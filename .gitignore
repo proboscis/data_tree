@@ -11,7 +11,7 @@ __pycache__/
 build/
 *.c
 dist/
-
+.pytest_cache/
 test/.pytest_cache/
 #################
 # emacs
