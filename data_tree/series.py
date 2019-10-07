@@ -13,13 +13,12 @@ import numpy as np
 from frozendict import frozendict
 from lazy import lazy as en_lazy
 from logzero import logger
-from proboscis.util import load_or_save
 from tqdm.autonotebook import tqdm
 
 from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder
 from data_tree.resource import ContextResource, Resource
-from data_tree.util import ensure_path_exists, batch_index_generator
+from data_tree.util import ensure_path_exists, batch_index_generator, load_or_save
 
 
 def en_numpy(data):
