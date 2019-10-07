@@ -247,10 +247,10 @@ class ZippedSeries(Series):
         return list(zip(self.a._values(_slice), self.b._values(_slice)))
 
     def _get_indices(self, indices):
-        return list(zip(self.a._values(indices), self._values(indices)))
+        return list(zip(self.a._values(indices), self.b._values(indices)))
 
     def _get_mask(self, mask):
-        return list(zip(self._values(mask), self._values(mask)))
+        return list(zip(self.a._values(mask), self.b._values(mask)))
 
     def __init__(self, a: Series, b: Series):
         self._total = min(a.total, b.total)
@@ -363,8 +363,8 @@ class SourcedSeries(Series):
         i = self.indexer[index]
         return Trace(
             [self.src._trace(i)],
-            index=i,
-            get_value=lambda: self[i],
+            index=index,
+            get_value=lambda: self[index],
             series=self,
             metadata=dict()
         )
@@ -1012,43 +1012,3 @@ class Hdf5CachedSeries(SourcedSeries):
 
     def _get_mask(self, mask):
         return self._get_indices(np.arange(self.total)[mask])
-
-
-class FromSeries(Series):
-    def __init__(self, initializer: Callable, cache_path: str, cache_kind: str):
-        """
-        :param initializer: ()=>Series
-        """
-        self.initializer = initializer
-        self.cache_path = cache_path
-        assert cache_kind in {"pkl", "hdf5", "shelve"}
-        self.cache_kind = cache_kind
-
-    @en_lazy
-    def src(self):
-        return self.initializer()
-
-    @en_lazy
-    def cache(self):
-        return LambdaAdapter(slicer=lambda s: self.src._values(s), total=self.total).__getattribute__(self.cache_kind)(
-            self.cache_path)
-
-    @en_lazy
-    def indexer(self) -> Indexer:
-        return IdentityIndexer(self.total)
-
-    @en_lazy
-    def total(self):
-        return load_or_save(self.cache_path, lambda: self.src.total)
-
-    def _get_item(self, index):
-        pass
-
-    def _get_slice(self, _slice):
-        pass
-
-    def _get_indices(self, indices):
-        pass
-
-    def _get_mask(self, mask):
-        pass

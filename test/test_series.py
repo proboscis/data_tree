@@ -26,7 +26,6 @@ def test_numpy_dataset():
     left_val = left_cache.values
     right_val = left.values
     assert (left_val == right_val).all()
-
     assert (left_cache[:5].values == left[:5].values).all()
 
 
