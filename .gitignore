@@ -1,0 +1,79 @@
+
+##############
+# python
+##############
+__pycache__/
+.pyc
+*.pyc
+*.egg-info/
+*.pkl
+*.so
+build/
+*.c
+dist/
+
+test/.pytest_cache/
+#################
+# emacs
+#################
+
+\#*
+
+*.db
+
+###
+# HDF5
+###
+*.hdf5
+
+hdfjava/
+
+
+*checkpoint.ipynb
+
+
+#################
+# Intellij and customs
+#################
+# Intellij
+.idea
+.idea/
+.idea_modules/
+*.iml
+*.iws
+#ensime
+.ensime
+.ensime_lucene/
+#eclipse
+.project
+.classpath
+#sbt
+target/
+web-driver/
+#scala/java
+*.class
+models/
+
+#log
+*.log
+#generated
+.changed/
+
+*.bak
+*.dat
+*.dir
+
+cache/
+
+###############
+# KEYS
+###############
+api_keys/
+*.key
+*.ca
+*.crt
+*.ovpn
+
+# docker/ansible
+*.retry
+.vagrant/
