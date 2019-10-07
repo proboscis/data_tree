@@ -41,8 +41,10 @@ class Trace(NamedTuple):
     parents: List["Trace"]
     series: "Series"
     index: int
-    get_value: Callable
     metadata: dict
+
+    def get_value(self):
+        return self.series[self.index]
 
     def print_trace(self):
         def _print_trace(trace, indent):
@@ -103,7 +105,7 @@ class Series(metaclass=abc.ABCMeta):
         pass
 
     def _trace(self, index) -> Trace:
-        return Trace(parents=[], series=self, index=index, get_value=lambda: self[index], metadata=dict())
+        return Trace(parents=[], series=self, index=index, metadata=dict())
 
     def trace(self, index) -> Trace:
         return self._trace(index).compiled()
@@ -263,7 +265,6 @@ class ZippedSeries(Series):
         return Trace(
             parents=[self.a._trace(i), self.b._trace(i)],
             index=i,
-            get_value=lambda: self[i],
             series=self,
             metadata=dict()
         )
@@ -364,7 +365,6 @@ class SourcedSeries(Series):
         return Trace(
             [self.src._trace(i)],
             index=index,
-            get_value=lambda: self[index],
             series=self,
             metadata=dict()
         )
@@ -513,7 +513,6 @@ class FlattenedSeries(SourcedSeries):
             parents=[self.src._trace(self.mapping[index]), src2._trace(self.offsets[index])],
             series=self,
             index=index,
-            get_value=lambda: self[index],
             metadata=dict()
         )
 
