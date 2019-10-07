@@ -4,9 +4,10 @@ from typing import Mapping
 from frozendict import frozendict
 from lazy import lazy as en_lazy
 
-from proboscis.data_tree.series import Series
 import pandas
 import numpy as np
+
+from data_tree import Series
 
 
 class Table(metaclass=abc.ABCMeta):
