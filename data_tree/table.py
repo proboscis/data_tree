@@ -72,3 +72,7 @@ class SeriesTable(Table):
 
     def __init__(self, columns: Mapping[str, Series]):
         self._columns: Mapping[str, Series] = dict(**columns)
+
+def from_df(df:pandas.DataFrame):
+    keys = list(df.keys())
+    return SeriesTable({k:df[k].values for k in keys})
