@@ -1,5 +1,8 @@
 import pickle
 from datetime import datetime
+from queue import Queue, Full
+from threading import Thread
+
 import pandas as pd
 from logzero import logger
 def load_or_save(path, proc):
@@ -54,3 +57,43 @@ def ensure_path_exists(fileName):
         except FileExistsError as fee:
             pass
 
+
+def prefetch_generator(gen, n_prefetch=5):
+    """
+    use this on IO intensive(non-cpu intensive) task
+    :param gen:
+    :param n_prefetch:
+    :return:
+    """
+
+    item_queue = Queue(n_prefetch)
+    active = True
+
+    END_TOKEN="$$end$$"
+    def loader():
+        for item in gen:
+            while active:
+                try:
+                    #logger.info(f"putting item to queue. (max {n_prefetch})")
+                    item_queue.put(item, timeout=1)
+                    break
+                except Full:
+                    pass
+            if not active:
+                break
+        item_queue.put(END_TOKEN)
+
+    t = Thread(target=loader)
+    t.daemon = True
+    t.start()
+    try:
+        while True:
+            #logger.info(f"queue status:{item_queue.qsize()}")
+            item = item_queue.get()
+            if item is END_TOKEN:
+                break
+            else:
+                yield item
+    finally:
+        active = False
+        t.join()

@@ -45,3 +45,11 @@ def test_hash():
         lambda hash, self: self.map(lambda item: item * 2).pkl("test_shuffled.pkl", src_hash=hash))
 
     assert pkled.values == shuffled.map(lambda item: item * 2).values, "shuffling and caching with hash"
+
+def test_metadata():
+    N = 10000
+    series = Series.from_numpy(np.arange(N))
+    s2 = series.update_metadata(name="hello world")
+    s3 = s2.visualization(lambda:print)
+    print(s3.trace(0))
+    print(s3._trace(0))
