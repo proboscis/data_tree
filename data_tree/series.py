@@ -5,9 +5,11 @@ import pickle
 import queue
 import shelve
 import threading
-from concurrent.futures import Executor, Future
+from collections import OrderedDict
+from concurrent.futures import Executor
 from datetime import datetime
 from hashlib import sha1
+from pprint import pformat
 from typing import Iterable, NamedTuple, Union, Mapping, Callable, List
 
 import PIL
@@ -16,15 +18,24 @@ import numpy as np
 from IPython.core.display import display
 from PIL import Image
 from frozendict import frozendict
+from ipywidgets import interactive
 from lazy import lazy as en_lazy
 from logzero import logger
 from tqdm.autonotebook import tqdm
 
+from data_tree.cache import ConditionedFilePathProvider
+from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
-from data_tree.mp_util import GlobalHolder
+from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2
+
 from data_tree.resource import ContextResource, Resource
 from data_tree.util import ensure_path_exists, batch_index_generator, load_or_save, prefetch_generator
-from ipywidgets import interactive
+import ipywidgets as widgets
+import pyaml
+
+
+def pretty_format(data):
+    return pyaml.dump(data, indent=2, width=160)
 
 
 def en_numpy(data):
@@ -103,7 +114,6 @@ class Trace(NamedTuple):
     def ancestors(self):
         return Series.from_iterable(list(self.traverse()))
 
-
     def find_by_tag(self, tag: str):
         return [t for t in self.compiled().traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
 
@@ -120,40 +130,52 @@ class Trace(NamedTuple):
     def _repr_html(self):
         return self.__repr__()
 
-    def inferred_visualization(self):
-        value = self.get_value()
-        if isinstance(value, np.ndarray):
-            if len(value.shape) == 3:
-                return Image.fromarray(value, mode="RGB")
-            elif len(value.shape) == 2:
-                return Image.fromarray(value, mode="L")
-            else:
-                return value
-        elif isinstance(value, PIL.Image.Image):
-            return value
-        else:
-            return value
-
     def visualization(self):
         viz = self.metadata.get("visualization")
+        data = self.get_value()
         if viz is None:
-            viz = self.inferred_visualization()
+            viz = infer_widget(data)
         elif callable(viz):
             viz = viz(self.get_value())
         return viz
 
-    def show_traceback_html(self, skipping_tags=("slow",)):
-        for t in self.traverse():
+    def show_traceback_html(self, skipping_tags=("slow",), showing_tags=None, depth=None, skip_indices=None,
+                            show_indices=None):
+        # import ipywidgets as widgets
+        skipping_tags = set(skipping_tags) if skipping_tags is not None else ()
+        showing_tags = set(showing_tags) if showing_tags is not None else set()
+
+        traces = list(self.traverse())
+        skip_mask = np.zeros(len(traces), dtype=bool)
+        show_mask = np.zeros(len(traces), dtype=bool)
+        skip_mask[skip_indices if skip_indices is not None else []] = True
+        show_mask[show_indices if show_indices is not None else []] = True
+        mask = np.ones(len(traces), dtype=bool)  # defaults to show everything
+        if depth is None:
+            depth = len(traces)
+        for i, t in enumerate(traces):
             tags = t.metadata.get("tags")
-            ignored = False
-            if tags is not None:
-                for tag in skipping_tags:
-                    if tag in tags:
-                        ignored = True
-                        break
-            if ignored:
-                continue
-            display(t.visualization())
+            tags = set(tags) if tags is not None else set()
+            ignored = bool(tags & skipping_tags)  # or skip_mask[i]
+            shown = bool(tags & showing_tags)  # or show_mask[i]
+            skip_mask[i] = skip_mask[i] or ignored
+            show_mask[i] = show_mask[i] or shown
+
+        # blacklist and whitelist
+        # default is to show everything. so if show is specified, switch to not showing default
+        if sum(show_mask):
+            mask[:] = False
+            mask[show_mask] = True
+        else:
+            mask[skip_mask] = False
+
+        for i, t in enumerate(traces[:depth]):
+            if mask[i]:
+                display(widgets.HBox([
+                    widgets.Label(value=f"value at depth {i}"),
+                    widgets.Label(value=str(t.metadata))
+                ]))
+                display(t.visualization())
 
 
 class Series(metaclass=abc.ABCMeta):
@@ -188,6 +210,35 @@ class Series(metaclass=abc.ABCMeta):
 
     def _trace(self, index) -> Trace:
         return Trace(parents=[], series=self, index=index, metadata=dict())
+
+    @property
+    def _metadata(self):
+        return dict()
+
+    @en_lazy
+    def metadata(self):
+        return dict(series=self, metadata=self._metadata, parents=[p.metadata for p in self.parents])
+
+    @property
+    @abc.abstractmethod
+    def parents(self) -> List["Series"]:
+        pass
+
+    @en_lazy
+    def ancestors(self):
+        result = []
+        for p in self.parents:
+            result.append(p)
+            result += p.ancestors
+        return Series.from_iterable(result)
+
+    @en_lazy
+    def traversed(self):
+        return Series.from_iterable([self] + list(self.ancestors))
+
+    @property
+    def traversed_metadata(self):
+        return self.traversed.map(lambda m: m._metadata)
 
     def trace(self, index) -> Trace:
         return self._trace(index).compiled()
@@ -225,7 +276,13 @@ class Series(metaclass=abc.ABCMeta):
         return MappedSeries(self, f, batch_f)
 
     def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None):
-        return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process).lazy()
+        """
+        :param f: picklable function (Item,Dict(str,value from resources) => value)
+        :param global_resources: Mapping[Str,Resource[GlobalHolder]]
+        :param num_process:
+        :return: beware f must be picklable and each element comes to first argument of f, and global resources will be given as kwargs.
+        """
+        return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process)  # .lazy()
 
     @property
     def values(self):
@@ -233,6 +290,73 @@ class Series(metaclass=abc.ABCMeta):
 
     def hdf5(self, cache_path, src_hash=None, **dataset_opts):
         return Hdf5CachedSeries(self, cache_path=cache_path, src_hash=src_hash, **dataset_opts)
+
+    def auto_hdf5(self, cache_path, src_hash=None, **dataset_opts):
+        sample = self[0]
+        # check sample and split until it becomes an array
+        if isinstance(sample, str):
+            raise RuntimeError("cannot make hdf5 cache for string values.")
+        if isinstance(sample, Iterable):
+            def converted():
+                split_serires = [
+                    self.map((lambda n: (lambda item: item[n]))(i)).auto_hdf5(cache_path=cache_path + f"_auto{i}",
+                                                                              src_hash=src_hash,
+                                                                              **dataset_opts)
+                    for i in range(len(sample))]
+                return ZippedSeries(*split_serires)
+
+            try:
+                numpied = np.array(sample)
+            except ValueError as e:
+                logger.info(f"element cannot be converted to numpy array")
+                return converted()
+            if numpied.dtype == np.object:  #
+                return converted()
+            else:
+                return self.hdf5(cache_path, src_hash=src_hash, **dataset_opts)
+
+    def condition(self, **conds: dict):
+        def _add_condition(m: dict):
+            copied: dict = m.copy()
+            old_conds = copied.get("conditions")
+            if old_conds is None:
+                copied["conditions"] = conds
+            else:
+                old_conds.update(conds)
+                copied["conditions"] = old_conds.copy()
+            return copied
+
+        return MetadataOpsSeries(self, operator=_add_condition)
+
+    @en_lazy
+    def conditions(self):
+        conditions = dict()
+        for m in self.traversed_metadata:
+            conds = m.get("conditions")
+            if conds is not None:
+                conditions.update(conds)
+        return conditions
+
+    def managed_cache(self, cache_root=None, kind="auto_hdf5"):
+
+        if cache_root is None:
+            for meta in reversed(list(self.traversed_metadata)):
+                if "managed_cache_root" in meta:
+                    cache_root = meta["managed_cache_root"]
+                    logger.info(f"managed cache root is set to {cache_root} from series metadata")
+                    break
+        assert cache_root is not None, "no cache root is specified. you must set this in either parameter or in metadata"
+        cfpp = ConditionedFilePathProvider(cache_root)
+        managed_path = cfpp.get_managed_file_path(self.conditions, "managed_cache." + kind)
+        if kind == "hdf5":
+            return self.hdf5(managed_path)
+        elif kind == "pkl":
+            return self.pkl(managed_path)
+        elif kind == "shelve":
+            return self.shelve(managed_path)
+        elif kind == "auto_hdf5":
+            return self.auto_hdf5(managed_path)
+        raise RuntimeError(f"kind :{kind} is not a supported cache type! use hdf5/pkl/shelve")
 
     def shelve(self, cache_path, src_hash=None):
         return ShelveSeries(self, cache_path=cache_path, src_hash=src_hash)
@@ -294,11 +418,15 @@ class Series(metaclass=abc.ABCMeta):
     def traces(self):
         return TraceSeries(self)
 
-    def zip(self, tgt: "Series"):
-        return ZippedSeries(self, tgt)
+    def zip(self, *tgts: "Series"):
+        return ZippedSeries(self, *tgts)
 
     def zip_with_index(self):
         return ZippedSeries(self, NumpySeries(np.arange(self.total)))
+
+    def unzip(self):
+        sample = self[0]
+        return tuple(self.map((lambda n: (lambda item: item[n]))(i)) for i in range(len(sample)))
 
     @en_lazy
     def hash(self):
@@ -345,15 +473,26 @@ class Series(metaclass=abc.ABCMeta):
         transformer = load_or_save(cache_path, transformer_constructor)
         return self[transformer]
 
-    def interact(self):
+    def interact(self, depth=None,
+                 skip_tags=("slow",),
+                 show_tags=None,
+                 skip_indices=None,
+                 show_indices=None
+                 ):
         def _l(i):
-            self.trace(i).show_traceback_html()
+            self.trace(i).show_traceback_html(
+                depth=depth,
+                skipping_tags=skip_tags,
+                showing_tags=show_tags,
+                skip_indices=skip_indices,
+                show_indices=show_indices
+            )
 
         return interactive(_l, i=(0, len(self) - 1, 1))
 
-    def shuffle(self):
-        permutation = np.random.permutation(self.total)
-        return self[permutation].tag("shuffle")
+    def shuffle(self, seed=42):
+        idx = np.random.RandomState(seed=seed).permutation(self.total)
+        return self[idx].tag("shuffle")
 
     @staticmethod
     def split3_indices(train_amount, valid_amount, total):
@@ -381,7 +520,7 @@ class Series(metaclass=abc.ABCMeta):
             for i in range(len(self)):
                 yield self[i]
 
-        return gen
+        return gen()
 
     def slice_generator(self, slices, preload=5, en_numpy=False):
         def batches():
@@ -424,7 +563,7 @@ class Series(metaclass=abc.ABCMeta):
         dt = end - start
         return read_values.nbytes / 1024 / 1024 / dt.total_seconds()
 
-    def sps(self,batch_size=512):
+    def sps(self, batch_size=512):
         """
         :param batch_size:
         :return: sample per second
@@ -439,10 +578,31 @@ class Series(metaclass=abc.ABCMeta):
         return f"{self.__class__.__name__} #{id(self)}"
 
     def __repr__(self):
-        return self.trace(0).trace_string()
+        def _str_(s: Series):
+            return OrderedDict(
+                series=str(s),
+                metadata=s._metadata,
+                parents=[_str_(p) for p in s.parents]
+            )
+
+        return pretty_format(_str_(self))  # self.trace(0).trace_string()
+
+    @en_lazy
+    def list(self):
+        return list(self)
 
 
-class ZippedSeries(Series):
+class MultiSourcedSeries(Series):
+
+    def __init__(self, parents: list):
+        self._parents = parents
+
+    @property
+    def parents(self):
+        return self._parents
+
+
+class ZippedSeries(MultiSourcedSeries):
     @property
     def indexer(self) -> Indexer:
         return self._indexer
@@ -452,27 +612,26 @@ class ZippedSeries(Series):
         return self._total
 
     def _get_item(self, index):
-        return self.a._values(index), self.b._values(index)
+        return tuple(s._values(index) for s in self.parents)
 
     def _get_slice(self, _slice):
-        return list(zip(self.a._values(_slice), self.b._values(_slice)))
+        return list(zip(s._values(_slice) for s in self.parents))
 
     def _get_indices(self, indices):
-        return list(zip(self.a._values(indices), self.b._values(indices)))
+        return list(zip(s._values(indices) for s in self.parents))
 
     def _get_mask(self, mask):
-        return list(zip(self.a._values(mask), self.b._values(mask)))
+        return list(zip(s._values(mask) for s in self.parents))
 
-    def __init__(self, a: Series, b: Series):
-        self._total = min(a.total, b.total)
+    def __init__(self, *sources: Iterable[Series]):
+        super().__init__(parents=list(sources))
+        self._total = min([s.total for s in self.parents])
         self._indexer = IdentityIndexer(self._total)
-        self.a = a
-        self.b = b
 
     def _trace(self, index) -> Trace:
         i = self.indexer[index]
         return Trace(
-            parents=[self.a._trace(i), self.b._trace(i)],
+            parents=[s._trace(i) for s in self.parents],
             index=i,
             series=self,
             metadata=dict()
@@ -480,6 +639,10 @@ class ZippedSeries(Series):
 
 
 class LambdaAdapter(Series):
+    @en_lazy
+    def parents(self):
+        return []
+
     def __init__(self, slicer, total):
         self.slicer = slicer
         self._indexer = IdentityIndexer(total=total)
@@ -506,6 +669,10 @@ class LambdaAdapter(Series):
 
 
 class Hdf5Adapter(Series):
+    @en_lazy
+    def parents(self):
+        return []
+
     def __init__(self, hdf5_initializer, hdf5_file_name, key):
         if not os.path.exists(hdf5_file_name):
             hdf5_initializer()
@@ -535,6 +702,10 @@ class Hdf5Adapter(Series):
 
 
 class Hdf5OpenFileAdapter(Series):
+    @property
+    def parents(self):
+        return []
+
     def __init__(self, hdf5_initializer, open_file, key):
         if key not in open_file:
             hdf5_initializer()
@@ -564,6 +735,11 @@ class Hdf5OpenFileAdapter(Series):
 
 
 class SourcedSeries(Series):
+
+    @en_lazy
+    def parents(self):
+        return [self.src]
+
     @property
     @abc.abstractmethod
     def src(self) -> Series:
@@ -667,10 +843,16 @@ class PickledSeries(SourcedSeries):
         return self._get_indices(np.arange(self.total)[mask])
 
 
-class FlattenedSeries(SourcedSeries):
+class FlattenedSeries(MultiSourcedSeries):
+
+    @property
+    def parents(self):
+        return self._parents
+
     def __init__(self, src):
+        super().__init__(list(src.values))
         self._src = src
-        self._index = IdentityIndexer(total=sum([s.total for s in src.values]))
+        self._index = IdentityIndexer(total=sum([s.total for s in self.parents]))
         self.mapping = np.zeros(self.total, dtype=int)
         self.offsets = np.zeros(self.total, dtype=int)
         self._range = np.arange(self.total)
@@ -874,6 +1056,10 @@ class MetadataOpsSeries(IndexedSeries):
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
 
+    @en_lazy
+    def _metadata(self):
+        return self.operator(dict())
+
     @property
     def src(self) -> Series:
         return self._src
@@ -958,10 +1144,21 @@ class MappedSeries(IndexedSeries):
             yield self._map_values(batch)
 
 
-def mp_mapper(f, global_resources: Mapping[str, GlobalHolder], **kwargs):
+def mp_mapper(f, global_resources: Mapping[str, GlobalHolder], value):
     resources = {k: g.value for k, g in global_resources.items()}
-    result = f(**resources, **kwargs)
+    result = f(value, **resources)
     return result
+
+
+def stp_worker_generator(mapper, global_resources):
+    def _worker_generator():
+        def _worker(value):
+            resources = {k: g.value for k, g in global_resources.items()}
+            return mapper(value, **resources)
+
+        return _worker
+
+    return _worker_generator()
 
 
 class MPMappedSeries(IndexedSeries):
@@ -988,11 +1185,15 @@ class MPMappedSeries(IndexedSeries):
     def total(self):
         return self._src.total
 
-    def _map_values(self, values):
+    def _map_values(self, values, show_progress=True):
         resources = {k: r.prepare() for k, r in self.resources.items()}
+        if show_progress:
+            bar = tqdm
+        else:
+            bar = lambda seq, *args: seq
         with multiprocessing.Pool(processes=self.num_process) as pool:
-            futures = [pool.apply_async(mp_mapper, args=(self.single_mapper, resources), kwds=v) for v in values]
-            results = [f.get() for f in tqdm(futures, desc="waiting for mp map results")]
+            futures = [pool.apply_async(mp_mapper, args=(self.single_mapper, resources, v)) for v in values]
+            results = [f.get() for f in bar(futures, desc="waiting for mp map results")]
         for k, r in self.resources.items():
             r.release(r)
         return results
@@ -1018,6 +1219,45 @@ class MPMappedSeries(IndexedSeries):
     def _get_mask(self, mask):
         src_vals = self.src._values(mask)
         return self._map_values(src_vals)
+
+    def slice_generator(self, slices, preload=5, en_numpy=False):
+        slices = list(slices)
+        termination_signal = threading.Event()
+
+        def batches():
+            resources = {k: r.prepare() for k, r in self.resources.items()}
+            stp = SequentialTaskParallel2(
+                worker_generator=stp_worker_generator(self.single_mapper, global_resources=resources),
+                num_worker=multiprocessing.cpu_count(),
+                max_pending_result=512)
+
+            def _fetcher():
+                logger.info(f"multiprocessing fetcher started")
+                for _slice in slices:
+                    if not termination_signal.is_set():
+                        stp.enqueue(self.src[_slice].values)
+                    else:
+                        logger.warning(f"multiprocessing fetcher stopped due to signal")
+                        break
+
+            fetch_thread = threading.Thread(target=_fetcher)
+            fetch_thread.start()
+            try:
+                with stp.managed_start(total=len(slices)) as gen:
+                    for batch in tqdm(gen, total=len(slices)):
+                        if en_numpy and not isinstance(batch, np.ndarray):
+                            batch = np.array(batch)
+                        yield batch
+            finally:
+                termination_signal.set()
+                for k, r in self.resources.items():
+                    r.release(r)
+
+        if preload:
+            assert preload > 0, "preload must be positive integer"
+            yield from prefetch_generator(batches(), preload)
+        else:
+            yield from batches()
 
 
 class LazySeries(IndexedSeries):
@@ -1072,6 +1312,10 @@ class LazySeries(IndexedSeries):
 
 class NumpySeries(Series):
     @property
+    def parents(self):
+        return []
+
+    @property
     def indexer(self):
         return self._indexer
 
@@ -1101,6 +1345,10 @@ class NumpySeries(Series):
 
 
 class ListSeries(Series):
+    @property
+    def parents(self):
+        return []
+
     @property
     def indexer(self):
         return self._indexer
@@ -1149,6 +1397,7 @@ class Hdf5CachedSeries(SourcedSeries):
 
     def __init__(self, src: Series, cache_path: str, src_hash=None, **dataset_opts):
         self.cache_path = cache_path
+        logger.info(f"initialized hdf5 cache series at {cache_path}")
         self._src = src
         self._indexer = IdentityIndexer(self.total)
         self.src_hash = "None" if src_hash is None else src_hash

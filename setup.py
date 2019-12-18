@@ -21,6 +21,7 @@ setup(
         'matplotlib',
         "h5py",
         "tqdm",
-        "frozendict"
+        "frozendict",
+        "tblib"
     ],
 )

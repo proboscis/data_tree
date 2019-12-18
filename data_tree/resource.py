@@ -237,5 +237,8 @@ class MappedEB(ExecutorBound):
         self.task = None
 
 
+def fopen(path,mode:str):
+    return ContextResource(lambda:open(path,mode=mode))
+
 def shared_resource():
     pass

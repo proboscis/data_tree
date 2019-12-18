@@ -1,0 +1,75 @@
+import ipywidgets as widgets
+from pprint import pformat
+from PIL import Image
+import PIL
+from logzero import logger
+import numpy as np
+import pandas as pd
+
+nn = (none,func) -> func(none) if none is not None else None
+L = Image.fromarray$(mode="L")
+RGB = Image.fromarray$(mode="RGB")
+RGBA = Image.fromarray$(mode="RGBA")
+batch_image_to_image = ary->ary.transpose((1, 0, 2, 3)).reshape((ary.shape[2], -1, ary.shape[3]))
+batch_L_to_img = ary->ary 
+img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
+
+def ary_to_image(value):
+    if not value `isinstance` np.ndarray:
+        return None        
+    
+    if value.dtype is not np.uint8:
+        logger.warning("automatically converting dtype {value.dtype} to uint8 for visualization")
+        value = value.astype("uint8")
+        
+    case value.shape:
+        match (bs,h,w,1): # batch of gray images
+            return value.transpose(1,0,2,3).reshape(h,bs*w) |> L
+        match (_,_,_,3): # batch of rgbs
+            return value |> batch_image_to_image |> RGB
+        match (_,_,_,4): # batch of rgbas
+            return value |> batch_image_to_image |> RGBA
+        match (_,_,1): # a gray image
+            return value[:,:,0] |> L
+        match (_,_,3): # an RGB image
+            return value |> RGB
+        match (_,_,4): # an RGBA image
+            return value |> RGBA
+        match (bs,h,w) if w>4: # batch of gray image
+            return value.transpose(1,0,2).reshape(h,bs*w) |> L
+        match (_,_): # gray image
+            return value |> L
+    else:
+        return None
+
+def ary_stat_widget(ary):
+    return widgets.VBox([
+        widgets.Label(value=pformat(str(dict(
+            shape=ary.shape,
+            dtype=ary.dtype
+        )))),
+        widgets.HTML(pd.DataFrame(pd.Series(ary.ravel()).describe()).transpose()._repr_html_())        
+    ])
+
+    
+def ary_to_widget(ary):
+    stat_widget = ary_stat_widget(ary)
+    viz_widget = ary_to_image(ary) `nn` img_to_widget
+    viz_widget ??= widgets.Label(value=str(ary))
+    return widgets.VBox([
+        viz_widget,
+        stat_widget
+    ])
+
+def infer_widget(value):
+    case value:
+        match _ is tuple:
+            return widgets.VBox([
+                widgets.HBox([infer_widget(item) for item in value]),
+                widgets.Label(value=f"displaying tuple with {len(value)} elements")
+            ])
+        match _ is np.ndarray:
+            return ary_to_widget(value)
+    else:
+        return widgets.Label(value=repr(value))
+    

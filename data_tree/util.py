@@ -1,10 +1,15 @@
 import pickle
 from datetime import datetime
+from hashlib import sha1
 from queue import Queue, Full
 from threading import Thread
 
+import numpy as np
 import pandas as pd
+from frozendict import frozendict
 from logzero import logger
+
+
 def load_or_save(path, proc):
     try:
         with open(path, "rb") as f:
@@ -53,6 +58,7 @@ def ensure_path_exists(fileName):
     parent = os.path.dirname(fileName)
     if not path.exists(parent) and parent:
         try:
+            logger.info(f"making dirs for {fileName}")
             makedirs(parent)
         except FileExistsError as fee:
             pass
@@ -89,6 +95,8 @@ def prefetch_generator(gen, n_prefetch=5):
     try:
         while True:
             #logger.info(f"queue status:{item_queue.qsize()}")
+            if item_queue.qsize() == 0:
+                logger.warn(f"prefetching queue is empty! check bottlenecks")
             item = item_queue.get()
             if item is END_TOKEN:
                 break
@@ -97,3 +105,24 @@ def prefetch_generator(gen, n_prefetch=5):
     finally:
         active = False
         t.join()
+
+
+def dict_hash(val):
+    return sha1(str(freeze(val)).encode()).hexdigest()
+
+
+def freeze(_item):
+    def _freeze(item):
+        if isinstance(item, dict):
+            return sorted_frozendict({_freeze(k):_freeze(v) for k, v in item.items()})
+        elif isinstance(item, list):
+            return tuple(_freeze(i) for i in item)
+        elif isinstance(item, np.ndarray):
+            return tuple(_freeze(i) for i in item)
+        return item
+
+    return _freeze(_item)
+
+
+def sorted_frozendict(_dict):
+    return frozendict(sorted(_dict.items(), key=lambda item: item[0]))
