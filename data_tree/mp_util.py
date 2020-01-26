@@ -95,6 +95,29 @@ def mp_run(target, **process_params) -> Future:
     return result_future
 
 
+def mt_run(target, **thread_params):
+    """
+    runs target function on another process.
+    returns a future which contains result or serialized exception.
+    You will never miss remote process exception again.
+    :param target:
+    :param process_params: (e.g. args,kwargs,daemon,etc..)
+    :return:
+    """
+    result_future = Future()
+    thread_params = thread_params.copy()
+
+    def _wrapper(*args, **kwargs):
+        try:
+            result_future.set_result(target(*args, **kwargs))
+        except Exception as e:
+            result_future.set_exception(e)
+
+    t = Thread(target=_wrapper, **thread_params)
+    t.start()
+    return result_future
+
+
 class SequentialTaskParallel:
     def __init__(self, worker_generator, num_worker=8, max_pending_result=100):
         self.worker_generator = worker_generator

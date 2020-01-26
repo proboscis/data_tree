@@ -1,0 +1,245 @@
+from IPython.display import display
+import ipywidgets as widgets
+from typing import Tuple
+from rx.subjects import BehaviorSubject
+from lazy import lazy
+from concurrent.futures import Future
+from data_tree.mp_util import mt_run
+from data_tree.coconut.visualization import infer_widget
+from rx import Observable
+from itertools import chain
+from inspect import signature
+
+class ControllableWidget: #mutable subject with controller
+    @property
+    def controllers(self):
+        return []
+
+    @property
+    def value(self)->BehaviorSubject:
+        return None
+
+    @property
+    def parents(self):
+        return []
+
+    @lazy
+    def widget(self):
+        out = widgets.Output()
+        def _on_change(item):
+            # I want the item to be cleared before item comes.
+            out.clear_output(wait=False)
+            with out:
+                item |> infer_widget |> display
+        self.value.subscribe(
+            _on_change,
+            _on_change,
+            _on_change)
+        box = widgets.VBox([*self.controllers,out])
+        #box.layout = widgets.Layout(
+        #            #grid_template_columns="auto auto auto",
+        #            border="solid 2px"
+        #        )
+        box.layout.border="solid 2px"
+        return box
+
+    def _ipython_display_(self):
+        display(self.widget)
+
+    def map(self,f):
+        return MappedCW(f,self)
+
+    def star_map(self,f):
+        return MappedCW(f,self,expand=True)
+
+    def zip(self,*others):
+        return ZippedCW(self,*others)
+
+    @lazy
+    def roots(self):
+        result = []
+        for p in self.parents:
+            if not p.parents:
+                result.append(p)
+            else:
+                result += p.roots
+        return {id(r):r for r in result}.values() |> list
+
+    @lazy
+    def traverse_parents(self):
+        result = []
+        for p in self.parents:
+            result.append(p)
+            result += p.traverse_parents
+        return {id(r):r for r in result}.values() |> list
+
+    def get(self):
+        return self.value.value
+
+
+class IpyWidgetAdapter(ControllableWidget):
+    def __init__(self,widget):
+        self._widget=widget
+        self._value = BehaviorSubject(self._widget.value)#.buffer_with_time(1).filter(bool).map(.[-1])
+        def emit_if_different(item):
+            #if item["old"] != item["new"]:
+            self._value.on_next(item["new"])
+        self._widget.observe(emit_if_different,names="value")
+        #self._widget.observe(self._value.on_next,names="value")
+
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def controllers(self):
+        return [self._widget]
+
+unique_objects = items ->{id(i):i for i in items}.values() |> tuple
+class Sourced(ControllableWidget):
+
+    @property
+    def parents(self):
+        raise RuntimeError("Not implemented")
+
+    @property
+    def controllers(self):
+        return self.parents |> map$(.controllers) |*> chain |> unique_objects
+    @lazy
+    def widget(self):
+        out = widgets.Output()
+        def data_output(data):
+            out.clear_output(wait=False)
+            with out:
+                data |> infer_widget |> display
+        roots = [r.value for r in self.roots]
+        #Observable.combine_latest(roots,(*i)->tuple(i)).subscribe(_->out.clear_output(wait=False))
+
+        def _on_change(item):
+            if item `isinstance` Future:
+                data_output("waiting for future")
+                item.add_done_callback(f->data_output(f.result()))
+            else:
+                data_output(item)
+
+        self.value.subscribe(
+            _on_change,
+            _on_change,
+            _on_change)
+        #out.layout.border="solid 2px"
+        box = widgets.HBox([out])
+        box.layout.border="solid 2px"
+        return box
+
+    def _ipython_display_(self):
+        #parent_widgets = [p.widget for p in self.traverse_parents]
+        #display(widgets.VBox((parent_widgets |> reversed |> list) + [self.widget]))
+        display(widgets.VBox([*self.controllers,self.widget]))
+
+class MappedCW(Sourced):
+    def __init__(self,f,src,expand=False):
+        self.src = src
+        self.f = f
+        self.expand=expand
+
+    @property
+    def parents(self):
+        return [self.src]
+
+    @lazy
+    def value(self):
+        subject = BehaviorSubject(None)
+        if self.expand:
+            self.src.value.map(args->self.f(*args)).subscribe(subject.on_next)
+        else:
+            self.src.value.map(self.f).subscribe(subject.on_next)
+        return subject
+
+
+class ZippedCW(Sourced):
+    def __init__(self,*srcs):
+        self.srcs = srcs
+
+    @property
+    def parents(self):
+        return list(self.srcs)
+
+    @property
+    def controller(self):
+        return widgets.VBox([w.controller for w in self.srcs])
+
+    @lazy
+    def value(self):
+        #root_ids = {id(p) for p in self.traverse_parents}
+        #tgts = [w.value for w in self.srcs if id(w) not in root_ids]
+        tgts = [s.value for s in self.srcs]
+        #current_values = ()->tuple([w.value.value for w in self.srcs])
+        subject = BehaviorSubject(None)
+        #if not tgts:
+        #    tgts = [self.parents[0].value]
+        combined = Observable.combine_latest(tgts,(*i)->tuple(i))
+        combined.subscribe(subject.on_next)#.subscribe(t -> subject.on_next(current_values()))
+        return subject
+
+def infer_ipywidget(item,**kwargs):
+    case item:
+        match (start is int,end is int,step is int):
+            _kwargs = dict(
+                value = (start + end)//2 ,
+                max=end,
+                min=start,
+                step=step
+            )
+            return widgets.IntSlider(**{**_kwargs,**kwargs})
+        match (start is float,end,step):
+            _kwargs = dict(
+                value=(start+end)/2,max=end,min=start,step=step
+            )
+            return widgets.FloatSlider(**{**_kwargs,**kwargs})
+        match _ is str:
+            return widgets.Text(value=item,**kwargs)
+        match _ is list:
+            return widgets.Dropdown(options=item,index=0,value=item[0],**kwargs)
+    else:
+        raise RuntimeError(f"cannot convert {item} to widget")
+
+iwa = IpyWidgetAdapter
+iwa_helper = infer_ipywidget ..> iwa
+iwidget = iwa_helper
+def ensure_iwa(key,item):
+    case item:
+        match _ is ControllableWidget:
+            return item
+    else:
+        return iwa_helper(item,description=key)
+class FunctionCW(Sourced):
+    def __init__(self,f,**applications:dict):
+        """
+        each value of application must be CW
+        """
+        self.f = f
+        self.signature=signature(self.f)
+        self.applications = {k:ensure_iwa(k,a) for k,a in applications.items()}
+
+
+    def __call__(self,*args,**kwargs):
+        non_applied = [k for k in self.signature.parameters.keys() if k not in self.applications]
+        application = self.applications.copy()
+        for nak,a in zip(non_applied,args):
+            application[nak] = a
+        for k,a in kwargs.items():
+            application[k] = a
+        return FunctionCW(self.f,**application)
+
+    @lazy
+    def parents(self):
+        return [v for k,v in self.applications.items()]
+
+    @lazy
+    def value(self):
+        keys,obs = zip(*(self.applications.items() |> list))
+        obs = [o.value for o in obs]
+        subject = BehaviorSubject(None)
+        Observable.combine_latest(obs,(*t)-> (zip(keys,t)|>dict) |**> self.f).subscribe(subject.on_next)
+        return subject

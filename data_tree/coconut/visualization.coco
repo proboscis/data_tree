@@ -1,11 +1,11 @@
 import ipywidgets as widgets
-from pprint import pformat
+from pprintpp import pformat,pprint
 from PIL import Image
 import PIL
 from logzero import logger
 import numpy as np
 import pandas as pd
-
+from typing import Iterable
 nn = (none,func) -> func(none) if none is not None else None
 L = Image.fromarray$(mode="L")
 RGB = Image.fromarray$(mode="RGB")
@@ -14,12 +14,23 @@ batch_image_to_image = ary->ary.transpose((1, 0, 2, 3)).reshape((ary.shape[2], -
 batch_L_to_img = ary->ary 
 img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
+from bqplot import pyplot as blt
+
+
+def bqplot_hist(ary, title="histogram", bins=50):
+    fig = blt.figure(title=title)
+    blt.hist(ary.flatten(), bins=bins)
+    fig.layout.width = "400px"
+    fig.layout.height = "300px"
+    return fig
+
+
 def ary_to_image(value):
     if not value `isinstance` np.ndarray:
         return None        
     
     if value.dtype is not np.uint8:
-        logger.warning("automatically converting dtype {value.dtype} to uint8 for visualization")
+        #logger.warning("automatically converting dtype {value.dtype} to uint8 for visualization")
         value = value.astype("uint8")
         
     case value.shape:
@@ -48,28 +59,48 @@ def ary_stat_widget(ary):
             shape=ary.shape,
             dtype=ary.dtype
         )))),
-        widgets.HTML(pd.DataFrame(pd.Series(ary.ravel()).describe()).transpose()._repr_html_())        
+        widgets.HTML(pd.DataFrame(pd.Series(ary.ravel()).describe()).transpose()._repr_html_())
     ])
 
-    
+
 def ary_to_widget(ary):
     stat_widget = ary_stat_widget(ary)
     viz_widget = ary_to_image(ary) `nn` img_to_widget
     viz_widget ??= widgets.Label(value=str(ary))
-    return widgets.VBox([
+
+    children = [
         viz_widget,
+        ary |> bqplot_hist,
         stat_widget
-    ])
+    ]
+    return widgets.VBox(children)
+
+def output_widget(value):
+    out = widgets.Output()
+    with out:
+        pprint(repr(value))
+    return out
 
 def infer_widget(value):
+    from data_tree._series import Series
     case value:
-        match _ is tuple:
-            return widgets.VBox([
-                widgets.HBox([infer_widget(item) for item in value]),
-                widgets.Label(value=f"displaying tuple with {len(value)} elements")
-            ])
+        match _ is Series:
+            return value.widget()
+        match _ is PIL.Image.Image:
+            return value |> img_to_widget
         match _ is np.ndarray:
             return ary_to_widget(value)
+        match _ is tuple if value `hasattr` "_asdict":
+            return value |> output_widget
+        match _ is (tuple,list):
+            items = [infer_widget(item) for item in value]
+            return widgets.VBox([
+                widgets.GridBox(items,layout=widgets.Layout(
+                    grid_template_columns="auto auto auto",
+                    border="solid 2px"
+                )),
+                widgets.Label(value=f"displaying tuple with {len(value)} elements")
+            ])
     else:
-        return widgets.Label(value=repr(value))
-    
+        return value |> output_widget
+
