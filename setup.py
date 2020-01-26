@@ -22,6 +22,11 @@ setup(
         "h5py",
         "tqdm",
         "frozendict",
-        "tblib"
+        "tblib",
+        "bqplot",
+        "pyvis",
+        "lazy_object_proxy",
+        "retry",
+        "pprintpp"
     ],
 )

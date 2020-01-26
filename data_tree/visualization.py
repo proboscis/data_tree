@@ -1,4 +1,4 @@
-from data_tree.series import Trace
+from data_tree._series import Trace
 from ipywidgets import interactive, Widget
 from PIL import Image
 from ipywidgets import Image as WImage

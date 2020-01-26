@@ -1,4 +1,6 @@
+import os
 import pickle
+import shutil
 from datetime import datetime
 from hashlib import sha1
 from queue import Queue, Full
@@ -7,7 +9,10 @@ from threading import Thread
 import numpy as np
 import pandas as pd
 from frozendict import frozendict
+from lazy import lazy
 from logzero import logger
+
+WARN_SLOW_PREFETCH=True
 
 
 def load_or_save(path, proc):
@@ -47,6 +52,7 @@ def load_or_save_df(path, proc):
         df.to_hdf(path, key="cache")
         return df
 
+
 def batch_index_generator(start, end, batch_size):
     for i in range(start, end, batch_size):
         yield i, min(i + batch_size, end)
@@ -64,23 +70,28 @@ def ensure_path_exists(fileName):
             pass
 
 
-def prefetch_generator(gen, n_prefetch=5):
+def prefetch_generator(gen, n_prefetch=5,name=None):
     """
     use this on IO intensive(non-cpu intensive) task
     :param gen:
     :param n_prefetch:
-    :return:
+    AA:return:AA
     """
+
+    if n_prefetch == 0:
+        yield from gen
+        return
 
     item_queue = Queue(n_prefetch)
     active = True
 
-    END_TOKEN="$$end$$"
+    END_TOKEN = "$$end$$"
+
     def loader():
         for item in gen:
             while active:
                 try:
-                    #logger.info(f"putting item to queue. (max {n_prefetch})")
+                    # logger.info(f"putting item to queue. (max {n_prefetch})")
                     item_queue.put(item, timeout=1)
                     break
                 except Full:
@@ -94,9 +105,9 @@ def prefetch_generator(gen, n_prefetch=5):
     t.start()
     try:
         while True:
-            #logger.info(f"queue status:{item_queue.qsize()}")
-            if item_queue.qsize() == 0:
-                logger.warn(f"prefetching queue is empty! check bottlenecks")
+            # logger.info(f"queue status:{item_queue.qsize()}")
+            if item_queue.qsize() == 0 and WARN_SLOW_PREFETCH:
+                logger.warn(f"prefetching queue is empty! check bottleneck named:{name}")
             item = item_queue.get()
             if item is END_TOKEN:
                 break
@@ -114,7 +125,7 @@ def dict_hash(val):
 def freeze(_item):
     def _freeze(item):
         if isinstance(item, dict):
-            return sorted_frozendict({_freeze(k):_freeze(v) for k, v in item.items()})
+            return sorted_frozendict({_freeze(k): _freeze(v) for k, v in item.items()})
         elif isinstance(item, list):
             return tuple(_freeze(i) for i in item)
         elif isinstance(item, np.ndarray):
@@ -124,5 +135,23 @@ def freeze(_item):
     return _freeze(_item)
 
 
+
 def sorted_frozendict(_dict):
     return frozendict(sorted(_dict.items(), key=lambda item: item[0]))
+
+class Pickled:
+    def __init__(self, path, proc):
+        self.loaded = False
+        self._value = None
+        self.path = path
+        self.proc = proc
+
+    @lazy
+    def value(self):
+        if not self.loaded:
+            self._value = load_or_save(self.path, self.proc)
+        return self._value
+
+    def clear(self):
+        os.remove(self.path)
+        logger.info(f"deleted pickled file at {self.path}")
