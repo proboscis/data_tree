@@ -17,6 +17,10 @@ from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_g
 import data_tree._series as series
 from tqdm.autonotebook import tqdm
 
+from filelock import Timeout, FileLock
+# from threading import RLock
+from multiprocessing import RLock
+
 
 class CachedSeries(SourcedSeries):
     def slice_generator(self, slices, preload=5, en_numpy=False):
@@ -32,6 +36,10 @@ class CachedSeries(SourcedSeries):
 
 
 class PickledSeries(CachedSeries):
+
+    def clone(self, parents):
+        return PickledSeries(src=parents[0], pickle_path=self.pickle_path, src_hash=self.src_hash)
+
     def __init__(self, src: Series, pickle_path: str, src_hash=None):
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
@@ -96,11 +104,15 @@ class ShelveSeries(CachedSeries):
         self.cache_path = cache_path
         self.flag_path = cache_path + ".flags.hdf5"
         self.shelve_file = ContextResource(lambda: shelve.open(self.cache_path))
+        self.src_hash = src_hash
         if self.shelve_file.map(lambda db: "src_hash" in db and db["src_hash"] != src_hash).get():
             os.remove(self.cache_path)
         with self.shelve_file.to_context() as db:
             if "src_hash" not in db:
                 db["src_hash"] = src_hash
+
+    def clone(self, parents):
+        return ShelveSeries(src=parents[0], cache_path=self.cache_path, src_hash=self.src_hash)
 
     @property
     def src(self) -> Series:
@@ -152,6 +164,9 @@ class ShelveSeries(CachedSeries):
 
 
 class LazySeries(CachedSeries):
+
+    def clone(self, parents):
+        return LazySeries(src=parents[0], prefer_slice=self.prefer_slice)
 
     @property
     def total(self):
@@ -207,6 +222,9 @@ class LazySeries(CachedSeries):
 
 class NumpyCache(NumpySeries, CachedSeries):
 
+    def clone(self, parents):
+        return NumpyCache(parents[0])
+
     @property
     def src(self) -> Series:
         return self._src
@@ -225,6 +243,9 @@ class Hdf5CachedSeries(CachedSeries):
     def src(self) -> Series:
         return self._src
 
+    def clone(self, parents):
+        return Hdf5CachedSeries(src=parents[0], cache_path=self.cache_path, src_hash=self.src_hash, **self.dataset_opts)
+
     def __init__(self, src: Series, cache_path: str, src_hash=None, **dataset_opts):
         self.cache_path = cache_path
         logger.info(f"initialized hdf5 cache series at {cache_path}")
@@ -233,45 +254,50 @@ class Hdf5CachedSeries(CachedSeries):
         self.src_hash = "None" if src_hash is None else src_hash
 
         self.dataset_opts = dataset_opts
+        self.lock = RLock()  # FileLock(self.cache_path + ".lock")
 
     def prepared(self):
         ensure_path_exists(self.cache_path)
-        with h5py.File(self.cache_path, mode="a") as f:
-            if "src_hash" in f.attrs and f.attrs["src_hash"] != self.src_hash:
-                os.remove(self.cache_path)
-                logger.warn(f"deleted cache due to inconsistent hash of source. {self.cache_path}")
+        with self.lock:  # dont let multiple thread check this.
+            # why is this repeatedly called in batch gen?
+            logger.info(
+                f"trying to open hdf5 for preparation at thread:{threading.currentThread().name} |pid:{os.getpid()} ")
+            with h5py.File(self.cache_path, mode="a") as f:  # tries to open lock even though it is locked..
+                if "src_hash" in f.attrs and f.attrs["src_hash"] != self.src_hash:
+                    os.remove(self.cache_path)
+                    logger.warn(f"deleted cache due to inconsistent hash of source. {self.cache_path}")
 
-        with h5py.File(self.cache_path, mode="a") as f:
-            if "src_hash" not in f.attrs:
-                f.attrs["src_hash"] = self.src_hash
-            if not all(map(lambda item: item in f, "value flag".split())):
-                sample = self.src[0]
-                if isinstance(sample, int):
-                    sample = np.int64(sample)
-                elif isinstance(sample, float):
-                    sample = np.float64(sample)
-                if "value" not in f:
-                    if hasattr(sample, "shape"):
-                        shape = (self.total, *sample.shape)
-                    else:
-                        shape = (self.total,)
-                    if sample.dtype == np.float64:
-                        logger.warn(f"this dataset({self.__class__.__name__}) returns value with dtype:float64 ")
+            with h5py.File(self.cache_path, mode="a") as f:
+                if "src_hash" not in f.attrs:
+                    f.attrs["src_hash"] = self.src_hash
+                if not all(map(lambda item: item in f, "value flag".split())):
+                    sample = self.src[0]
+                    if isinstance(sample, int):
+                        sample = np.int64(sample)
+                    elif isinstance(sample, float):
+                        sample = np.float64(sample)
+                    if "value" not in f:
+                        if hasattr(sample, "shape"):
+                            shape = (self.total, *sample.shape)
+                        else:
+                            shape = (self.total,)
+                        if sample.dtype == np.float64:
+                            logger.warn(f"this dataset({self.__class__.__name__}) returns value with dtype:float64 ")
 
-                    if self.dataset_opts.get("chunks") is True:
-                        items_per_chunk = max(1024 * 1024 * 1 // sample.nbytes, 1)  # chunk is set to 1 MBytes
+                        if self.dataset_opts.get("chunks") is True:
+                            items_per_chunk = max(1024 * 1024 * 1 // sample.nbytes, 1)  # chunk is set to 1 MBytes
 
-                        self.dataset_opts["chunks"] = (items_per_chunk, *sample.shape)
-                    logger.info(f"dataset created with options:{self.dataset_opts}")
-                    logger.warn(f"dataset dtype: {sample.dtype}")
-                    f.create_dataset("value", shape=shape, dtype=sample.dtype, **self.dataset_opts)
-                    logger.info(f"created value in hdf5")
-                if "flag" not in f:
-                    f.create_dataset("flag", data=np.zeros((self.total,), dtype=np.bool))
-                    logger.info(f"created flag in hdf5")
-                logger.info(f"created hdf5 cache at {self.cache_path}.")
-                f.flush()
-                logger.info(f"{list(f.keys())}")
+                            self.dataset_opts["chunks"] = (items_per_chunk, *sample.shape)
+                        logger.info(f"dataset created with options:{self.dataset_opts}")
+                        logger.warn(f"dataset dtype: {sample.dtype}")
+                        f.create_dataset("value", shape=shape, dtype=sample.dtype, **self.dataset_opts)
+                        logger.info(f"created value in hdf5")
+                    if "flag" not in f:
+                        f.create_dataset("flag", data=np.zeros((self.total,), dtype=np.bool))
+                        logger.info(f"created flag in hdf5")
+                    logger.info(f"created hdf5 cache at {self.cache_path}.")
+                    f.flush()
+                    logger.info(f"{list(f.keys())}")
         return True
 
     @property
@@ -283,10 +309,10 @@ class Hdf5CachedSeries(CachedSeries):
         return self._src.total
 
     def check_zeros_in_cache(self, _slice):
-        with h5py.File(self.cache_path, mode="r+") as f:
-            flags = f["flag"]
-            flags_on_mem = flags[:]
-            with h5py.File(self.cache_path, mode="r") as f:
+        with self.lock:
+            with h5py.File(self.cache_path, mode="r+") as f:
+                flags = f["flag"]
+                flags_on_mem = flags[:]
                 xs = f["value"]
                 for i in tqdm(range(*_slice.indices(_slice.stop))):
                     if flags_on_mem[i]:
@@ -308,8 +334,9 @@ class Hdf5CachedSeries(CachedSeries):
             if check_non_zero:
                 flags = self.check_zeros_in_cache(_slice)
             else:
-                with h5py.File(self.cache_path, mode="r+") as f:
-                    flags = f["flag"][:]
+                with self.lock:
+                    with h5py.File(self.cache_path, mode="r") as f:
+                        flags = f["flag"][:]
 
             def missing_batches():
                 start, end, step = _slice.indices(len(self))
@@ -323,23 +350,24 @@ class Hdf5CachedSeries(CachedSeries):
                                         total=len(missing_slices))
 
             def saver():
-                with h5py.File(self.cache_path, mode="r+") as f:
-                    flags = f["flag"]
-                    xs = f["value"]
-                    observed = 0
-                    while True:
-                        item = item_queue.get()
-                        if item is None:
-                            break
-                        _s, x = item
-                        # logger.info(f"item inside: {item}")
-                        xs[_s] = x
-                        saved_count = len(x)
-                        flags[_s] = True
-                        observed += saved_count
-                        # if observed > 1000:
-                        f.flush()
+                with self.lock:
+                    with h5py.File(self.cache_path, mode="r+") as f:
+                        flags = f["flag"]
+                        xs = f["value"]
                         observed = 0
+                        while True:
+                            item = item_queue.get()
+                            if item is None:
+                                break
+                            _s, x = item
+                            # logger.info(f"item inside: {item}")
+                            xs[_s] = x
+                            saved_count = len(x)
+                            flags[_s] = True
+                            observed += saved_count
+                            # if observed > 1000:
+                            f.flush()
+                            observed = 0
 
             t = threading.Thread(target=saver)
             t.start()
@@ -355,10 +383,12 @@ class Hdf5CachedSeries(CachedSeries):
 
     def _get_item(self, index):
         if self.prepared():
-            with h5py.File(self.cache_path, mode="r+") as f:
-                if f["flag"][index]:
-                    return f["value"][index]
-                else:
+            with self.lock:
+                with h5py.File(self.cache_path, mode="r") as f:
+                    if f["flag"][index]:
+                        return f["value"][index]
+
+                with h5py.File(self.cache_path, mode="r+") as f:
                     x = self.src._values(index)
                     f["value"][index] = x
                     f["flag"][index] = True
@@ -366,13 +396,29 @@ class Hdf5CachedSeries(CachedSeries):
 
     def _get_slice(self, _slice):
         if self.prepared():
-            with h5py.File(self.cache_path, mode="r+") as f:  # opening file takes 20ms
-                if f["flag"][_slice].all():
-                    # logger.info(f"cache is ready for this slice")
+            with self.lock:
+                with h5py.File(self.cache_path, mode="r") as f:  # opening file takes 20ms
+                    if f["flag"][_slice].all():
+                        # logger.info(f"cache is ready for this slice")
+                        return f["value"][_slice]
+                self.ensure(_slice)
+                with h5py.File(self.cache_path, mode="r") as f:
                     return f["value"][_slice]
-                else:
-                    self.ensure(_slice)
-                    return f["value"][_slice]
+
+    def slice_generator(self, slices, preload=5, en_numpy=False):
+        # do not propagate batch generation to parent
+        self.ensure()  # checking all values before iteration.
+
+        def batches():
+            for _slice in slices:
+                #logger.info(f"get lock:{threading.currentThread().name}")
+                with self.lock, h5py.File(self.cache_path, mode="r") as f:
+                    values = f["value"][_slice] # do not yield while holding a lock!
+                    #logger.info(f"yield:{threading.currentThread().name}")
+                yield values
+                #logger.info(f"release lock:{threading.currentThread().name}")
+
+        yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
     def _get_indices(self, indices):
         logger.warn(f"indices access on hdf5 is slow")

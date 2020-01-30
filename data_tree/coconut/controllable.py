@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xee62c790
+# __coconut_hash__ = 0x18f7cd00
 
 # Compiled with Coconut version 1.4.1 [Ernest Scribbler]
 
@@ -44,6 +44,9 @@ class ControllableWidget:  #mutable subject with controller  # class Controllabl
     def parents(self):  #     def parents(self):
         return []  #         return []
 
+    def _infer_widget(self, val):  #     def _infer_widget(self,val):
+        return infer_widget(val)  #         return infer_widget(val)
+
     @lazy  #     @lazy
     def widget(self):  #     def widget(self):
         out = widgets.Output()  #         out = widgets.Output()
@@ -51,18 +54,14 @@ class ControllableWidget:  #mutable subject with controller  # class Controllabl
 # I want the item to be cleared before item comes.
             out.clear_output(wait=False)  #             out.clear_output(wait=False)
             with out:  #             with out:
-                (display)((infer_widget)(item))  #                 item |> infer_widget |> display
+                (display)((self._infer_widget)(item))  #                 item |> self._infer_widget |> display
         self.value.subscribe(_on_change, _on_change, _on_change)  #         self.value.subscribe(
-        box = widgets.VBox([*self.controllers, out])  #         box = widgets.VBox([*self.controllers,out])
-#box.layout = widgets.Layout(
-#            #grid_template_columns="auto auto auto",
-#            border="solid 2px"
-#        )
+        box = widgets.VBox([out])  #         box = widgets.VBox([out])
         box.layout.border = "solid 2px"  #         box.layout.border="solid 2px"
         return box  #         return box
 
     def _ipython_display_(self):  #     def _ipython_display_(self):
-        display(self.widget)  #         display(self.widget)
+        display(widgets.VBox([*self.controllers, self.widget]))  #         display(widgets.VBox([*self.controllers,self.widget]))
 
     def map(self, f):  #     def map(self,f):
         return MappedCW(f, self)  #         return MappedCW(f,self)
@@ -72,6 +71,9 @@ class ControllableWidget:  #mutable subject with controller  # class Controllabl
 
     def zip(self, *others):  #     def zip(self,*others):
         return ZippedCW(self, *others)  #         return ZippedCW(self,*others)
+
+    def viz(self, visualizer):  #     def viz(self,visualizer):
+        return VizCW(self, visualizer)  #         return VizCW(self,visualizer)
 
     @lazy  #     @lazy
     def roots(self):  #     def roots(self):
@@ -124,33 +126,33 @@ class Sourced(ControllableWidget):  # class Sourced(ControllableWidget):
     @property  #     @property
     def controllers(self):  #     def controllers(self):
         return (unique_objects)((chain)(*map(_coconut.operator.attrgetter("controllers"), self.parents)))  #         return self.parents |> map$(.controllers) |*> chain |> unique_objects
-    @lazy  #     @lazy
-    def widget(self):  #     def widget(self):
-        out = widgets.Output()  #         out = widgets.Output()
-        def data_output(data):  #         def data_output(data):
-            out.clear_output(wait=False)  #             out.clear_output(wait=False)
-            with out:  #             with out:
-                (display)((infer_widget)(data))  #                 data |> infer_widget |> display
-        roots = [r.value for r in self.roots]  #         roots = [r.value for r in self.roots]
-#Observable.combine_latest(roots,(*i)->tuple(i)).subscribe(_->out.clear_output(wait=False))
+    """
+    @lazy
+    def widget(self):
+        out = widgets.Output()
+        def data_output(data):
+            out.clear_output(wait=False)
+            with out:
+                data |> self._infer_widget |> display
+        roots = [r.value for r in self.roots]
+        #Observable.combine_latest(roots,(*i)->tuple(i)).subscribe(_->out.clear_output(wait=False))
 
-        def _on_change(item):  #         def _on_change(item):
-            if (isinstance)(item, Future):  #             if item `isinstance` Future:
-                data_output("waiting for future")  #                 data_output("waiting for future")
-                item.add_done_callback(lambda f: data_output(f.result()))  #                 item.add_done_callback(f->data_output(f.result()))
-            else:  #             else:
-                data_output(item)  #                 data_output(item)
+        def _on_change(item):
+            if item `isinstance` Future:
+                data_output("waiting for future")
+                item.add_done_callback(f->data_output(f.result()))
+            else:
+                data_output(item)
 
-        self.value.subscribe(_on_change, _on_change, _on_change)  #         self.value.subscribe(
-#out.layout.border="solid 2px"
-        box = widgets.HBox([out])  #         box = widgets.HBox([out])
-        box.layout.border = "solid 2px"  #         box.layout.border="solid 2px"
-        return box  #         return box
-
-    def _ipython_display_(self):  #     def _ipython_display_(self):
-#parent_widgets = [p.widget for p in self.traverse_parents]
-#display(widgets.VBox((parent_widgets |> reversed |> list) + [self.widget]))
-        display(widgets.VBox([*self.controllers, self.widget]))  #         display(widgets.VBox([*self.controllers,self.widget]))
+        self.value.subscribe(
+            _on_change,
+            _on_change,
+            _on_change)
+        #out.layout.border="solid 2px"
+        box = widgets.VBox([*self.controllers,out])
+        box.layout.border="solid 2px"
+        return box
+    """  #     """
 
 class MappedCW(Sourced):  # class MappedCW(Sourced):
     def __init__(self, f, src, expand=False):  #     def __init__(self,f,src,expand=False):
@@ -196,6 +198,20 @@ class ZippedCW(Sourced):  # class ZippedCW(Sourced):
         combined = Observable.combine_latest(tgts, lambda *i: tuple(i))  #         combined = Observable.combine_latest(tgts,(*i)->tuple(i))
         combined.subscribe(subject.on_next)  #.subscribe(t -> subject.on_next(current_values()))  #         combined.subscribe(subject.on_next)#.subscribe(t -> subject.on_next(current_values()))
         return subject  #         return subject
+
+class VizCW(Sourced):  # class VizCW(Sourced):
+    def __init__(self, src, visualizer: '_coconut.typing.Callable[[object], "displayable"]'):  #     def __init__(self,src,visualizer:object->"displayable"):
+        self.src = src  #         self.src = src
+        self.visualizer = visualizer  #         self.visualizer = visualizer
+    @lazy  #     @lazy
+    def value(self):  #     def value(self):
+        return self.src.value  #         return self.src.value
+    @property  #     @property
+    def parents(self):  #     def parents(self):
+        return [self.src]  #         return [self.src]
+
+    def _infer_widget(self, val):  #     def _infer_widget(self,val):
+        return self.visualizer(val)  #         return self.visualizer(val)
 
 def infer_ipywidget(item, **kwargs):  # def infer_ipywidget(item,**kwargs):
     _coconut_match_to = item  #     case item:

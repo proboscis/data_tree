@@ -12,7 +12,7 @@ from frozendict import frozendict
 from lazy import lazy
 from logzero import logger
 
-WARN_SLOW_PREFETCH=True
+WARN_SLOW_PREFETCH = True
 
 
 def load_or_save(path, proc):
@@ -70,7 +70,7 @@ def ensure_path_exists(fileName):
             pass
 
 
-def prefetch_generator(gen, n_prefetch=5,name=None):
+def prefetch_generator(gen, n_prefetch=5, name=None):
     """
     use this on IO intensive(non-cpu intensive) task
     :param gen:
@@ -78,7 +78,7 @@ def prefetch_generator(gen, n_prefetch=5,name=None):
     AA:return:AA
     """
 
-    if n_prefetch == 0:
+    if n_prefetch <= 0:
         yield from gen
         return
 
@@ -135,9 +135,9 @@ def freeze(_item):
     return _freeze(_item)
 
 
-
 def sorted_frozendict(_dict):
     return frozendict(sorted(_dict.items(), key=lambda item: item[0]))
+
 
 class Pickled:
     def __init__(self, path, proc):
@@ -155,3 +155,29 @@ class Pickled:
     def clear(self):
         os.remove(self.path)
         logger.info(f"deleted pickled file at {self.path}")
+
+
+def scantree(path):
+    """Recursively yield DirEntry objects for given directory."""
+    for entry in os.scandir(path):
+        if entry.is_dir(follow_symlinks=False):
+            yield from scantree(entry.path)  # see below for Python 2.x
+        else:
+            yield entry
+
+
+def scan_images(path):
+    from data_tree import series
+    from PIL import Image
+    EXTS = {".jpg", ".png", ".gif", ".jpeg"}
+
+    def gen():
+        for item in scantree(path):
+            for e in EXTS:
+                if item.name.endswith(e):
+                    yield item
+                    break
+
+    return series(gen()).tag("dir_entries").map(
+        lambda p: Image.open(p.path)
+    ).tag("load_iamge")
