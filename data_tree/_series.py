@@ -128,6 +128,9 @@ class Trace(NamedTuple):
     def find_by_tag(self, tag: str):
         return [t for t in self.compiled().traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
 
+    def find_one_by_tag(self,tag:str):
+        return self.find_by_tag(tag)[0]
+
     def compiled(self):
         if isinstance(self.series, MetadataOpsSeries):
             m = self.metadata
@@ -189,7 +192,8 @@ class Trace(NamedTuple):
         for i, t in enumerate(traces[:depth]):
             if mask[i]:
                 vis = t.visualization()
-                assert isinstance(vis,widgets.Widget), f"visualization must be an instance of widget. viz from {t} is {vis}"
+                assert isinstance(vis,
+                                  widgets.Widget), f"visualization must be an instance of widget. viz from {t} is {vis}"
                 hbox = widgets.VBox([
                     widgets.Label(value=f"value at depth {i}"),
                     widgets.Label(value=str(t.metadata)),
@@ -296,6 +300,8 @@ class Series(metaclass=abc.ABCMeta):
     def map(self, f, batch_f=None):
         return MappedSeries(self, f, batch_f)
 
+
+
     def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
@@ -311,6 +317,10 @@ class Series(metaclass=abc.ABCMeta):
 
     def hdf5(self, cache_path, src_hash=None, **dataset_opts):
         from data_tree.ops.cache import Hdf5CachedSeries
+        # when you replace anything in the tree, this cache must be invalidated.
+        # you need a renamed cache when the replaced tree was new
+        # but naming is hard.. how about you provide names?
+        # sin you know that all the cache files have distinct names, you need just one prefix.
         return Hdf5CachedSeries(self, cache_path=cache_path, src_hash=src_hash, **dataset_opts)
 
     def auto_hdf5(self, cache_path, src_hash=None, **dataset_opts):
@@ -520,7 +530,7 @@ class Series(metaclass=abc.ABCMeta):
             self.cache_path + "." + cache_kind)
 
     def cached_transform(self, transformer_constructor: Callable, cache_path: str):
-        return self[Pickled(cache_path,transformer_constructor).value]
+        return self[Pickled(cache_path, transformer_constructor).value]
 
     def shuffle(self, seed=42):
         idx = np.random.RandomState(seed=seed).permutation(self.total)
@@ -575,6 +585,7 @@ class Series(metaclass=abc.ABCMeta):
             progress_bar = lambda i, **kwargs: i
 
         yield from progress_bar(self.slice_generator(slices, preload=preload, en_numpy=en_numpy), total=len(slices))
+
 
     def schedule_on(self, executor: Executor):
         return ScheduledSeries(self, executor)
@@ -634,16 +645,14 @@ class Series(metaclass=abc.ABCMeta):
         pickled = Pickled(path, lambda: op(self))
         return pickled
 
-    def scan(self,init,scanner,batch_scanner=None,show_progress=True,batch_size=512):
-        wrapper = tqdm if show_progress else (lambda i :i)
+    def scan(self, init, scanner, batch_scanner=None, show_progress=True, batch_size=512):
+        wrapper = tqdm if show_progress else (lambda i: i)
         generator = self if batch_scanner is None else self.batch_generator(batch_size=batch_size)
         scanner = scanner if batch_scanner is None else batch_scanner
         state = init
         for item in wrapper(generator):
-            state = scanner(state,item)
+            state = scanner(state, item)
         return state
-
-
 
     def normalization_scaler(self, feature_range=(-1, 1), batch_size=128, progress_bar=tqdm):
         # need to cache used scaler and store that in a history
@@ -682,6 +691,7 @@ class Series(metaclass=abc.ABCMeta):
         return interactive(_l, i=(0, len(self) - 1, 1))
 
     def widget(self):
+
         max_depth = len(self.trace(0).ancestors()) + 1
 
         def _interactive(**kwargs):
@@ -702,11 +712,21 @@ class Series(metaclass=abc.ABCMeta):
         def show_network():
             display(series_to_tree(self))
 
+        @_interactive()
+        def show_trace2():
+            display(self.traces[0])
+
+        @_interactive()
+        def control():
+            display(self.control())
+
         @_interactive(
             visualization=dict(
                 trace=show_trace,
+                raw_trace=show_trace2,
                 tree=show_tree,
-                network=show_network
+                network=show_network,
+                control=control
             )
         )
         def inner(visualization):
@@ -717,8 +737,43 @@ class Series(metaclass=abc.ABCMeta):
     def _ipython_display_(self):
         return display(self.widget())
 
+    def replace(self, replacer):
+        replaced = replacer(self,self.parents)
+        if replaced is not None:
+            return replaced
+        else:
+            return self
 
+    @abc.abstractmethod
+    def clone(self, parents):
+        pass
 
+    def control(self):
+        from data_tree.coconut.ops.control import control_series
+        return control_series(self)
+
+    def cmap(self, f, batch_f, defaults):
+        """
+        either f or batch_f can be None
+        defaults: = dict(a=dict(schem=(1,128,0),value=128,description="test a ")))
+
+        example:
+        pixiv224.rescaled_images.cmap(
+            f = (a,size,scale_method)->a |> Image.fromarray |> .resize((size,size),Image.LANCZOS),
+            batch_f=None,
+            defaults=dict(
+                size=(128,dict(schem=(16,512,16),value=128,description="size")),
+                scale_method=(Image.LANCZOS,dict(schem=[Image.LANCZOS,Image.BILINEAR],description="scaling method"))
+            )
+        )
+        """
+        from data_tree.coconut.ops.control import CMapTemplate
+        return CMapTemplate(
+            src=self,
+            mapper=f,
+            slice_mapper=batch_f,
+            param_controllers=defaults
+        )
 
 class MultiSourcedSeries(Series):
 
@@ -729,8 +784,20 @@ class MultiSourcedSeries(Series):
     def parents(self):
         return self._parents
 
+    def replace(self, replacer):
+        new_parents = [p.replace(replacer) for p in self.parents]
+        replaced = replacer(self,new_parents)
+        if replaced is not  None:
+            return replaced
+        else:
+            return self.clone(new_parents)
+
 
 class ZippedSeries(MultiSourcedSeries):
+
+    def clone(self, parents):
+        return ZippedSeries(self, *parents)
+
     @property
     def indexer(self) -> Indexer:
         return self._indexer
@@ -764,6 +831,16 @@ class ZippedSeries(MultiSourcedSeries):
             series=self,
             metadata=dict()
         )
+
+    def slice_generator(self, slices, preload=5, en_numpy=False):
+        def batches():
+            src_slices = [self.indexer[_s] for _s in slices]
+            for batch in zip(*[s.slice_generator(src_slices, preload=preload, en_numpy=False) for s in self.parents]):
+                if en_numpy and not isinstance(batch, np.ndarray):
+                    batch = np.array(batch)
+                yield batch
+
+        yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
 
 class LambdaAdapter(Series):
@@ -866,6 +943,17 @@ class Hdf5OpenFileAdapter(Series):
 
 class SourcedSeries(Series):
 
+    def replace(self,replacer):
+        new_parents = [p.replace(replacer) for p in self.parents]
+        replaced = replacer(self,new_parents)
+        if replaced is not None:
+            return replaced
+        else:
+            return self.clone(new_parents)
+
+    def clone(self, parents):
+        return self.__class__(parents[0])
+
     @en_lazy
     def parents(self):
         return [self.src]
@@ -937,6 +1025,9 @@ class TraceSeries(SourcedSeries):
 
 
 class FlattenedSeries(MultiSourcedSeries):
+
+    def clone(self, parents):
+        return FlattenedSeries(Series.from_iterable(parents))
 
     @property
     def parents(self):
@@ -1021,7 +1112,6 @@ class IndexedSeries(SourcedSeries):
 
 
 class ScheduledSeries(IndexedSeries):
-
     def __init__(self, src: Series, executor: Executor):
         self.scheduler = executor
         self._src = src
@@ -1063,6 +1153,10 @@ class ScheduledSeries(IndexedSeries):
 
 
 class TaggedSeries(IndexedSeries):
+
+    def clone(self, parents):
+        return TaggedSeries(src=parents[0], *self.tags)
+
     def __init__(self, src: Series, *tags):
         self.tags = tags
         self._src = src
@@ -1081,6 +1175,10 @@ class TaggedSeries(IndexedSeries):
 
 
 class MetadataOpsSeries(IndexedSeries):
+
+    def clone(self, parents):
+        return MetadataOpsSeries(src=parents[0], operator=self.operator)
+
     def __init__(self, src: Series, operator: Callable):
         self.operator = operator
         self._src = src
@@ -1103,6 +1201,10 @@ class MetadataOpsSeries(IndexedSeries):
 
 
 class Indexed(IndexedSeries):
+
+    def clone(self, parents):
+        return Indexed(parents[0], self.indexer)
+
     def __init__(self, src, indexer):
         self._src = src
         self._indexer = indexer
@@ -1117,6 +1219,10 @@ class Indexed(IndexedSeries):
 
 
 class MappedSeries(IndexedSeries):
+
+    def clone(self, parents):
+        return MappedSeries(src=parents[0], single_mapper=self.single_mapper, slice_mapper=self.slice_mapper)
+
     @property
     def indexer(self):
         return self._indexer
@@ -1187,6 +1293,10 @@ def stp_worker_generator(mapper, global_resources):
 
 
 class MPMappedSeries(IndexedSeries):
+    def clone(self, parents):
+        return MPMappedSeries(src=parents[0], single_mapper=self.single_mapper, resources_kwargs=self.resources,
+                              num_process=self.num_process)
+
     @property
     def indexer(self):
         return self._indexer
@@ -1283,6 +1393,9 @@ class MPMappedSeries(IndexedSeries):
 
 
 class NumpySeries(Series):
+    def clone(self, parents):
+        return NumpySeries(self.data)
+
     @property
     def parents(self):
         return []
@@ -1320,6 +1433,9 @@ class ListSeries(Series):
     @property
     def parents(self):
         return []
+
+    def clone(self, parents):
+        return ListSeries(self.data)
 
     @property
     def indexer(self):

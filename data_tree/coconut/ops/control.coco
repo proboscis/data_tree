@@ -1,0 +1,152 @@
+from data_tree._series import Series,SourcedSeries
+from data_tree.coconut.controllable import ControllableWidget,iwidget
+from data_tree.indexer import IdentityIndexer
+
+data SliceFunction(f,vec_f):
+    def partial(self,**kwargs):
+        return SliceFunction(self.f$(**kwargs),self.vec_f$(**kwargs))
+
+
+def f_to_vec_f(f):
+    return (items,*args,**kwargs)->[f(i,*args,**kwargs) for i in items]
+
+def vecf_to_f(vecf):
+    return (items,*args,**kwargs)->vecf(item,*args,**kwargs)[0]
+
+def get_slice_function(f=None,vec_f=None):
+    if f is None and vec_f is None:
+        raise RuntimeError(f"either f or vec_f must be a function! {f} and {vec_f}")
+    if f is None:
+        f = vecf_to_f(vec_f)
+    elif vec_f is None:
+        vec_f = f_to_vec_f(f)
+    return SliceFunction(f,vec_f)
+
+
+class CMapTemplate(SourcedSeries):
+    def __init__(self,
+                 src,
+                 mapper,
+                 slice_mapper,
+                 param_controllers:Mapping[str,tuple]):
+        super().__init__()
+        self._src = src
+        self._indexer = IdentityIndexer(self.total)
+        self.param_controllers = param_controllers
+        self.default_params = {k:v[0] for k,v in param_controllers.items()}
+        self.unapplied = get_slice_function(mapper,slice_mapper)
+        self.applied = self.unapplied.partial(**self.default_params)
+        self.mapped = src.map(f=self.applied.f,batch_f=self.applied.vec_f)
+
+    def clone(self, parents):
+        return CMapTemplate(
+            self.src,
+            self.unapplied.f,
+            self.unapplied.vec_f,
+            self.param_controllers)
+
+    @property
+    def indexer(self):
+        return self._indexer
+
+    @property
+    def src(self) -> Series:
+        return self._src
+
+    @property
+    def total(self):
+        return self._src.total
+
+    def _get_item(self, index):
+        return self.mapped._values(index)
+
+    def _get_slice(self, _slice):
+        return self.mapped._values(_slice)
+
+    def _get_indices(self, indices):
+        return self.mapped._values(indices)
+
+    def _get_mask(self, mask):
+        return self.mapped._values(mask)
+
+    def slice_generator(self, slices, preload=5, en_numpy=False):
+        yield from self.mapped.slice_generator(slices,preload=preload,en_numpy=en_numpy)
+from typing import Callable
+class CMapInstance(SourcedSeries):# stateful. beware not to use it
+    def __init__(self,template:CMapTemplate):
+        self.template = template
+        self.controllers = dict()
+        for k,v in self.template.param_controllers.items():
+            case v[1]:
+                match f is Callable: # generates widget
+                    self.controllers[k] = f()
+                match data is dict:
+                    data = data.copy()
+                    schem = data["schem"]
+                    del data["schem"]
+                    self.controllers[k] = iwidget(schem,**data)
+
+        #self.controllers = {k:v[1] for k,v in self.template.param_controllers.items()}
+
+    @property
+    def indexer(self):
+        return self.template.indexer
+
+    @property
+    def src(self)->Series:
+        return self.template.src
+
+    def clone(self,parents):
+        return CMapInstance(self.template)
+
+    @property
+    def total(self):
+        return self.template.total
+
+    def current_kwargs(self):
+        return {k:v.value.value for k,v in self.controllers.items()}
+
+    def _get_item(self, index):
+        kwargs = self.current_kwargs()
+        val = self.src[index]
+        return self.template.unapplied.f(val,**kwargs)
+
+    def _get_slice(self, _slice):
+        kwargs = self.current_kwargs()
+        vals = self.src._values(_slice)
+        return self.template.unaplied.vec_f(vals,**kwargs)
+
+    def _get_indices(self, indices):
+        kwargs = self.current_kwargs()
+        vals = self.src._values(_slice)
+        return self.template.unaplied.vec_f(vals,**kwargs)
+
+
+    def _get_mask(self, mask):
+        kwargs = self.current_kwargs()
+        vals = self.src._values(_slice)
+        return self.template.unaplied.vec_f(vals,**kwargs)
+def remove_caches(s,parents):
+    from data_tree.ops.cache import CachedSeries
+    case s:
+        match _ is CachedSeries:
+            return parents[0]
+
+def instantiate_cmap(s,parents):
+    case s:
+        match _ is CMapTemplate:
+            return CMapInstance(s.clone(parents))
+
+def control_series(s):
+    from data_tree import series
+    converted = s.replace(remove_caches).replace(instantiate_cmap)
+    controllers = converted.traversed.filter(->_ `isinstance` CMapInstance ).map(->_.controllers.values()|>series).flatten().values
+    controllers = ControllableWidget.zip(*controllers)
+    index = iwidget((0,len(converted),1),description="index")
+    max_depth = len(converted.trace(0).ancestors()) + 1
+    depth = iwidget((0,max_depth,1),value=1,min=1,description="depth")
+    def _id(i,d):
+        return converted.trace(i).show_traceback_html(depth=d)
+
+    trace = index.zip(depth)#.star_map(_id)
+    return controllers.zip(trace).viz(t->_id(*t[1]))

@@ -23,6 +23,9 @@ class ControllableWidget: #mutable subject with controller
     def parents(self):
         return []
 
+    def _infer_widget(self,val):
+        return infer_widget(val)
+
     @lazy
     def widget(self):
         out = widgets.Output()
@@ -30,21 +33,17 @@ class ControllableWidget: #mutable subject with controller
             # I want the item to be cleared before item comes.
             out.clear_output(wait=False)
             with out:
-                item |> infer_widget |> display
+                item |> self._infer_widget |> display
         self.value.subscribe(
             _on_change,
             _on_change,
             _on_change)
-        box = widgets.VBox([*self.controllers,out])
-        #box.layout = widgets.Layout(
-        #            #grid_template_columns="auto auto auto",
-        #            border="solid 2px"
-        #        )
+        box = widgets.VBox([out])
         box.layout.border="solid 2px"
         return box
 
     def _ipython_display_(self):
-        display(self.widget)
+        display(widgets.VBox([*self.controllers,self.widget]))
 
     def map(self,f):
         return MappedCW(f,self)
@@ -54,6 +53,9 @@ class ControllableWidget: #mutable subject with controller
 
     def zip(self,*others):
         return ZippedCW(self,*others)
+
+    def viz(self,visualizer):
+        return VizCW(self,visualizer)
 
     @lazy
     def roots(self):
@@ -106,13 +108,14 @@ class Sourced(ControllableWidget):
     @property
     def controllers(self):
         return self.parents |> map$(.controllers) |*> chain |> unique_objects
+    """
     @lazy
     def widget(self):
         out = widgets.Output()
         def data_output(data):
             out.clear_output(wait=False)
             with out:
-                data |> infer_widget |> display
+                data |> self._infer_widget |> display
         roots = [r.value for r in self.roots]
         #Observable.combine_latest(roots,(*i)->tuple(i)).subscribe(_->out.clear_output(wait=False))
 
@@ -128,14 +131,10 @@ class Sourced(ControllableWidget):
             _on_change,
             _on_change)
         #out.layout.border="solid 2px"
-        box = widgets.HBox([out])
+        box = widgets.VBox([*self.controllers,out])
         box.layout.border="solid 2px"
         return box
-
-    def _ipython_display_(self):
-        #parent_widgets = [p.widget for p in self.traverse_parents]
-        #display(widgets.VBox((parent_widgets |> reversed |> list) + [self.widget]))
-        display(widgets.VBox([*self.controllers,self.widget]))
+    """
 
 class MappedCW(Sourced):
     def __init__(self,f,src,expand=False):
@@ -181,6 +180,20 @@ class ZippedCW(Sourced):
         combined = Observable.combine_latest(tgts,(*i)->tuple(i))
         combined.subscribe(subject.on_next)#.subscribe(t -> subject.on_next(current_values()))
         return subject
+
+class VizCW(Sourced):
+    def __init__(self,src,visualizer:object->"displayable"):
+        self.src = src
+        self.visualizer = visualizer
+    @lazy
+    def value(self):
+        return self.src.value
+    @property
+    def parents(self):
+        return [self.src]
+
+    def _infer_widget(self,val):
+        return self.visualizer(val)
 
 def infer_ipywidget(item,**kwargs):
     case item:
