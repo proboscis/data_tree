@@ -300,8 +300,6 @@ class Series(metaclass=abc.ABCMeta):
     def map(self, f, batch_f=None):
         return MappedSeries(self, f, batch_f)
 
-
-
     def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
@@ -346,6 +344,7 @@ class Series(metaclass=abc.ABCMeta):
                 return converted()
             else:
                 return self.hdf5(cache_path, src_hash=src_hash, **dataset_opts)
+
 
     def condition(self, **conds: dict):
         def _add_condition(m: dict):
