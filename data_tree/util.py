@@ -10,10 +10,12 @@ import numpy as np
 import pandas as pd
 from frozendict import frozendict
 from lazy import lazy
-from logzero import logger
+from loguru import logger
 
-WARN_SLOW_PREFETCH = True
-
+WARN_SLOW_PREFETCH = False
+import sys
+#logger.remove()
+#logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
 
 def load_or_save(path, proc):
     try:
@@ -75,7 +77,7 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
     use this on IO intensive(non-cpu intensive) task
     :param gen:
     :param n_prefetch:
-    AA:return:AA
+    :return:
     """
 
     if n_prefetch <= 0:
@@ -91,13 +93,16 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
         for item in gen:
             while active:
                 try:
-                    # logger.info(f"putting item to queue. (max {n_prefetch})")
+                    logger.debug(f"putting item to queue. (max {n_prefetch})")
                     item_queue.put(item, timeout=1)
                     break
                 except Full:
                     pass
             if not active:
+                logger.info(f"break due to inactivity")
                 break
+            logger.debug("waiting for generator item")
+        logger.info("putting end token")
         item_queue.put(END_TOKEN)
 
     t = Thread(target=loader)
@@ -110,12 +115,21 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
                 logger.warn(f"prefetching queue is empty! check bottleneck named:{name}")
             item = item_queue.get()
             if item is END_TOKEN:
+                logger.debug("an end token is fetched")
                 break
             else:
                 yield item
+    except Exception as e:
+        logger.error(e)
+        raise e
     finally:
+        logger.info(f"trying to join loader {t.name}")
         active = False
+        #consume all queue
+        while item_queue.qsize() > 0:
+            item_queue.get()
         t.join()
+        logger.info(f"loader {t.name} completed")
 
 
 def dict_hash(val):

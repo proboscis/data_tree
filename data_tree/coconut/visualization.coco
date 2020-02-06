@@ -15,7 +15,14 @@ batch_L_to_img = ary->ary
 img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
 from bqplot import pyplot as blt
-
+from logzero import logger
+data DummyType
+try:
+    import torch
+    TensorType = torch.Tensor
+except Exception as e:
+    logger.warn(f"failed to load torch. no visualization for torch tensor.")
+    TensorType = DummyType
 
 def bqplot_hist(ary, title="histogram", bins=50):
     fig = blt.figure(title=title)
@@ -88,6 +95,8 @@ def infer_widget(value):
             return value.widget()
         match _ is PIL.Image.Image:
             return value |> img_to_widget
+        match _ is TensorType:
+            return infer_widget(value.detach().numpy())
         match _ is np.ndarray:
             return ary_to_widget(value)
         match _ is tuple if value `hasattr` "_asdict":

@@ -7,7 +7,8 @@ import threading
 import h5py
 import numpy as np
 from lazy import lazy as en_lazy
-from logzero import logger
+#from logzero import logger
+from loguru import logger
 from tqdm._tqdm_notebook import tqdm_notebook
 
 from data_tree import Series, IdentityIndexer, Indexer
@@ -56,14 +57,14 @@ class PickledSeries(CachedSeries):
                     if data is not None and len(data) == self.total and loaded_hash == self.src_hash:
                         return data
                     else:
-                        logger.warn(f"found data is corrupt:{loaded_hash} != {self.src_hash}")
+                        logger.warning(f"found data is corrupt:{loaded_hash} != {self.src_hash}")
                         failed = True
                 except Exception as e:
-                    logger.warn(f"failed to load pkl:{e}")
+                    logger.warning(f"failed to load pkl:{e}")
                     failed = True
                 if failed:
                     os.remove(self.pickle_path)
-                    logger.warn(f"removed corrupt cache at {self.pickle_path}")
+                    logger.warning(f"removed corrupt cache at {self.pickle_path}")
 
         with open(self.pickle_path, "wb") as f:
             data = self.src.values
@@ -265,7 +266,7 @@ class Hdf5CachedSeries(CachedSeries):
             with h5py.File(self.cache_path, mode="a") as f:  # tries to open lock even though it is locked..
                 if "src_hash" in f.attrs and f.attrs["src_hash"] != self.src_hash:
                     os.remove(self.cache_path)
-                    logger.warn(f"deleted cache due to inconsistent hash of source. {self.cache_path}")
+                    logger.warning(f"deleted cache due to inconsistent hash of source. {self.cache_path}")
 
             with h5py.File(self.cache_path, mode="a") as f:
                 if "src_hash" not in f.attrs:
@@ -282,14 +283,14 @@ class Hdf5CachedSeries(CachedSeries):
                         else:
                             shape = (self.total,)
                         if sample.dtype == np.float64:
-                            logger.warn(f"this dataset({self.__class__.__name__}) returns value with dtype:float64 ")
+                            logger.warning(f"this dataset({self.__class__.__name__}) returns value with dtype:float64 ")
 
                         if self.dataset_opts.get("chunks") is True:
                             items_per_chunk = max(1024 * 1024 * 1 // sample.nbytes, 1)  # chunk is set to 1 MBytes
 
                             self.dataset_opts["chunks"] = (items_per_chunk, *sample.shape)
                         logger.info(f"dataset created with options:{self.dataset_opts}")
-                        logger.warn(f"dataset dtype: {sample.dtype}")
+                        logger.warning(f"dataset dtype: {sample.dtype}")
                         f.create_dataset("value", shape=shape, dtype=sample.dtype, **self.dataset_opts)
                         logger.info(f"created value in hdf5")
                     if "flag" not in f:
@@ -379,7 +380,7 @@ class Hdf5CachedSeries(CachedSeries):
     def clear(self):
         if os.path.exists(self.cache_path):
             os.remove(self.cache_path)
-            logger.warn(f"deleted cache at {self.cache_path}")
+            logger.warning(f"deleted cache at {self.cache_path}")
 
     def _get_item(self, index):
         if self.prepared():
@@ -421,7 +422,7 @@ class Hdf5CachedSeries(CachedSeries):
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
     def _get_indices(self, indices):
-        logger.warn(f"indices access on hdf5 is slow")
+        logger.warning(f"indices access on hdf5 is slow")
         if self.prepared():
             with h5py.File(self.cache_path, mode="r+") as f:
                 flags = f["flag"]

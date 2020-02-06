@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x60878f40
+# __coconut_hash__ = 0xa2c4f1f4
 
 # Compiled with Coconut version 1.4.1 [Ernest Scribbler]
 
@@ -37,7 +37,21 @@ batch_L_to_img = lambda ary: ary  # batch_L_to_img = ary->ary
 img_to_widget = lambda value: widgets.Box([widgets.Image(value=value._repr_png_(), format="png")])  # img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
 from bqplot import pyplot as blt  # from bqplot import pyplot as blt
+from logzero import logger  # from logzero import logger
+class DummyType(_coconut.collections.namedtuple("DummyType", "")):  # data DummyType
+    __slots__ = ()  # data DummyType
+    __ne__ = _coconut.object.__ne__  # data DummyType
+    def __eq__(self, other):  # data DummyType
+        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data DummyType
+    def __hash__(self):  # data DummyType
+        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data DummyType
 
+try:  # try:
+    import torch  #     import torch
+    TensorType = torch.Tensor  #     TensorType = torch.Tensor
+except Exception as e:  # except Exception as e:
+    logger.warn("failed to load torch. no visualization for torch tensor.".format())  #     logger.warn(f"failed to load torch. no visualization for torch tensor.")
+    TensorType = DummyType  #     TensorType = DummyType
 
 def bqplot_hist(ary, title="histogram", bins=50):  # def bqplot_hist(ary, title="histogram", bins=50):
     fig = blt.figure(title=title)  #     fig = blt.figure(title=title)
@@ -126,35 +140,54 @@ def output_widget(value):  # def output_widget(value):
     return out  #     return out
 
 def infer_widget(value):  # def infer_widget(value):
-    from data_tree._series import Series  #     from data_tree._series import Series
-    _coconut_match_to = value  #     case value:
-    _coconut_case_check_1 = False  #     case value:
-    if _coconut.isinstance(_coconut_match_to, Series):  #     case value:
-        _coconut_case_check_1 = True  #     case value:
-    if _coconut_case_check_1:  #     case value:
-        return value.widget()  #             return value.widget()
-    if not _coconut_case_check_1:  #         match _ is PIL.Image.Image:
-        if _coconut.isinstance(_coconut_match_to, PIL.Image.Image):  #         match _ is PIL.Image.Image:
-            _coconut_case_check_1 = True  #         match _ is PIL.Image.Image:
-        if _coconut_case_check_1:  #         match _ is PIL.Image.Image:
-            return (img_to_widget)(value)  #             return value |> img_to_widget
-    if not _coconut_case_check_1:  #         match _ is np.ndarray:
-        if _coconut.isinstance(_coconut_match_to, np.ndarray):  #         match _ is np.ndarray:
-            _coconut_case_check_1 = True  #         match _ is np.ndarray:
-        if _coconut_case_check_1:  #         match _ is np.ndarray:
-            return ary_to_widget(value)  #             return ary_to_widget(value)
-    if not _coconut_case_check_1:  #         match _ is tuple if value `hasattr` "_asdict":
-        if _coconut.isinstance(_coconut_match_to, tuple):  #         match _ is tuple if value `hasattr` "_asdict":
-            _coconut_case_check_1 = True  #         match _ is tuple if value `hasattr` "_asdict":
-        if _coconut_case_check_1 and not ((hasattr)(value, "_asdict")):  #         match _ is tuple if value `hasattr` "_asdict":
-            _coconut_case_check_1 = False  #         match _ is tuple if value `hasattr` "_asdict":
-        if _coconut_case_check_1:  #         match _ is tuple if value `hasattr` "_asdict":
-            return (output_widget)(value)  #             return value |> output_widget
-    if not _coconut_case_check_1:  #         match _ is (tuple,list):
-        if _coconut.isinstance(_coconut_match_to, (tuple, list)):  #         match _ is (tuple,list):
-            _coconut_case_check_1 = True  #         match _ is (tuple,list):
-        if _coconut_case_check_1:  #         match _ is (tuple,list):
-            items = [infer_widget(item) for item in value]  #             items = [infer_widget(item) for item in value]
-            return widgets.VBox([widgets.GridBox(items, layout=widgets.Layout(grid_template_columns="auto auto auto", border="solid 2px")), widgets.Label(value="displaying tuple with {_coconut_format_0} elements".format(_coconut_format_0=(len(value))))])  #             return widgets.VBox([
-    if not _coconut_case_check_1:  #     else:
-        return (output_widget)(value)  #         return value |> output_widget
+    while True:  #     from data_tree._series import Series
+        from data_tree._series import Series  #     from data_tree._series import Series
+        _coconut_match_to = value  #     case value:
+        _coconut_case_check_1 = False  #     case value:
+        if _coconut.isinstance(_coconut_match_to, Series):  #     case value:
+            _coconut_case_check_1 = True  #     case value:
+        if _coconut_case_check_1:  #     case value:
+            return value.widget()  #             return value.widget()
+        if not _coconut_case_check_1:  #         match _ is PIL.Image.Image:
+            if _coconut.isinstance(_coconut_match_to, PIL.Image.Image):  #         match _ is PIL.Image.Image:
+                _coconut_case_check_1 = True  #         match _ is PIL.Image.Image:
+            if _coconut_case_check_1:  #         match _ is PIL.Image.Image:
+                return (img_to_widget)(value)  #             return value |> img_to_widget
+        if not _coconut_case_check_1:  #         match _ is TensorType:
+            if _coconut.isinstance(_coconut_match_to, TensorType):  #         match _ is TensorType:
+                _coconut_case_check_1 = True  #         match _ is TensorType:
+            if _coconut_case_check_1:  #         match _ is TensorType:
+                try:  #         match _ is TensorType:
+                    _coconut_is_recursive = infer_widget is _coconut_recursive_func_5  #         match _ is TensorType:
+                except _coconut.NameError:  #         match _ is TensorType:
+                    _coconut_is_recursive = False  #         match _ is TensorType:
+                if _coconut_is_recursive:  #         match _ is TensorType:
+                    value = value.detach().numpy()  #         match _ is TensorType:
+                    continue  #         match _ is TensorType:
+                else:  #         match _ is TensorType:
+                    return infer_widget(value.detach().numpy())  #         match _ is TensorType:
+
+        if not _coconut_case_check_1:  #         match _ is np.ndarray:
+            if _coconut.isinstance(_coconut_match_to, np.ndarray):  #         match _ is np.ndarray:
+                _coconut_case_check_1 = True  #         match _ is np.ndarray:
+            if _coconut_case_check_1:  #         match _ is np.ndarray:
+                return ary_to_widget(value)  #             return ary_to_widget(value)
+        if not _coconut_case_check_1:  #         match _ is tuple if value `hasattr` "_asdict":
+            if _coconut.isinstance(_coconut_match_to, tuple):  #         match _ is tuple if value `hasattr` "_asdict":
+                _coconut_case_check_1 = True  #         match _ is tuple if value `hasattr` "_asdict":
+            if _coconut_case_check_1 and not ((hasattr)(value, "_asdict")):  #         match _ is tuple if value `hasattr` "_asdict":
+                _coconut_case_check_1 = False  #         match _ is tuple if value `hasattr` "_asdict":
+            if _coconut_case_check_1:  #         match _ is tuple if value `hasattr` "_asdict":
+                return (output_widget)(value)  #             return value |> output_widget
+        if not _coconut_case_check_1:  #         match _ is (tuple,list):
+            if _coconut.isinstance(_coconut_match_to, (tuple, list)):  #         match _ is (tuple,list):
+                _coconut_case_check_1 = True  #         match _ is (tuple,list):
+            if _coconut_case_check_1:  #         match _ is (tuple,list):
+                items = [infer_widget(item) for item in value]  #             items = [infer_widget(item) for item in value]
+                return widgets.VBox([widgets.GridBox(items, layout=widgets.Layout(grid_template_columns="auto auto auto", border="solid 2px")), widgets.Label(value="displaying tuple with {_coconut_format_0} elements".format(_coconut_format_0=(len(value))))])  #             return widgets.VBox([
+        if not _coconut_case_check_1:  #     else:
+            return (output_widget)(value)  #         return value |> output_widget
+
+
+        return None  # 
+_coconut_recursive_func_5 = infer_widget  #

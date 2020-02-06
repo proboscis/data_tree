@@ -7,7 +7,7 @@ packages = find_packages(include=["data_tree"])
 setup(
     zip_safe=False,
     name="data_tree",
-    version="0.1",
+    version="0.11",
     description="data conversion tracing library",
     author="proboscis",
     author_email="nameissoap@gmail.com",
@@ -27,6 +27,7 @@ setup(
         "pyvis",
         "lazy_object_proxy",
         "retry",
-        "pprintpp"
+        "pprintpp",
+        "loguru"
     ],
 )
