@@ -15,7 +15,7 @@ from IPython.core.display import display
 from frozendict import frozendict
 from ipywidgets import interactive
 from lazy import lazy as en_lazy
-from logzero import logger
+from loguru import logger
 from sklearn.preprocessing import MinMaxScaler
 from tqdm.autonotebook import tqdm
 
@@ -25,9 +25,8 @@ from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2
 
 from data_tree.resource import Resource
-from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled
+from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled, shared_npy_array_like
 import ipywidgets as widgets
-import pyaml
 from pprintpp import pformat
 from pyvis.network import Network
 
@@ -128,7 +127,7 @@ class Trace(NamedTuple):
     def find_by_tag(self, tag: str):
         return [t for t in self.compiled().traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
 
-    def find_one_by_tag(self,tag:str):
+    def find_one_by_tag(self, tag: str):
         return self.find_by_tag(tag)[0]
 
     def compiled(self):
@@ -300,6 +299,12 @@ class Series(metaclass=abc.ABCMeta):
     def map(self, f, batch_f=None):
         return MappedSeries(self, f, batch_f)
 
+    def star_map(self, f):
+        return MappedSeries(self, single_mapper=lambda args: f(*args))
+
+    def map_b(self, batch_f):
+        return MappedSeries(self, lambda b: batch_f(b[None])[0], batch_f)
+
     def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
@@ -344,7 +349,6 @@ class Series(metaclass=abc.ABCMeta):
                 return converted()
             else:
                 return self.hdf5(cache_path, src_hash=src_hash, **dataset_opts)
-
 
     def condition(self, **conds: dict):
         def _add_condition(m: dict):
@@ -585,7 +589,6 @@ class Series(metaclass=abc.ABCMeta):
 
         yield from progress_bar(self.slice_generator(slices, preload=preload, en_numpy=en_numpy), total=len(slices))
 
-
     def schedule_on(self, executor: Executor):
         return ScheduledSeries(self, executor)
 
@@ -737,7 +740,7 @@ class Series(metaclass=abc.ABCMeta):
         return display(self.widget())
 
     def replace(self, replacer):
-        replaced = replacer(self,self.parents)
+        replaced = replacer(self, self.parents)
         if replaced is not None:
             return replaced
         else:
@@ -774,6 +777,13 @@ class Series(metaclass=abc.ABCMeta):
             param_controllers=defaults
         )
 
+    def values_progress(self, batch_size, progress_bar):
+        res = []
+        for batch in self.batch_generator(batch_size=batch_size, preload=0, progress_bar=progress_bar):
+            res += batch
+        return res
+
+
 class MultiSourcedSeries(Series):
 
     def __init__(self, parents: list):
@@ -785,8 +795,8 @@ class MultiSourcedSeries(Series):
 
     def replace(self, replacer):
         new_parents = [p.replace(replacer) for p in self.parents]
-        replaced = replacer(self,new_parents)
-        if replaced is not  None:
+        replaced = replacer(self, new_parents)
+        if replaced is not None:
             return replaced
         else:
             return self.clone(new_parents)
@@ -907,44 +917,11 @@ class Hdf5Adapter(Series):
         return self.data[mask]
 
 
-class Hdf5OpenFileAdapter(Series):
-    @property
-    def parents(self):
-        return []
-
-    def __init__(self, hdf5_initializer, open_file, key):
-        if key not in open_file:
-            hdf5_initializer()
-        self.hdf5_file = open_file
-        self.data = self.hdf5_file[key]
-        self._indexer = IdentityIndexer(total=len(self.data))
-
-    @property
-    def indexer(self):
-        return self._indexer
-
-    @property
-    def total(self):
-        return self._indexer.total
-
-    def _get_item(self, index):
-        return self.data[index]
-
-    def _get_slice(self, _slice):
-        return self.data[_slice]
-
-    def _get_indices(self, indices):
-        return self.data[indices]
-
-    def _get_mask(self, mask):
-        return self.data[mask]
-
-
 class SourcedSeries(Series):
 
-    def replace(self,replacer):
+    def replace(self, replacer):
         new_parents = [p.replace(replacer) for p in self.parents]
-        replaced = replacer(self,new_parents)
+        replaced = replacer(self, new_parents)
         if replaced is not None:
             return replaced
         else:
@@ -1283,12 +1260,13 @@ def mp_mapper(f, global_resources: Mapping[str, GlobalHolder], value):
 def stp_worker_generator(mapper, global_resources):
     def _worker_generator():
         def _worker(value):
+            v, token = value
             resources = {k: g.value for k, g in global_resources.items()}
-            return mapper(value, **resources)
+            return mapper(v, **resources), token
 
         return _worker
 
-    return _worker_generator()
+    return _worker_generator
 
 
 class MPMappedSeries(IndexedSeries):
@@ -1363,26 +1341,35 @@ class MPMappedSeries(IndexedSeries):
             resources = {k: r.prepare() for k, r in self.resources.items()}
             stp = SequentialTaskParallel2(
                 worker_generator=stp_worker_generator(self.single_mapper, global_resources=resources),
-                num_worker=multiprocessing.cpu_count(),
-                max_pending_result=512)
+                num_worker=multiprocessing.cpu_count() if self.num_process is None else self.num_process,
+                max_pending_result=64)
 
             def _fetcher():
                 logger.info(f"multiprocessing fetcher started")
                 for batch in self.src.slice_generator(src_slices, preload=preload, en_numpy=False):
                     if not termination_signal.is_set():
-                        stp.enqueue(batch)
+                        # logger.debug(f"task queue size:{stp.task_queue.qsize()}")
+                        for item in batch[:-1]:
+                            stp.enqueue((item, None))
+                        stp.enqueue((batch[-1], "end"))
                     else:
                         logger.warning(f"multiprocessing fetcher stopped due to signal")
                         break
+                stp.enqueue_termination()
 
             fetch_thread = threading.Thread(target=_fetcher)
             fetch_thread.start()
             try:
-                with stp.managed_start(total=len(slices)) as gen:
-                    for batch in tqdm(gen, total=len(slices)):
-                        if en_numpy and not isinstance(batch, np.ndarray):
-                            batch = np.array(batch)
-                        yield batch
+                with stp.managed_start() as gen:
+                    batch_buffer = []
+                    for item, token in tqdm(gen, desc="multi process mapping progress.."):
+                        batch_buffer.append(item)
+                        if token == "end":
+                            if en_numpy and not isinstance(batch, np.ndarray):
+                                batch = np.array(batch)
+                            yield batch_buffer
+                            # logger.debug("yield batch")
+                            batch_buffer = []
             finally:
                 termination_signal.set()
                 for k, r in self.resources.items():

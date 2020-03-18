@@ -5,7 +5,7 @@ from threading import Thread
 from typing import Callable
 
 from lazy import lazy
-from logzero import logger
+from loguru import logger
 
 
 class Resource(metaclass=abc.ABCMeta):

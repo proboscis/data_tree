@@ -1,3 +1,4 @@
+import abc
 import os
 import pickle
 import shutil
@@ -11,11 +12,15 @@ import pandas as pd
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
+from easydict import EasyDict as edict
+from tqdm.autonotebook import tqdm
 
 WARN_SLOW_PREFETCH = False
 import sys
-#logger.remove()
-#logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
+
+
+# logger.remove()
+# logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
 
 def load_or_save(path, proc):
     try:
@@ -93,16 +98,16 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
         for item in gen:
             while active:
                 try:
-                    logger.debug(f"putting item to queue. (max {n_prefetch})")
+                    # logger.debug(f"putting item to queue. (max {n_prefetch})")
                     item_queue.put(item, timeout=1)
                     break
                 except Full:
                     pass
             if not active:
-                logger.info(f"break due to inactivity")
+                # logger.info(f"break due to inactivity")
                 break
-            logger.debug("waiting for generator item")
-        logger.info("putting end token")
+            # logger.debug("waiting for generator item")
+        # logger.info("putting end token")
         item_queue.put(END_TOKEN)
 
     t = Thread(target=loader)
@@ -112,10 +117,10 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
         while True:
             # logger.info(f"queue status:{item_queue.qsize()}")
             if item_queue.qsize() == 0 and WARN_SLOW_PREFETCH:
-                logger.warn(f"prefetching queue is empty! check bottleneck named:{name}")
+                logger.warning(f"prefetching queue is empty! check bottleneck named:{name}")
             item = item_queue.get()
             if item is END_TOKEN:
-                logger.debug("an end token is fetched")
+                # logger.debug("an end token is fetched")
                 break
             else:
                 yield item
@@ -123,13 +128,13 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
         logger.error(e)
         raise e
     finally:
-        logger.info(f"trying to join loader {t.name}")
+        # logger.info(f"trying to join loader {t.name}")
         active = False
-        #consume all queue
+        # consume all queue
         while item_queue.qsize() > 0:
             item_queue.get()
         t.join()
-        logger.info(f"loader {t.name} completed")
+        # logger.info(f"loader {t.name} completed")
 
 
 def dict_hash(val):
@@ -153,7 +158,20 @@ def sorted_frozendict(_dict):
     return frozendict(sorted(_dict.items(), key=lambda item: item[0]))
 
 
-class Pickled:
+class PickledTrait:
+
+    @property
+    @abc.abstractmethod
+    def value(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def clear(self):
+        pass
+
+
+class Pickled(PickledTrait):
     def __init__(self, path, proc):
         self.loaded = False
         self._value = None
@@ -171,6 +189,23 @@ class Pickled:
         logger.info(f"deleted pickled file at {self.path}")
 
 
+    def map(self, f):
+        return MappedPickled(self, f)
+
+
+class MappedPickled(PickledTrait):
+    def __init__(self, src: PickledTrait, f):
+        self.src = src
+        self.f = f
+
+    @lazy
+    def value(self):
+        return self.f(self.src.value)
+
+    def clear(self):
+        return self.src.clear()
+
+
 def scantree(path):
     """Recursively yield DirEntry objects for given directory."""
     for entry in os.scandir(path):
@@ -179,19 +214,79 @@ def scantree(path):
         else:
             yield entry
 
+def scanfiles(path):
+    def gen():
+        for item in tqdm(scantree(path), desc="scanning files.."):
+            yield item
+    from data_tree import series
+    return series(gen())
+
+
+
 
 def scan_images(path):
     from data_tree import series
     from PIL import Image
-    EXTS = {".jpg", ".png", ".gif", ".jpeg"}
+    EXTS = {"jpg", "png", "gif", "jpeg"}
 
     def gen():
-        for item in scantree(path):
-            for e in EXTS:
-                if item.name.endswith(e):
-                    yield item
-                    break
+        for item in tqdm(scantree(path), desc="scanning directory for images..."):
+            ext = item.name.split(".")
+            if len(ext):
+                ext = ext[-1]
+            if ext in EXTS:
+                yield item
 
     return series(gen()).tag("dir_entries").map(
         lambda p: Image.open(p.path)
-    ).tag("load_iamge")
+    ).tag("load_image")
+
+
+def scan_images_cached(cache_path, scan_path) -> PickledTrait:
+    """
+    searches a given directory for images recursively and save its result as pkl.
+    :param cache_path:
+    :param scan_path:
+    :return: PickledTrait[Series[Image]]
+    """
+    from data_tree import series
+    from PIL import Image
+    paths = Pickled(
+        cache_path,
+        lambda: series(
+            scan_images(scan_path).tagged_value("dir_entries").map(
+                lambda de:edict(path=de.path,name=de.name)
+            ).values_progress(512, tqdm))
+    )
+    return paths.map(
+        lambda ps: series(ps).tag("dir_entries").map(
+            lambda d:d.path).tag("image_path").map(
+            Image.open).tag("loaded_image"))
+
+
+def save_images_to_path(series, path):
+    """
+    stores all Image instance in a series in to path with name:sha1(np.array(img)).hexdigest()+".png"
+    :param series:Series[PIL.Image]
+    :param path:destination dir
+    :return:
+    """
+    from hashlib import sha1
+    import numpy as np
+    import os
+    ensure_path_exists(path)
+    for img in tqdm(series, desc=f"saving images"):
+        _hash = sha1(np.array(img)).hexdigest()
+        img_path = os.path.join(path, _hash + ".jpg")
+        if not os.path.exists(img_path):
+            img.save(img_path)
+
+
+def shared_npy_array_like(ary: np.ndarray):
+    import multiprocessing as mp
+
+    buf = mp.RawArray(
+        np.ctypeslib.as_ctypes_type(ary.dtype),
+        ary.size)
+    return np.frombuffer(buf, dtype=ary.dtype).reshape(ary.shape)
+

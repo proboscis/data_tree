@@ -2,7 +2,7 @@ import os
 from typing import NamedTuple
 
 import yaml
-from logzero import logger
+from loguru import logger
 
 from data_tree.util import ensure_path_exists, dict_hash
 from data_tree.resource import ContextResource, fopen

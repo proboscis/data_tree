@@ -1,0 +1,8 @@
+from data_tree.coconut.astar import AStarSolver
+
+
+class SmartObject:
+    solver = AStarSolver
+    def __init__(self,data,_type):
+        self.data = data
+        self._type = _type

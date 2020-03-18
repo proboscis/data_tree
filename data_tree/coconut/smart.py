@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x14ca3b07
+# __coconut_hash__ = 0xf34f812b
 
 # Compiled with Coconut version 1.4.1 [Ernest Scribbler]
 
@@ -18,3 +18,12 @@ from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _cocon
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
+
+from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import AStarSolver
+
+
+class SmartObject:  # class SmartObject:
+    solver = AStarSolver  #     solver = AStarSolver
+    def __init__(self, data, _type):  #     def __init__(self,data,_type):
+        self.data = data  #         self.data = data
+        self._type = _type  #         self._type = _type
