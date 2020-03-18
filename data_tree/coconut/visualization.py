@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xa2c4f1f4
+# __coconut_hash__ = 0x74504432
 
 # Compiled with Coconut version 1.4.1 [Ernest Scribbler]
 
@@ -24,7 +24,7 @@ from pprintpp import pformat  # from pprintpp import pformat,pprint
 from pprintpp import pprint  # from pprintpp import pformat,pprint
 from PIL import Image  # from PIL import Image
 import PIL  # import PIL
-from logzero import logger  # from logzero import logger
+from loguru import logger  # from loguru import logger
 import numpy as np  # import numpy as np
 import pandas as pd  # import pandas as pd
 from typing import Iterable  # from typing import Iterable
@@ -37,7 +37,8 @@ batch_L_to_img = lambda ary: ary  # batch_L_to_img = ary->ary
 img_to_widget = lambda value: widgets.Box([widgets.Image(value=value._repr_png_(), format="png")])  # img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
 from bqplot import pyplot as blt  # from bqplot import pyplot as blt
-from logzero import logger  # from logzero import logger
+from loguru import logger  # from loguru import logger
+
 class DummyType(_coconut.collections.namedtuple("DummyType", "")):  # data DummyType
     __slots__ = ()  # data DummyType
     __ne__ = _coconut.object.__ne__  # data DummyType
@@ -46,11 +47,12 @@ class DummyType(_coconut.collections.namedtuple("DummyType", "")):  # data Dummy
     def __hash__(self):  # data DummyType
         return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data DummyType
 
+
 try:  # try:
     import torch  #     import torch
     TensorType = torch.Tensor  #     TensorType = torch.Tensor
 except Exception as e:  # except Exception as e:
-    logger.warn("failed to load torch. no visualization for torch tensor.".format())  #     logger.warn(f"failed to load torch. no visualization for torch tensor.")
+    logger.warning("failed to load torch. no visualization for torch tensor.".format())  #     logger.warning(f"failed to load torch. no visualization for torch tensor.")
     TensorType = DummyType  #     TensorType = DummyType
 
 def bqplot_hist(ary, title="histogram", bins=50):  # def bqplot_hist(ary, title="histogram", bins=50):
@@ -63,11 +65,13 @@ def bqplot_hist(ary, title="histogram", bins=50):  # def bqplot_hist(ary, title=
 
 def ary_to_image(value):  # def ary_to_image(value):
     if not (isinstance)(value, np.ndarray):  #     if not value `isinstance` np.ndarray:
-        return None  #         return None        
-
+        return None  #         return None
     if value.dtype is not np.uint8:  #     if value.dtype is not np.uint8:
+        if value.max() <= 1:  #         if value.max() <= 1:
+            value = value * 255  #             value = value * 255
 #logger.warning("automatically converting dtype {value.dtype} to uint8 for visualization")
         value = value.astype("uint8")  #         value = value.astype("uint8")
+
 
     _coconut_match_to = value.shape  #     case value.shape:
     _coconut_case_check_0 = False  #     case value.shape:
@@ -142,12 +146,18 @@ def output_widget(value):  # def output_widget(value):
 def infer_widget(value):  # def infer_widget(value):
     while True:  #     from data_tree._series import Series
         from data_tree._series import Series  #     from data_tree._series import Series
+        from data_tree.coconut.convert import AutoImage  #     from data_tree.coconut.convert import AutoImage
         _coconut_match_to = value  #     case value:
         _coconut_case_check_1 = False  #     case value:
-        if _coconut.isinstance(_coconut_match_to, Series):  #     case value:
+        if _coconut.isinstance(_coconut_match_to, AutoImage):  #     case value:
             _coconut_case_check_1 = True  #     case value:
         if _coconut_case_check_1:  #     case value:
-            return value.widget()  #             return value.widget()
+            return value.to_widget()  #             return value.to_widget()
+        if not _coconut_case_check_1:  #         match _ is Series:
+            if _coconut.isinstance(_coconut_match_to, Series):  #         match _ is Series:
+                _coconut_case_check_1 = True  #         match _ is Series:
+            if _coconut_case_check_1:  #         match _ is Series:
+                return value.widget()  #             return value.widget()
         if not _coconut_case_check_1:  #         match _ is PIL.Image.Image:
             if _coconut.isinstance(_coconut_match_to, PIL.Image.Image):  #         match _ is PIL.Image.Image:
                 _coconut_case_check_1 = True  #         match _ is PIL.Image.Image:

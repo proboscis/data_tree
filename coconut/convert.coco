@@ -1,0 +1,511 @@
+from PIL import Image
+import numpy as np
+import heapq
+from data_tree.coconut.visualization import infer_widget
+from loguru import logger
+from data_tree.coconut.astar import new_conversion,AStarSolver
+
+data ValueRange(name)
+VR_0_1 = ValueRange("VR_0_1")
+VR_0_255 = ValueRange("VR_0_255")
+VR_None = ValueRange("VR_None")
+VR_XYZ_Normalized = ValueRange("VR_XYZ_Normalized")
+
+
+data DataType
+#TODO add shape information to tensorlike
+#TODO add shape information to PILImage
+
+data TensorLike(
+    dtype is str,
+    arrange is str,
+    channel_repr is str,
+    value_range is ValueRange) from DataType:
+    def __repr__(self):
+        return f"Tensor({self.data_type}|{self.dtype}|{self.arrange}|{self.channel_repr}|{self.value_range})"
+
+data Numpy(dtype,arrange,channel_repr,value_range) from TensorLike:
+    def __new__(cls,*args):
+        return makedata(cls,*args)
+
+data Torch(dtype,arrange,channel_repr,value_range) from TensorLike:
+    def __new__(cls,*args):
+        return makedata(cls,*args)
+
+data PILImages(mode,channel_repr) from DataType # represents iterable of PIL.Images
+data PILImage(mode,channel_repr) from DataType
+
+data ImageDef(data_type is DataType,tags is frozenset)
+
+DTYPES={"float32","float64","int32","int64","uint8","bool"}
+data Edge(a:ImageDef,b:ImageDef,f,cost:int,name="undefined"):
+    def __repr__(self):
+        return f"{self.a} \t-> {self.name}\t-> {self.b}"
+from typing import List
+
+#純粋にエッジだけを考えると、どうしても組み合わせ爆発になる。目的地を知っていれば削減できる。
+
+# 各imdefのNodeベースでエッジを定義するのか。それとも。エッジのルールを網羅するのか。
+# オペレーターのほうが数が少ないので、オペレーターだけ定義したい。
+# List up operators.
+# operator definition: ImageDef->List[Edge]
+# 1. change data_type
+# 2. change dtype
+# 3. change arrange
+# 4. change ch_repr
+# 5. select channel
+def to_imagedef(f):
+    def _inner(imdef:ImageDef):
+        try:
+            #logger.debug(type(imdef))
+            if imdef `isinstance` ImageDef and len(imdef) >= 1 and imdef `hasattr` "data_type":
+            #if imdef `isinstance` ImageDef:
+                edges = f(imdef.data_type)
+                if edges is not None:
+                    return [Edge(imdef,ImageDef(e.b,imdef.tags),e.f,e.cost,e.name) for e in edges]
+                else:
+                    return []
+            else:
+                return []
+        except Exception as e:
+            logger.warning(f"unknown error...imdef:{imdef}")
+            logger.warning(f"{imdef} has attr causes exception?")
+            logger.warning(f"{hasattr(imdef,'data_type')}")
+            raise e
+    return _inner
+
+@to_imagedef
+def to_PILImages(imdef:ImageDef)->Edge[]:
+    #TODO fix pattern match on data class
+    case imdef:
+        match Numpy("uint8","BHWC",("RGBA" or "RGB" or "LAB") as c_repr, =VR_0_255):
+            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray ..> .convert(c_repr))(img) for img in ary],2,name="to_Images")]
+        match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
+            return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="to_Images")]
+    return []
+@to_imagedef
+def to_numpy(imdef:ImageDef)->List[Edge]:
+    case imdef:
+        match Torch(dtype,arng,ch_repr,vr): # torch tensor can always become numpy
+            return [Edge(imdef,
+                         Numpy(dtype  ,arng ,ch_repr,vr),
+                         (.detach() ..> .cpu() ..> .numpy()),
+                         1,
+                         name="torch_to_numpy")]
+        match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
+            return [Edge(imdef,
+                         Numpy("uint8","BHW",ch_repr,VR_0_255),
+                         (fmap$(np.array) ..> np.array),
+                         1,
+                         name="image_to_numpy")]
+        match PILImages(mode,ch_repr):# A multi-channel Image becomes a numpy array
+            return [Edge(imdef,
+                         Numpy("uint8","BHWC",ch_repr,VR_0_255),
+                         (fmap$(np.array) ..> np.array),
+                         1,
+                         name="image_to_numpy")]
+    return []
+@to_imagedef
+def to_torch(imdef:ImageDef):
+    import torch
+    case imdef:
+        match Numpy(dtype,arng,ch_repr,vr): # only numpy can directly become a torch tensor
+            return [Edge(imdef,Torch(dtype,arng,ch_repr,vr),torch.from_numpy,2,name="to_torch")]
+    return []
+@to_imagedef
+def change_dtype(imdef:ImageDef):# TODO match value range to dtype with bool type
+    case imdef:
+        match Numpy(dtype,arng,ch_repr,vr):
+            return [Edge(
+                imdef,
+                imdef.__class__(_dtype,arng,ch_repr,vr),
+                .astype(_dtype),
+                1,
+                name=f"{dtype} to {_dtype}"
+            ) for _dtype in DTYPES if _dtype != dtype]
+    return []
+
+
+def change_arng(imdef):
+    case imdef:
+        match Numpy(_,"BCHW",_,_):
+            return [(.transpose(0,2,3,1),"BHWC")]
+        match Numpy(_,"BHWC",_,_):
+            return [(.transpose(0,3,1,2),"BCHW")]
+        match Torch(_,"BCHW",_,_):
+            return [(.transpose(1,2) ..> .transpose(2,3),"BHWC")]
+        match Torch(_,"BHWC",_,_):
+            return [(.transpose(2,3) ..> .transpose(1,2),"BCHW")]
+    return []
+
+@to_imagedef
+def drop_alpha(imdef):
+    case imdef:
+        match TensorLike(dtype,"BHWC","RGBA",vr):
+            return [Edge(a=imdef,
+                         b=imdef.__class__(dtype,"BHWC","RGB",vr),
+                         f=a->a[:,:,:,:3],
+                         cost=1,
+                         name=f"select rgb channel")]
+        match TensorLike(dtype,"BCHW","RGBA",vr):
+            return [Edge(a=imdef,
+                         b=imdef.__class__(dtype,"BHWC","RGB",vr),
+                         f=a->a[:,:3],
+                         cost=1,
+                         name=f"select rgb channel")]
+@to_imagedef
+def change_arrange(imdef:ImageDef):
+    match TensorLike(dtype,arng,ch_repr,vr) in imdef:
+        return [Edge(imdef,imdef.__class__(dtype,_arng,ch_repr,vr),f,1,name=f"{arng} to {_arng}") for f,_arng in change_arng(imdef)]
+    return []
+
+@to_imagedef
+def select_channel(imdef:ImageDef):
+    case imdef:
+        match TensorLike(dtype,"BHWC",ch_repr,vr) if len(ch_repr) >= 1:
+            return [Edge(a=imdef,
+                         b=imdef.__class__(dtype,"BHWC",c,vr),
+                         f=a->a[:,:,:,[i]],
+                         cost=1,
+                         name=f"select {c} channel") for i,c in enumerate(ch_repr)]
+        match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_repr) >= 1:
+            return [Edge(a=imdef,
+                         b=imdef.__class__(dtype,"BHWC",c,vr),
+                         f=a->a[:,[i]],
+                         cost=1,
+                         name=f"select {c} channel") for i,c in enumerate(ch_repr)]
+    return []
+@to_imagedef
+def drop_channel(imdef:ImageDef):
+    case imdef:
+        match TensorLike(dtype,="BHWC",ch_repr,vr) if len(ch_repr) == 1:
+            return [Edge(a=imdef,
+                        b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+                        f=a->a[:,:,:,0],
+                        cost = 1,
+                        name=f"BHWC to BHW"
+                       )]
+        match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_repr) == 1:
+            return [Edge(a=imdef,
+                        b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+                        f=a->a[:,0],
+                        cost = 1,
+                        name=f"BCHW to BHW"
+                       )]
+    return []
+
+
+def en_batch(imdef:ImageDef):
+    case imdef:
+        match ImageDef(TensorLike(dtype,"HWC" or "CHW" or "HW",ch_repr,vr),tags):
+            new_arng = "B"+imdef.data_type.arrange
+            return [Edge(a=imdef,
+                         b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
+                         f=a->a[None],
+                         cost=1,
+                         name=f"{imdef.data_type.arrange} to {new_arng}"
+                        )]
+        match ImageDef(PILImage(mode,channel_repr),tags):
+            return [Edge(a=imdef,
+                         b=ImageDef(PILImages(mode,channel_repr),tags|frozenset(("en_batched",))),
+                         f=a->[a],
+                         cost=1,
+                         name=f"wrap image with list"
+                        )]
+    return []
+def de_batch(imdef:ImageDef):
+    case imdef:
+        match ImageDef(TensorLike(dtype,arng,ch,vr),tags) if "en_batched" in tags and "B" in arng:
+            return [Edge(
+                a=imdef,
+                b=ImageDef(imdef.data_type.__class__(dtype,arng[1:],ch,vr),tags-frozenset("en_batched")),
+                f=a->a[0],
+                cost=1,
+                name=f"de_batch en_batched image"
+            )]
+        match ImageDef(PILImages(mode,ch),tags) if "en_batched" in tags:
+            return [Edge(
+                a=imdef,
+                b=ImageDef(PILImage(mode,ch),tags-frozenset("en_batched")),
+                f=a->a[0],
+                cost=1,
+                name=f"de_batch en_batched image"
+            )]
+
+def drop_batch_tag(imdef:ImageDef):
+    case imdef:
+        match ImageDef(data_type,tags) if "en_batched" in tags:
+            return [Edge(imdef,
+                         ImageDef(data_type,tags-frozenset(("en_batched",))),
+                         f=a->a,
+                         cost=1,
+                         name="drop en_batched tag"
+                        )]
+
+@to_imagedef
+def to_rgba(imdef:ImageDef):
+    case imdef:
+        match TensorLike(dtype,arng,ch_repr,vr) if len(ch_repr) == 4:
+            return [Edge(a=imdef,
+                         b=imdef.__class__(dtype,arng,"RGBA",vr),
+                         f=a->a[None],
+                         cost=1,
+                         name=f"view {ch_repr} as RGBA "
+                        )]
+        match TensorLike(dtype,arng,ch_repr,vr) if len(ch_repr) == 3:
+            return [Edge(a=imdef,
+                         b=imdef.__class__(dtype,arng,"RGB",vr),
+                         f=a->a[None],
+                         cost=1,
+                         name=f"view {ch_repr} as RGB "
+                        )]
+@to_imagedef
+def change_value_range(imdef:ImageDef):
+    case imdef:
+        match TensorLike("float32" or "float64",arng,ch_repr,=VR_0_255):
+            return [Edge(a=imdef,
+                         b=imdef.__class__(imdef.dtype,arng,ch_repr,VR_0_1),
+                         f=a->a/255.0,
+                         cost=len(ch_repr),
+                         name="0-255 to 0-1"
+                        )]
+        match TensorLike("float32" or "float64",arng,ch_repr,=VR_0_1):
+            return [Edge(a=imdef,
+                         b=imdef.__class__(imdef.dtype,arng,ch_repr,VR_0_255),
+                         f=a->a*255.0,
+                         cost=len(ch_repr),
+                         name="0-1 to 0-255"
+                        )]
+    return []
+
+
+
+class NoRouteException(Exception)
+_conversions =[
+    to_PILImages,
+    to_numpy,
+    to_torch,
+    change_dtype,
+    change_arrange,
+    select_channel,
+    drop_channel,
+    en_batch,
+    change_value_range,
+    drop_alpha,
+    to_rgba,
+    drop_batch_tag,
+    de_batch
+]
+
+def _heuristics(src:ImageDef,dst:ImageDef):
+    case (src,dst):
+        match (a is TensorLike,b is TensorLike):
+            return (np.array(a) != np.array(b)).sum()
+        match (a is PILImages,b is TensorLike):
+            return 1
+        match (a is TensorLike,b is PILImage):
+            return 1
+    return 0
+
+def _astar(start,end,h,d,max_depth = 10):
+    to_visit = []
+    scores = dict()
+    heapq.heappush(to_visit,
+                   (d([])+h(start,end),start,[]))
+    while to_visit:
+        score,pos,trace = heapq.heappop(to_visit)
+        #print(f"visit:{pos}")
+        #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
+        #print(f"visit:{trace[-1] if trace else 'no trace'}")
+        if len(trace) >= max_depth: # terminate search on max_depth
+            continue
+        if pos == end: # reached a goal
+            return trace
+        for edge in _edges(pos):
+            node = edge.b
+            new_trace = trace + [edge]
+            new_score = d(new_trace) + h(node,end)
+            if node in scores and scores[node] <= new_score:
+                continue
+            else:
+                scores[node] = new_score
+                heapq.heappush(to_visit,(new_score,node,new_trace))
+
+    raise NoRouteException(f"no route found between {start} to {end}")
+
+@memoize(1024)
+def _edges(imdef):
+    res = []
+    for f in _conversions:
+        edges = f(imdef)
+        if edges is not None:
+            res += edges
+    return res
+
+
+
+
+_imdef_astar = _astar$(h=_heuristics,d=trace->[t.cost for t in trace] |> sum) |> memoize(1024)
+_converter = (_imdef_astar ..> new_conversion) |> memoize(1024)
+@memoize(1024)
+def str_to_img_def(query):
+    """
+    ex1: 'numpy,float32,BCHW,RGB,0_255 | hello,world'
+    ex2: 'torch,float32,BCHW,RGBA,0_1'
+    ex3: 'image,RGBA,RGBA'
+    ex4: 'images,RGB,RGB|tag1,tag2...'
+    """
+    vrs = {
+        "0_255":VR_0_255,
+        "0_1":VR_0_1,
+        "None":VR_None
+    }
+    query = query.replace(" ","")
+    def query_to_data_type(query):
+        case query.split(","):
+            match ["numpy",dtype,arng,ch,vr]:
+                return Numpy(dtype,arng,ch,vrs[vr])
+            match ["torch",dtype,arng,ch,vr]:
+                return Torch(dtype,arng,ch,vrs[vr])
+            match ["image",mode,ch]:
+                return PILImage(mode,ch)
+            match ["images",mode,ch]:
+                return PILImages(mode,ch)
+    case query.split("|"):
+        match [data_type]:
+            return ImageDef(query_to_data_type(data_type),frozenset())
+        match [data_type,tags]:
+            return ImageDef(query_to_data_type(data_type),frozenset(tags.split(",")))
+
+def parse_def(img_def):
+    return str_to_img_def(img_def) if img_def `isinstance` str else img_def
+
+accept_def_str = f -> parse_def ..> f
+def imdef_neighbors(imdef):
+    return [(e.f,e.b,e.cost,e.name) for e in _edges(imdef)]
+class AutoImage:
+    solver = AStarSolver(rules=[imdef_neighbors])
+    @staticmethod
+    def reset_solver():
+        AutoImage.solver = AStarSolver(
+            rules=[imdef_neighbors]
+        )
+
+    @staticmethod
+    def debug_conversion(a,b,samples):
+        x = samples
+        edges = AutoImage.solver.search_direct(a,b).edges
+        for edge in edges:
+            print(edge)
+            print(edge.f)
+            x = edge.f(x)
+            print(f"converted to type:{type(x)}")
+            if x `isinstance` np.ndarray:
+                print(x.shape)
+            print(f"converted:{x}")
+        return x
+
+    def to_debug(self,img_def):
+        img_def = parse_def(img_def)
+        return AutoImage.debug_conversion(self.img_def,img_def,self.data)
+
+    def __init__(self,data,img_def):
+        img_def = parse_def(img_def)
+        self.data = data
+        self.img_def = img_def
+
+    def converter(self,img_def):
+        img_def = parse_def(img_def)
+        return AutoImage.solver.search_direct(self.img_def,img_def)
+
+    def to(self,img_def is (str,ImageDef),log_trace=False):
+        img_def = parse_def(img_def)
+        #logger.debug(f"searching a path for {self.img_def} to {img_def}")
+        convert = self.converter(img_def)
+        if log_trace:
+            logger.debug(f"converting to {img_def} with {[e.name for e in convert.edges]}")
+        return convert(self.data)
+
+    def convert(self,img_def):
+        img_def = parse_def(img_def)
+        return AutoImage(self.to(img_def),img_def)
+
+    def to_widget(self):
+        convert = self.converter(self.to_images_def())
+        return (convert(self.data),convert.edges)|> infer_widget
+
+    def _repr_html_(self):
+        return self.to_widget() |> display
+
+    def to_images_def(self):
+        match TensorLike(_,arng,_,_) in self.img_def.data_type if "B" not in arng:
+            tag_opt = frozenset(("en_batched",))
+        else:
+            tag_opt = frozenset()
+        case self.img_def.data_type:
+            match PILImage(mode,chrepr):
+                if len(chrepr) == 1:
+                    tag_opt = frozenset(("en_batched",))
+                else:
+                    tag_opt = frozenset()
+                return str_to_img_def("images,{'L' if len(chrepr) == 1 else chrepr},chrepr|{','.join(self,img_def.tags|tag_opt)}")
+            match PILImages(mode,chrepr):
+                return self.img_def
+            match TensorLike(dtype,arng,c,vr) if len(c) == 1:
+                return ImageDef(PILImages("L",c),self.img_def.tags | tag_opt)
+            match TensorLike(dtype,arng,"RGBA",vr):
+                return ImageDef(PILImages("RGBA","RGBA"),self.img_def.tags | tag_opt)
+            match TensorLike(dtype,arng,"RGB",vr):
+                return ImageDef(PILImages("RGB","RGB"),self.img_def.tags | tag_opt)
+        else:
+            return ImageDef(PILImages("RGB","RGB"),self.img_def.tags | tag_opt)
+
+    def image_op(self,f:Image->Image):
+        images_def = self.to_images_def()
+        images = self.to(images_def)
+        new_images=[f(i) for i in images ] # do some resizing or something
+        new_ai = AutoImage(new_images,images_def)
+        return new_ai.convert(self.img_def) # go back to last state.
+
+@property
+def AutoImage.images(self):
+    return self.to(self.to_images_def())
+
+@property
+def AutoImage.image_size(self):
+    return self.images[0].size
+
+def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
+    ch = self.img_def.data_type.channel_repr
+    imgs = self.to(f"numpy,uint8,BHWC,{ch},0_255")[:max_image]
+    nrow = int(sqrt(max_image)+0.5)
+    r = int((w-((nrow+1)*padding))/nrow)
+    imgs = self.image_op(.resize((r,r))).to(f"numpy,uint8,BHWC,{ch},0_255")[:max_image]
+    return auto_image(make_grid(imgs,nrow,padding=1),f"numpy,uint8,HWC,{ch},0_255")
+
+
+def AutoImage.to_widget(self):
+    # TODO display some info about edges, img_def
+    case self.img_def.data_type:
+        match item is PILImages:
+            return self.tile_image().to_widget()
+        match TensorLike(_,arng,*_) if "B" in arng:
+            return self.tile_image().to_widget()
+    else:
+        convert = _converter(self.img_def,self.to_images_def())
+    return convert(self.data) |> infer_widget
+
+
+img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
+def auto_to_3res(img:"AutoImage",cx,cy,r=256)->"AutoImage":
+    img = img.to("image,L,L")
+    #img = img.resize((2048,2048))
+    chs = [crop_square(img,cx,cy,_r).resize((r,r)) for _r in [r*4,r*2,r]]
+    return auto_image(np.concatenate([array(i)[:,:,None] for i in chs],axis=2),"numpy,float32,HWC,RGB,0_255")
+
+def img_to_grid_batch(img:AutoImage):
+    grids = img_to_shifting_grids(img) |> .astype("int32") |> series
+    batch = grids.map((xy)->auto_to_3res(img,xy[0]+128,xy[1]+128,r=256).to("numpy,float32,HWC,RGB,0_1")).values |> array |> .astype("float32")
+    return grids.values,auto_image(batch,"numpy,float32,BHWC,RGB,0_1")
+
+

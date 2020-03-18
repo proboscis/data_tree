@@ -3,7 +3,7 @@ from ipywidgets import interactive, Widget
 from PIL import Image
 from ipywidgets import Image as WImage
 import numpy as np
-from logzero import logger
+from loguru import logger
 
 def show_trace(trace: Trace):
     trace.metadata

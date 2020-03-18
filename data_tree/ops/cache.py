@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import pickle
 import queue
@@ -7,7 +8,7 @@ import threading
 import h5py
 import numpy as np
 from lazy import lazy as en_lazy
-#from logzero import logger
+# from loguru import logger
 from loguru import logger
 from tqdm._tqdm_notebook import tqdm_notebook
 
@@ -67,7 +68,7 @@ class PickledSeries(CachedSeries):
                     logger.warning(f"removed corrupt cache at {self.pickle_path}")
 
         with open(self.pickle_path, "wb") as f:
-            data = self.src.values
+            data = self.src.values_progress(batch_size=128, progress_bar=tqdm)
             pickle.dump((self.src_hash, data), f)
             logger.info(f"pickled at {self.pickle_path} with src_hash {self.src_hash}")
         return data
@@ -253,7 +254,6 @@ class Hdf5CachedSeries(CachedSeries):
         self._src = src
         self._indexer = IdentityIndexer(self.total)
         self.src_hash = "None" if src_hash is None else src_hash
-
         self.dataset_opts = dataset_opts
         self.lock = RLock()  # FileLock(self.cache_path + ".lock")
 
@@ -377,6 +377,31 @@ class Hdf5CachedSeries(CachedSeries):
             item_queue.put(None)
             t.join()
 
+    def ensured(self, batch_size=None):
+        try:
+            self.ensure(batch_size=batch_size)
+        except OSError as ose:
+            logger.warning(f"failed to open source hdf5 for ensuring. assuming it is already ensured.")
+            logger.warning(ose)
+        return Hdf5OpenFileAdapter(
+            hdf5_initializer=lambda: None,
+            open_file=h5py.File(self.cache_path, mode="r"),
+            key="value",
+            parents=[self]
+        )
+
+    def ensured_accessor(self, batch_size=None):
+        try:
+            self.ensure(batch_size=batch_size)
+        except OSError as ose:
+            logger.warning(f"failed to open source hdf5 for ensuring. assuming it is already ensured.")
+            logger.warning(ose)
+        return Hdf5OpenFileAccessor(
+            open_file=h5py.File(self.cache_path, mode="r"),
+            key="value",
+            parents=[self]
+        )
+
     def clear(self):
         if os.path.exists(self.cache_path):
             os.remove(self.cache_path)
@@ -412,12 +437,12 @@ class Hdf5CachedSeries(CachedSeries):
 
         def batches():
             for _slice in slices:
-                #logger.info(f"get lock:{threading.currentThread().name}")
+                # logger.info(f"get lock:{threading.currentThread().name}")
                 with self.lock, h5py.File(self.cache_path, mode="r") as f:
-                    values = f["value"][_slice] # do not yield while holding a lock!
-                    #logger.info(f"yield:{threading.currentThread().name}")
+                    values = f["value"][_slice]  # do not yield while holding a lock!
+                    # logger.info(f"yield:{threading.currentThread().name}")
                 yield values
-                #logger.info(f"release lock:{threading.currentThread().name}")
+                # logger.info(f"release lock:{threading.currentThread().name}")
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
@@ -440,3 +465,111 @@ class Hdf5CachedSeries(CachedSeries):
 
     def _get_mask(self, mask):
         return self._get_indices(np.arange(self.total)[mask])
+
+
+class Hdf5OpenFileAdapter(Series):
+    def clone(self, parents):
+        pass
+
+    @property
+    def parents(self):
+        return self._parents
+
+    def __init__(self, hdf5_initializer, open_file, key, parents=None):
+        if key not in open_file:
+            hdf5_initializer()
+        self._parents = [] if parents is None else parents
+        self.hdf5_file = open_file
+        self.data = self.hdf5_file[key]
+        self._indexer = IdentityIndexer(total=len(self.data))
+        self.lock = multiprocessing.Lock()
+
+    @property
+    def indexer(self):
+        return self._indexer
+
+    @property
+    def total(self):
+        return self._indexer.total
+
+    def _get_item(self, index):
+        with self.lock:
+            return self.data[index]
+
+    def _get_slice(self, _slice):
+        with self.lock:
+            return self.data[_slice]
+
+    def _get_indices(self, indices):
+        with self.lock:
+            return self.data[indices]
+
+    def _get_mask(self, mask):
+        with self.lock:
+            return self.data[mask]
+
+
+class Hdf5Accessor:
+    def __init__(self, hdf5_database, slicer,lock):
+        self.slicer = (slicer,)
+        self.data = hdf5_database
+        self.lock = lock
+
+    def __getitem__(self, idx):
+        if isinstance(idx, tuple):
+            pass
+        else:
+            idx = (idx,)
+        index = self.slicer + idx
+        try:
+            with self.lock:
+                data = self.data[index]
+            return data
+        except Exception as e:
+            logger.error(f"failed to access hdf5 data with index:{index}")
+            raise e
+
+    def __iter__(self):
+        pass
+
+
+class Hdf5OpenFileAccessor(Series):
+    def clone(self, parents):
+        pass
+
+    @property
+    def parents(self):
+        return self._parents
+
+    def __init__(self, open_file, key, parents=None):
+        self._parents = [] if parents is None else parents
+        self.hdf5_file = open_file
+        self.data = self.hdf5_file[key]
+        self._indexer = IdentityIndexer(total=len(self.data))
+        self.indices = np.arange(self.total)
+        self.shape = self.data.shape[1:]
+        self.dtype = self.data.dtype
+        self.lock = multiprocessing.Lock()
+
+    @property
+    def indexer(self):
+        return self._indexer
+
+    @property
+    def total(self):
+        return self._indexer.total
+
+    def _get_item(self, index):
+        return Hdf5Accessor(self.data, index,self.lock)
+
+    def _get_slice(self, _slice):
+        return [Hdf5Accessor(self.data, i,self.lock) for i in self.indices[_slice]]
+
+    def _get_indices(self, indices):
+        return [Hdf5Accessor(self.data, i,self.lock) for i in indices]
+
+    def _get_mask(self, mask):
+        return [Hdf5Accessor(self.data, i,self.lock) for i in self.indices[mask]]
+
+    def close(self):
+        self.hdf5_file.close()

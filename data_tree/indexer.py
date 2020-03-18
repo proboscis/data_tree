@@ -3,7 +3,7 @@ from abc import ABC
 from typing import Union, Iterable
 
 import numpy as np
-from logzero import logger
+from loguru import logger
 
 
 class Indexer(metaclass=abc.ABCMeta):

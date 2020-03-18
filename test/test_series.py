@@ -1,6 +1,6 @@
 
 import numpy as np
-from logzero import logger
+from loguru import logger
 
 from data_tree import Series
 
