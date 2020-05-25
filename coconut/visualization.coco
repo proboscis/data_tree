@@ -11,8 +11,12 @@ L = Image.fromarray$(mode="L")
 RGB = Image.fromarray$(mode="RGB")
 RGBA = Image.fromarray$(mode="RGBA")
 batch_image_to_image = ary->ary.transpose((1, 0, 2, 3)).reshape((ary.shape[2], -1, ary.shape[3]))
-batch_L_to_img = ary->ary 
-img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
+batch_L_to_img = ary->ary
+def img_to_widget(value):
+    img_widget = widgets.Image(value=value._repr_png_(),format="png")
+    img_widget.layout.object_fit = "contain"
+    return img_widget
+#img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
 from bqplot import pyplot as blt
 from loguru import logger
@@ -96,6 +100,8 @@ def infer_widget(value):
     from data_tree._series import Series
     from data_tree.coconut.convert import AutoImage
     case value:
+        match _ if hasattr(value,"to_widget"):
+            return value.to_widget()
         match _ is AutoImage:
             return value.to_widget()
         match _ is Series:

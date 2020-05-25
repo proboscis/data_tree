@@ -305,14 +305,14 @@ class Series(metaclass=abc.ABCMeta):
     def map_b(self, batch_f):
         return MappedSeries(self, lambda b: batch_f(b[None])[0], batch_f)
 
-    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None):
+    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None,max_pending_result=8):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
         :param global_resources: Mapping[Str,Resource[GlobalHolder]]
         :param num_process:
         :return: beware f must be picklable and each element comes to first argument of f, and global resources will be given as kwargs.
         """
-        return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process)  # .lazy()
+        return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process,max_pending_result=max_pending_result)  # .lazy()
 
     @property
     def values(self):
@@ -325,6 +325,14 @@ class Series(metaclass=abc.ABCMeta):
         # but naming is hard.. how about you provide names?
         # sin you know that all the cache files have distinct names, you need just one prefix.
         return Hdf5CachedSeries(self, cache_path=cache_path, src_hash=src_hash, **dataset_opts)
+
+    def lmdb(self, cache_path, src_hash=None, **dataset_opts):
+        from data_tree.ops.cache import LMDBCachedSeries
+        # when you replace anything in the tree, this cache must be invalidated.
+        # you need a renamed cache when the replaced tree was new
+        # but naming is hard.. how about you provide names?
+        # sin you know that all the cache files have distinct names, you need just one prefix.
+        return LMDBCachedSeries(self,db_path=cache_path,src_hash=src_hash, **dataset_opts)
 
     def auto_hdf5(self, cache_path, src_hash=None, **dataset_opts):
         sample = self[0]
@@ -777,7 +785,7 @@ class Series(metaclass=abc.ABCMeta):
             param_controllers=defaults
         )
 
-    def values_progress(self, batch_size, progress_bar):
+    def values_progress(self, batch_size=16, progress_bar=tqdm):
         res = []
         for batch in self.batch_generator(batch_size=batch_size, preload=0, progress_bar=progress_bar):
             res += batch
@@ -845,6 +853,8 @@ class ZippedSeries(MultiSourcedSeries):
         def batches():
             src_slices = [self.indexer[_s] for _s in slices]
             for batch in zip(*[s.slice_generator(src_slices, preload=preload, en_numpy=False) for s in self.parents]):
+                # batch is now batch of slices. so .. you need to extract it
+                batch = tuple(zip(*batch))
                 if en_numpy and not isinstance(batch, np.ndarray):
                     batch = np.array(batch)
                 yield batch
@@ -1282,8 +1292,11 @@ class MPMappedSeries(IndexedSeries):
     def src(self) -> Series:
         return self._src
 
-    def __init__(self, src: Series, single_mapper, resources_kwargs: dict = Union[None, Mapping[str, Resource]],
-                 num_process=None):
+    def __init__(self, src: Series, single_mapper,
+                 resources_kwargs: dict = Union[None, Mapping[str, Resource]],
+                 num_process=None,
+                 max_pending_result=8
+                 ):
         self._src = src
         self._indexer = IdentityIndexer(self.total)
         self.single_mapper = single_mapper
@@ -1291,6 +1304,7 @@ class MPMappedSeries(IndexedSeries):
             resources_kwargs = dict()
         self.resources = resources_kwargs
         self.num_process = num_process
+        self.max_pending_result = max_pending_result
         super().__init__()
 
     @property
@@ -1342,7 +1356,7 @@ class MPMappedSeries(IndexedSeries):
             stp = SequentialTaskParallel2(
                 worker_generator=stp_worker_generator(self.single_mapper, global_resources=resources),
                 num_worker=multiprocessing.cpu_count() if self.num_process is None else self.num_process,
-                max_pending_result=64)
+                max_pending_result=self.max_pending_result)
 
             def _fetcher():
                 logger.info(f"multiprocessing fetcher started")
@@ -1356,7 +1370,7 @@ class MPMappedSeries(IndexedSeries):
                         logger.warning(f"multiprocessing fetcher stopped due to signal")
                         break
                 stp.enqueue_termination()
-
+                logger.warning(f"multiprocessing fetcher stopped ")
             fetch_thread = threading.Thread(target=_fetcher)
             fetch_thread.start()
             try:
@@ -1367,13 +1381,16 @@ class MPMappedSeries(IndexedSeries):
                         if token == "end":
                             if en_numpy and not isinstance(batch, np.ndarray):
                                 batch = np.array(batch)
+                            #logger.info("yielding batch")
                             yield batch_buffer
                             # logger.debug("yield batch")
                             batch_buffer = []
             finally:
+                logger.debug(f"setting fetcher termination signal")
                 termination_signal.set()
                 for k, r in self.resources.items():
                     r.release(r)
+                logger.debug(f"mp user resources are released")
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 

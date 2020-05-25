@@ -3,13 +3,15 @@ import numpy as np
 import heapq
 from data_tree.coconut.visualization import infer_widget
 from loguru import logger
-from data_tree.coconut.astar import new_conversion,AStarSolver
-
-data ValueRange(name)
-VR_0_1 = ValueRange("VR_0_1")
-VR_0_255 = ValueRange("VR_0_255")
-VR_None = ValueRange("VR_None")
-VR_XYZ_Normalized = ValueRange("VR_XYZ_Normalized")
+from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
+from math import sqrt
+data ValueRange(name):
+    def __str__(self):
+        return self.name
+VR_0_1 = ValueRange("0_1")
+VR_0_255 = ValueRange("0_255")
+VR_None = ValueRange("None")
+VR_XYZ_Normalized = ValueRange("XYZ_Normalized")
 
 
 data DataType
@@ -27,15 +29,26 @@ data TensorLike(
 data Numpy(dtype,arrange,channel_repr,value_range) from TensorLike:
     def __new__(cls,*args):
         return makedata(cls,*args)
+    def __repr__(self):
+        return f"Numpy({self.dtype},{self.arrange},{self.channel_repr},{self.value_range})"
 
 data Torch(dtype,arrange,channel_repr,value_range) from TensorLike:
     def __new__(cls,*args):
         return makedata(cls,*args)
+    def __repr__(self):
+        return f"Torch({self.dtype},{self.arrange},{self.channel_repr},{self.value_range})"
 
-data PILImages(mode,channel_repr) from DataType # represents iterable of PIL.Images
-data PILImage(mode,channel_repr) from DataType
+data PILImages(mode,channel_repr) from DataType: # represents iterable of PIL.Images
+    def __repr__(self):
+        return f"PILImages({self.mode},{self.channel_repr})"
+data PILImage(mode,channel_repr) from DataType:
+    def __repr__(self):
+        return f"PILImage({self.mode},{self.channel_repr})"
 
-data ImageDef(data_type is DataType,tags is frozenset)
+data ImageDef(data_type is DataType,tags is frozenset):
+    def __repr__(self):
+        return f"ImageDef({self.data_type}|{list(self.tags)})"
+
 
 DTYPES={"float32","float64","int32","int64","uint8","bool"}
 data Edge(a:ImageDef,b:ImageDef,f,cost:int,name="undefined"):
@@ -149,7 +162,7 @@ def drop_alpha(imdef):
                          name=f"select rgb channel")]
         match TensorLike(dtype,"BCHW","RGBA",vr):
             return [Edge(a=imdef,
-                         b=imdef.__class__(dtype,"BHWC","RGB",vr),
+                         b=imdef.__class__(dtype,"BCHW","RGB",vr),
                          f=a->a[:,:3],
                          cost=1,
                          name=f"select rgb channel")]
@@ -248,15 +261,15 @@ def to_rgba(imdef:ImageDef):
         match TensorLike(dtype,arng,ch_repr,vr) if len(ch_repr) == 4:
             return [Edge(a=imdef,
                          b=imdef.__class__(dtype,arng,"RGBA",vr),
-                         f=a->a[None],
-                         cost=1,
+                         f=a->a,
+                         cost=10,
                          name=f"view {ch_repr} as RGBA "
                         )]
         match TensorLike(dtype,arng,ch_repr,vr) if len(ch_repr) == 3:
             return [Edge(a=imdef,
                          b=imdef.__class__(dtype,arng,"RGB",vr),
-                         f=a->a[None],
-                         cost=1,
+                         f=a->a,
+                         cost=10,
                          name=f"view {ch_repr} as RGB "
                         )]
 @to_imagedef
@@ -278,9 +291,76 @@ def change_value_range(imdef:ImageDef):
                         )]
     return []
 
+def xyza_to_rgba(xyza):
+    xyz = xyza[:3]
+    a = xyza[[3]]
+    rgb = (xyz+1)/2
+    return np.concatenate((rgb,a),axis=0)
+def xyz_to_rgb(xyz):
+    return (xyz+1)/2
+def rgb_to_xyz(rgb):
+    return (rgb*2)-1
+def rgba_to_xyza(rgba):
+    rgb = rgba[:3]
+    a = rgba[[3]]
+    xyz = (rgb*2)-1
+    return np.concatenate((xyz,a),axis=0)
+
+def rule_xyz_to_rgb(imdef):
+    case imdef:
+        match ImageDef(Numpy(dtype,"CHW","XYZA","-1_1"),tags):
+            return [
+                (xyza_to_rgba,ImageDef(Numpy(dtype,"CHW","RGBA",VR_0_1),tags),2,"xyza_to_rgba")
+            ]
+        match ImageDef(Numpy(dtype,"CHW","XYZ","-1_1"),tags):
+            return [
+                (xyz_to_rgb,ImageDef(Numpy(dtype,"CHW","RGB",VR_0_1),tags),2,"xyz_to_rgb")
+            ]
+        match ImageDef(Numpy(dtype,"CHW","RGBA",=VR_0_1),tags):
+            return [
+                (rgba_to_xyza,ImageDef(Numpy(dtype,"CHW","XYZA","-1_1"),tags),2,"rgba_to_xyza")
+            ]
+        match ImageDef(Numpy(dtype,"CHW","RGB",=VR_0_1),tags):
+            return [
+                (rgb_to_xyz,ImageDef(Numpy(dtype,"CHW","XYZ","-1_1"),tags),2,"rgb_to_xyz")
+            ]
+
+def b_xyza_to_rgba(xyza):
+    xyz = xyza[:,:3]
+    a = xyza[:,[3]]
+    rgb = (xyz+1)/2
+    return np.concatenate((rgb,a),axis=1)
+def b_xyz_to_rgb(xyz):
+    return (xyz+1)/2
+def b_rgb_to_xyz(rgb):
+    return (rgb*2)-1
+def b_rgba_to_xyza(rgba):
+    rgb = rgba[:,:3]
+    a = rgba[:,[3]]
+    xyz = (rgb*2)-1
+    return np.concatenate((xyz,a),axis=1)
+
+def rule_batch_xyz_to_rgb(imdef):
+    case imdef:
+        match ImageDef(Numpy(dtype,"BCHW","XYZA","-1_1"),tags):
+            return [
+                (b_xyza_to_rgba,ImageDef(Numpy(dtype,"BCHW","RGBA",VR_0_1),tags),2,"xyza_to_rgba(batch)")
+            ]
+        match ImageDef(Numpy(dtype,"BCHW","XYZ","-1_1"),tags):
+            return [
+                (b_xyz_to_rgb,ImageDef(Numpy(dtype,"BCHW","RGB",VR_0_1),tags),2,"xyz_to_rgb(batch)")
+            ]
+        match ImageDef(Numpy(dtype,"BCHW","RGBA",=VR_0_1),tags):
+            return [
+                (b_rgba_to_xyza,ImageDef(Numpy(dtype,"BCHW","XYZA","-1_1"),tags),2,"rgba_to_xyza(batch)")
+            ]
+        match ImageDef(Numpy(dtype,"BCHW","RGB",=VR_0_1),tags):
+            return [
+                (b_rgb_to_xyz,ImageDef(Numpy(dtype,"BCHW","XYZ","-1_1"),tags),2,"rgb_to_xyz(batch)")
+            ]
 
 
-class NoRouteException(Exception)
+
 _conversions =[
     to_PILImages,
     to_numpy,
@@ -294,44 +374,9 @@ _conversions =[
     drop_alpha,
     to_rgba,
     drop_batch_tag,
-    de_batch
+    de_batch,
 ]
 
-def _heuristics(src:ImageDef,dst:ImageDef):
-    case (src,dst):
-        match (a is TensorLike,b is TensorLike):
-            return (np.array(a) != np.array(b)).sum()
-        match (a is PILImages,b is TensorLike):
-            return 1
-        match (a is TensorLike,b is PILImage):
-            return 1
-    return 0
-
-def _astar(start,end,h,d,max_depth = 10):
-    to_visit = []
-    scores = dict()
-    heapq.heappush(to_visit,
-                   (d([])+h(start,end),start,[]))
-    while to_visit:
-        score,pos,trace = heapq.heappop(to_visit)
-        #print(f"visit:{pos}")
-        #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
-        #print(f"visit:{trace[-1] if trace else 'no trace'}")
-        if len(trace) >= max_depth: # terminate search on max_depth
-            continue
-        if pos == end: # reached a goal
-            return trace
-        for edge in _edges(pos):
-            node = edge.b
-            new_trace = trace + [edge]
-            new_score = d(new_trace) + h(node,end)
-            if node in scores and scores[node] <= new_score:
-                continue
-            else:
-                scores[node] = new_score
-                heapq.heappush(to_visit,(new_score,node,new_trace))
-
-    raise NoRouteException(f"no route found between {start} to {end}")
 
 @memoize(1024)
 def _edges(imdef):
@@ -345,8 +390,6 @@ def _edges(imdef):
 
 
 
-_imdef_astar = _astar$(h=_heuristics,d=trace->[t.cost for t in trace] |> sum) |> memoize(1024)
-_converter = (_imdef_astar ..> new_conversion) |> memoize(1024)
 @memoize(1024)
 def str_to_img_def(query):
     """
@@ -364,9 +407,9 @@ def str_to_img_def(query):
     def query_to_data_type(query):
         case query.split(","):
             match ["numpy",dtype,arng,ch,vr]:
-                return Numpy(dtype,arng,ch,vrs[vr])
+                return Numpy(dtype,arng,ch,vrs[vr] if vr in vrs else vr)
             match ["torch",dtype,arng,ch,vr]:
-                return Torch(dtype,arng,ch,vrs[vr])
+                return Torch(dtype,arng,ch,vrs[vr] if vr in vrs else vr)
             match ["image",mode,ch]:
                 return PILImage(mode,ch)
             match ["images",mode,ch]:
@@ -376,20 +419,106 @@ def str_to_img_def(query):
             return ImageDef(query_to_data_type(data_type),frozenset())
         match [data_type,tags]:
             return ImageDef(query_to_data_type(data_type),frozenset(tags.split(",")))
+    else:
+        raise RuntimeError(f"could not parse image def string!:{query}")
 
 def parse_def(img_def):
-    return str_to_img_def(img_def) if img_def `isinstance` str else img_def
+    try:
+        return str_to_img_def(img_def) if img_def `isinstance` str else img_def
+    except Exception as e:
+        return img_def
+
+
 
 accept_def_str = f -> parse_def ..> f
 def imdef_neighbors(imdef):
     return [(e.f,e.b,e.cost,e.name) for e in _edges(imdef)]
+
+#from data_tree.coconut.convert import AutoImage,PILImage,str_to_img_def,PILImages
+#from data_tree.coconut.convert import ImageDef,Torch,Numpy,TensorLike,VR_0_1,VR_None,VR_0_255
+
+def normalize_numpy_img(ary):
+    _min = ary.min()
+    _max = ary.max()
+    return ((ary-_min)/(_max-_min))
+
+def rule_VR_None_to_normalized(imdef):
+    case imdef:
+        match ImageDef(Numpy(dtype,("CHW" or "HW") as arng,ch,=VR_None),tags):
+            return [(
+                normalize_numpy_img,
+                ImageDef(Numpy(dtype,arng,ch,VR_0_1),tags),
+                1,
+                "minmax_0_1_numpy_img"
+            )]
+        match ImageDef(Numpy(dtype,"BCHW",ch,=VR_None),tags):
+            return [(
+                batch->np.array([normalize_numpy_img(img) for img in batch]),
+                ImageDef(Numpy(dtype,"BCHW",ch,VR_0_1),tags),
+                1,
+                "batch_minmax_0_1_numpy_img"
+            )]
+def rule_add_channel(imdef):
+    case imdef:
+        match ImageDef(Numpy(dtype,"HW",ch,vr),tags):
+            return [(
+                a->a[None],
+                ImageDef(Numpy(dtype,"CHW",ch,vr),tags),
+                1,
+                "add_channel_dim"
+            )]
+        match ImageDef(Numpy(dtype,"BHW",ch,vr),tags):
+            return [(
+                a->a[:,None],
+                ImageDef(Numpy(dtype,"BCHW",ch,vr),tags),
+                1,
+                "add_channel_dim"
+            )]
+def rule_swap_RGB_BGR(imdef):
+    case imdef:
+        match ImageDef(TensorLike(dtype,"BHWC",("RGB" or "BGR") as rgb_order,vr) as tl,tags):
+            return [(
+                a->a[:,:,:,[2,1,0]],
+                ImageDef(tl.__class__(dtype,"BHWC","RGB" if rgb_order.startswith("B") else "BGR",vr),tags),
+                1,
+                "swap rgb or bgr"
+            )]
+def rule_BGR_to_LAB(imdef):
+    from skimage import color
+    case imdef:
+        match ImageDef(Numpy("float32","HWC","BGR",=VR_0_1),tags):
+            return[(
+                color.rgb2lab,
+                ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),tags),
+                1,
+                "bgr_0_1 to lab"
+            )]
+        match ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),tags):
+            return [(
+                color.lab2rgb,
+                ImageDef(Numpy("float32","HWC","BGR",VR_0_1),tags),
+                1,
+                "lab to bgr_0_1"
+            )]
+
+
+
+
 class AutoImage:
-    solver = AStarSolver(rules=[imdef_neighbors])
+    default_rules = [
+        imdef_neighbors,
+        rule_xyz_to_rgb,
+        rule_batch_xyz_to_rgb,
+        rule_VR_None_to_normalized,
+        rule_add_channel,
+        rule_swap_RGB_BGR,
+        rule_BGR_to_LAB
+        ]
+    solver = AStarSolver(rules=default_rules.copy())
+
     @staticmethod
     def reset_solver():
-        AutoImage.solver = AStarSolver(
-            rules=[imdef_neighbors]
-        )
+        AutoImage.solver = AStarSolver(rules = AutoImage.default_rules.copy())
 
     @staticmethod
     def debug_conversion(a,b,samples):
@@ -418,47 +547,87 @@ class AutoImage:
         img_def = parse_def(img_def)
         return AutoImage.solver.search_direct(self.img_def,img_def)
 
-    def to(self,img_def is (str,ImageDef),log_trace=False):
-        img_def = parse_def(img_def)
-        #logger.debug(f"searching a path for {self.img_def} to {img_def}")
-        convert = self.converter(img_def)
-        if log_trace:
-            logger.debug(f"converting to {img_def} with {[e.name for e in convert.edges]}")
-        return convert(self.data)
+    def any_converter(self,img_defs):
+        imdefs = [parse_def(imdef) for imdef in img_defs]
+        return AutoImage.solver.search_direct_any(self.img_def,imdefs)
 
     def convert(self,img_def):
-        img_def = parse_def(img_def)
-        return AutoImage(self.to(img_def),img_def)
+        convert = self.converter(img_def)
+        if convert.edges:
+            return AutoImage(convert(self.data),convert.edges[-1].dst)
+        else:
+            return self
+
+    def any_convert(self,imdefs):
+        converter = self.any_converter(imdefs)
+        if converter.edges:
+            return AutoImage(converter(self.data),converter.edges[-1].dst)
+        else:
+            return self
+
+    def to(self,img_def is (str,ImageDef),log_trace=False):
+        return self.convert(img_def).data
+
+    def any_to(self,imdefs):
+        return self.any_convert(imdefs).data
 
     def to_widget(self):
-        convert = self.converter(self.to_images_def())
-        return (convert(self.data),convert.edges)|> infer_widget
+        case self.img_def.data_type:
+            match item is PILImages:
+                return self.tile_image().to_widget()
+            match TensorLike(_,arng,*_) if "B" in arng:
+                return self.tile_image().to_widget()
+        else:
+            convert = self.converter(self.to_images_def())
+        return convert(self.data) |> infer_widget
 
     def _repr_html_(self):
         return self.to_widget() |> display
 
     def to_images_def(self):
-        match TensorLike(_,arng,_,_) in self.img_def.data_type if "B" not in arng:
-            tag_opt = frozenset(("en_batched",))
-        else:
-            tag_opt = frozenset()
+        """
+        you have to add en_batched tag when data is not batch.
+        """
+        tag_opt=frozenset()
+        img_cls = PILImages
+        case self.img_def:
+            match ImageDef(TensorLike(_,arng,_,_),tags) if "B" not in arng:
+                tag_opt = frozenset(("en_batched",))
+            match ImageDef(PILImage(mode,ch),tags):
+                tag_opt = frozenset(("en_batched",))
+
         case self.img_def.data_type:
             match PILImage(mode,chrepr):
-                if len(chrepr) == 1:
-                    tag_opt = frozenset(("en_batched",))
-                else:
-                    tag_opt = frozenset()
-                return str_to_img_def("images,{'L' if len(chrepr) == 1 else chrepr},chrepr|{','.join(self,img_def.tags|tag_opt)}")
+                return ImageDef(PILImages(mode,chrepr),self.img_def.tags | tag_opt)
             match PILImages(mode,chrepr):
                 return self.img_def
             match TensorLike(dtype,arng,c,vr) if len(c) == 1:
-                return ImageDef(PILImages("L",c),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("L",c),self.img_def.tags | tag_opt)
             match TensorLike(dtype,arng,"RGBA",vr):
-                return ImageDef(PILImages("RGBA","RGBA"),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("RGBA","RGBA"),self.img_def.tags | tag_opt)
             match TensorLike(dtype,arng,"RGB",vr):
-                return ImageDef(PILImages("RGB","RGB"),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("RGB","RGB"),self.img_def.tags | tag_opt)
+            match TensorLike(dtype,arng,ch,vr) if "A" in ch and ch != "LAB":
+                return ImageDef(img_cls("RGBA","RGBA"),self.img_def.tags | tag_opt)
         else:
-            return ImageDef(PILImages("RGB","RGB"),self.img_def.tags | tag_opt)
+            attempts=[
+                "image,RGBA,RGBA",
+                "images,RGBA,RGBA",
+                "image,RGB,RGB",
+                "images,RGB,RGB",
+                "image,L,L",
+                "images,L,L"
+            ]
+            for tgt in attempts:
+                imdef = str_to_img_def(tgt)
+                try:
+                    converter = self.converter(imdef)
+                    return imdef
+                except NoRouteException as e:
+                    #logger.warning(f"no route for:{imdef}. trying next imdef.")
+                    pass
+            raise RuntimeError(f"cannot convert to image:{self.img_def} to any image_like imdef}")
+
 
     def image_op(self,f:Image->Image):
         images_def = self.to_images_def()
@@ -466,6 +635,26 @@ class AutoImage:
         new_images=[f(i) for i in images ] # do some resizing or something
         new_ai = AutoImage(new_images,images_def)
         return new_ai.convert(self.img_def) # go back to last state.
+
+    def visdom(self,visdom=None,**kwargs):
+        if visdom is None:
+            from data_tree.visdom import VISDOM
+            visdom = VISDOM
+        candidates = [
+           "numpy,float32,CHW,RGB,0_1",
+           "numpy,float32,CHW,L,0_1",
+           "numpy,float32,BCHW,RGB,0_1",
+           "numpy,float32,BCHW,L,0_1"
+        ]
+        img = self.any_convert(candidates)
+        data_type = img.img_def.data_type
+        case data_type:
+           match Numpy(_,"CHW",_,_):
+               res = visdom.image(img.data,**kwargs)
+           match Numpy(_,"BCHW",_,_):
+               res = visdom.images(img.data,**kwargs)
+        return res
+
 
 @property
 def AutoImage.images(self):
@@ -475,37 +664,67 @@ def AutoImage.images(self):
 def AutoImage.image_size(self):
     return self.images[0].size
 
+def make_grid(imgs, nrow, padding=0):
+    """Numpy配列の複数枚の画像を、1枚の画像にタイルします
+
+    Arguments:
+        imgs {np.ndarray} -- 複数枚の画像からなるテンソル
+        nrow {int} -- 1行あたりにタイルする枚数
+
+    Keyword Arguments:
+        padding {int} -- グリッドの間隔 (default: {0})
+
+    Returns:
+        [np.ndarray] -- 3階テンソル。1枚の画像
+    """
+    assert imgs.ndim == 4 and nrow > 0
+    batch, height, width, ch = imgs.shape
+    n = nrow * (batch // nrow + np.sign(batch % nrow))
+    ncol = n // nrow
+    pad = np.zeros((n - batch, height, width, ch), imgs.dtype)
+    x = np.concatenate([imgs, pad], axis=0)
+    # border padding if required
+    if padding > 0:
+        x = np.pad(x, ((0, 0), (0, padding), (0, padding), (0, 0)),
+                   "constant", constant_values=(0, 0)) # 下と右だけにpaddingを入れる
+        height += padding
+        width += padding
+    x = x.reshape(ncol, nrow, height, width, ch)
+    x = x.transpose([0, 2, 1, 3, 4])  # (ncol, height, nrow, width, ch)
+    x = x.reshape(height * ncol, width * nrow, ch)
+    if padding > 0:
+        x = x[:(height * ncol - padding),:(width * nrow - padding),:] # 右端と下端のpaddingを削除
+    return x
+
+
 def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
-    ch = self.img_def.data_type.channel_repr
-    imgs = self.to(f"numpy,uint8,BHWC,{ch},0_255")[:max_image]
+    ch = self.to_images_def().data_type.channel_repr
+    if len(ch) == 1:
+        codec = f"numpy,uint8,BHW,{ch},0_255"
+    else:
+        codec = f"numpy,uint8,BHWC,{ch},0_255"
+    imgs = self.to(codec)[:max_image]
     nrow = int(sqrt(max_image)+0.5)
     r = int((w-((nrow+1)*padding))/nrow)
-    imgs = self.image_op(.resize((r,r))).to(f"numpy,uint8,BHWC,{ch},0_255")[:max_image]
-    return auto_image(make_grid(imgs,nrow,padding=1),f"numpy,uint8,HWC,{ch},0_255")
-
-
-def AutoImage.to_widget(self):
-    # TODO display some info about edges, img_def
-    case self.img_def.data_type:
-        match item is PILImages:
-            return self.tile_image().to_widget()
-        match TensorLike(_,arng,*_) if "B" in arng:
-            return self.tile_image().to_widget()
-    else:
-        convert = _converter(self.img_def,self.to_images_def())
-    return convert(self.data) |> infer_widget
-
+    imgs = np.array([(Image.fromarray(img).resize((r,r)) |> np.array) for img in imgs])
+    if len(ch) == 1:
+        imgs = imgs[:,:,:,None]
+    return AutoImage(make_grid(imgs,nrow,padding=1),f"numpy,uint8,HWC,{ch},0_255")
 
 img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
 def auto_to_3res(img:"AutoImage",cx,cy,r=256)->"AutoImage":
     img = img.to("image,L,L")
     #img = img.resize((2048,2048))
     chs = [crop_square(img,cx,cy,_r).resize((r,r)) for _r in [r*4,r*2,r]]
-    return auto_image(np.concatenate([array(i)[:,:,None] for i in chs],axis=2),"numpy,float32,HWC,RGB,0_255")
+    return AutoImage(np.concatenate([np.array(i)[:,:,None] for i in chs],axis=2),"numpy,float32,HWC,RGB,0_255")
 
 def img_to_grid_batch(img:AutoImage):
     grids = img_to_shifting_grids(img) |> .astype("int32") |> series
     batch = grids.map((xy)->auto_to_3res(img,xy[0]+128,xy[1]+128,r=256).to("numpy,float32,HWC,RGB,0_1")).values |> array |> .astype("float32")
-    return grids.values,auto_image(batch,"numpy,float32,BHWC,RGB,0_1")
+    return grids.values,AutoImage(batch,"numpy,float32,BHWC,RGB,0_1")
+
+
+def AutoImage.cast(self,imgdef):
+    return AutoImage(self.data,imgdef)
 
 

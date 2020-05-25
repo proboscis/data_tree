@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x74504432
+# __coconut_hash__ = 0x938d5e73
 
-# Compiled with Coconut version 1.4.1 [Ernest Scribbler]
+# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -33,8 +33,12 @@ L = _coconut.functools.partial(Image.fromarray, mode="L")  # L = Image.fromarray
 RGB = _coconut.functools.partial(Image.fromarray, mode="RGB")  # RGB = Image.fromarray$(mode="RGB")
 RGBA = _coconut.functools.partial(Image.fromarray, mode="RGBA")  # RGBA = Image.fromarray$(mode="RGBA")
 batch_image_to_image = lambda ary: ary.transpose((1, 0, 2, 3)).reshape((ary.shape[2], -1, ary.shape[3]))  # batch_image_to_image = ary->ary.transpose((1, 0, 2, 3)).reshape((ary.shape[2], -1, ary.shape[3]))
-batch_L_to_img = lambda ary: ary  # batch_L_to_img = ary->ary 
-img_to_widget = lambda value: widgets.Box([widgets.Image(value=value._repr_png_(), format="png")])  # img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
+batch_L_to_img = lambda ary: ary  # batch_L_to_img = ary->ary
+def img_to_widget(value):  # def img_to_widget(value):
+    img_widget = widgets.Image(value=value._repr_png_(), format="png")  #     img_widget = widgets.Image(value=value._repr_png_(),format="png")
+    img_widget.layout.object_fit = "contain"  #     img_widget.layout.object_fit = "contain"
+    return img_widget  #     return img_widget
+#img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
 from bqplot import pyplot as blt  # from bqplot import pyplot as blt
 from loguru import logger  # from loguru import logger
@@ -149,10 +153,16 @@ def infer_widget(value):  # def infer_widget(value):
         from data_tree.coconut.convert import AutoImage  #     from data_tree.coconut.convert import AutoImage
         _coconut_match_to = value  #     case value:
         _coconut_case_check_1 = False  #     case value:
-        if _coconut.isinstance(_coconut_match_to, AutoImage):  #     case value:
-            _coconut_case_check_1 = True  #     case value:
+        _coconut_case_check_1 = True  #     case value:
+        if _coconut_case_check_1 and not (hasattr(value, "to_widget")):  #     case value:
+            _coconut_case_check_1 = False  #     case value:
         if _coconut_case_check_1:  #     case value:
             return value.to_widget()  #             return value.to_widget()
+        if not _coconut_case_check_1:  #         match _ is AutoImage:
+            if _coconut.isinstance(_coconut_match_to, AutoImage):  #         match _ is AutoImage:
+                _coconut_case_check_1 = True  #         match _ is AutoImage:
+            if _coconut_case_check_1:  #         match _ is AutoImage:
+                return value.to_widget()  #             return value.to_widget()
         if not _coconut_case_check_1:  #         match _ is Series:
             if _coconut.isinstance(_coconut_match_to, Series):  #         match _ is Series:
                 _coconut_case_check_1 = True  #         match _ is Series:
@@ -168,7 +178,7 @@ def infer_widget(value):  # def infer_widget(value):
                 _coconut_case_check_1 = True  #         match _ is TensorType:
             if _coconut_case_check_1:  #         match _ is TensorType:
                 try:  #         match _ is TensorType:
-                    _coconut_is_recursive = infer_widget is _coconut_recursive_func_5  #         match _ is TensorType:
+                    _coconut_is_recursive = infer_widget is _coconut_recursive_func_6  #         match _ is TensorType:
                 except _coconut.NameError:  #         match _ is TensorType:
                     _coconut_is_recursive = False  #         match _ is TensorType:
                 if _coconut_is_recursive:  #         match _ is TensorType:
@@ -200,4 +210,4 @@ def infer_widget(value):  # def infer_widget(value):
 
 
         return None  # 
-_coconut_recursive_func_5 = infer_widget  #
+_coconut_recursive_func_6 = infer_widget  #

@@ -1,19 +1,43 @@
 import heapq
 from loguru import logger
-from lru import LRU
+from pprint import pformat
+from data_tree.coconut.monad import try_monad,Try,Success,Failure
+import dill # for pickling inner lambda...
 data Edge(src,dst,f,cost,name="unnamed")
 class NoRouteException(Exception)
-data Conversion(f,edges):
+class ConversionError(Exception)
+data Conversion(edges):
     def __call__(self,x):
-        return self.f(x)
+        for e in self.edges:
+            try:
+                x = e.f(x)
+            except Exception as ex:
+                raise ConversionError(f"exception in path:{e.name} \n paths:{[e.name for e in self.edges]}") from ex
+        return x
+
+    def __repr__(self):
+        if self.edges:
+            start = self.edges[0].src
+            end = self.edges[-1].dst
+        else:
+            start = "None"
+            end = "None"
+        info = dict(
+            name="Conversion",
+            start = start,
+            end = end,
+            path = [e.name for e in self.edges]
+        )
+        return pformat(info)
 def new_conversion(edges):
-    return Conversion(reduce((..>),[e.f for e in edges]),edges)
+    return Conversion(edges)
 class _HeapContainer:
     def __init__(self,score,data):
         self.score = score
         self.data = data
     def __lt__(self,other):
         return self.score < other.score
+
 def _astar(
           start,
           matcher,
@@ -28,21 +52,30 @@ def _astar(
     scores[start] = heuristics(start)
     heapq.heappush(to_visit,
                    _HeapContainer(scores[start],(start,[])))
-
+    visited = 0
     while to_visit:
         hc = heapq.heappop(to_visit)
         score = hc.score
         (pos,trace) = hc.data
+        visited += 1
         #print(f"visit:{pos}")
         #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
         #print(f"visit:{trace[-1] if trace else 'no trace'}")
         if len(trace) >= max_depth: # terminate search on max_depth
             continue
         if matcher(pos): # reached a goal
+            logger.debug(f"found after {visited} visits.")
+            logger.debug(f"search result:\n{new_conversion(trace)}")
             return trace
         for mapper,next_node,cost,name in neighbors(pos):
+            assert isinstance(cost,int),f"cost is not a number. cost:{cost},name:{name},pos:{pos}"
             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
-            new_score = scores[pos] + cost + heuristics(next_node)
+            #new_score = scores[pos] + cost + heuristics(next_node)
+            try:
+                new_score = scores[pos] + cost + heuristics(next_node)
+            except Exception as e:
+                logger.error(f"pos:{pos},cost:{cost},next_node:{next_node}")
+                raise e
             if next_node in scores and scores[next_node] <= new_score:
                 continue
             else:
@@ -50,6 +83,8 @@ def _astar(
                 heapq.heappush(to_visit,_HeapContainer(new_score,(next_node,new_trace)))
 
     raise NoRouteException(f"no route found from {start} matching {matcher}")
+
+
 
 def _astar_direct(
           start,
@@ -65,50 +100,80 @@ def _astar_direct(
     scores[start] = heuristics(start)
     heapq.heappush(to_visit,
                    _HeapContainer(scores[start],(start,[])))
-
+    visited = 0
     while to_visit:
         hc = heapq.heappop(to_visit)
         score = hc.score
         (pos,trace) = hc.data
+        #logger.debug(f"visiting:{pos}")
+        visited += 1
         #print(f"visit:{pos}")
         #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
         #print(f"visit:{trace[-1] if trace else 'no trace'}")
         if len(trace) >= max_depth: # terminate search on max_depth
             continue
         if pos == end: # reached a goal
+            logger.debug(f"found after {visited} visits.")
+            logger.debug(f"search result:\n{new_conversion(trace)}")
             return trace
         for mapper,next_node,cost,name in neighbors(pos):
+            assert isinstance(cost,int),f"cost is not a number:{pos}"
             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
-            new_score = scores[pos] + cost + heuristics(next_node)
+            try:
+                new_score = scores[pos] + cost + heuristics(next_node)
+            except Exception as e:
+                logger.error(f"pos:{pos},cost:{cost},next_node:{next_node}")
+                raise e
             if next_node in scores and scores[next_node] <= new_score:
                 continue
             else:
                 scores[next_node] = new_score
                 heapq.heappush(to_visit,_HeapContainer(new_score,(next_node,new_trace)))
 
-    raise NoRouteException(f"no route found from {start} matching {end}")
+    raise NoRouteException(f"no route found from {start} matching {end}. searched {visited} nodes.")
 
-astar = _astar ..> new_conversion
-astar_direct = _astar_direct ..> new_conversion
+astar = (_astar ..> new_conversion) |> try_monad
+astar_direct = (_astar_direct ..> new_conversion) |> try_monad
+
+def _zero_heuristics(x):
+    return 0
+
+MAX_MEMO = 2**(20)
+
 class AStarSolver:
-    def __init__(self,rules=None,max_memo=1024):
-        self.max_memo = max_memo
+    """
+    to make this picklable, you have to have these caches on global variable.
+    use getstate and setstate
+    actually, having to pickle this solver every time you pass auto_data is not feasible.
+    so, lets have auto_data to hold solver in global variable and never pickle AStarSolver!.
+    so forget about lru_cache pickling issues.
+    """
+    def __init__(self,rules=None):
+        """
+        rules: List[Rule]
+        Rule: (state)->List[(converter:(data)->data,new_state,cost,conversion_name)]
+        """
+        from lru import LRU
         self.rules = rules if rules is not None else []
-        self.heuristics = x->0
-        self.neighbors = (node->self._neighbors(node)) |> memoize(self.max_memo)
-        self.search_memo = LRU(self.max_memo)
-        self.direct_search_memo = LRU(self.max_memo)
+        self.heuristics = _zero_heuristics
+        self.neighbors_memo = LRU(MAX_MEMO) # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.
+        self.search_memo = LRU(MAX_MEMO)
+        self.direct_search_memo = LRU(MAX_MEMO)
 
-    def _neighbors(self,node):
+    def neighbors(self,node):
+        if node in self.neighbors_memo:
+            return self.neighbors_memo[node]
+
         res = []
         for rule in self.rules:
             edges = rule(node)
             if edges is not None:
                  res += edges
+        self.neighbors_memo[node] = res
         return res
 
     def invalidate_cache(self):
-        self.neighbors.cache_clear()
+        self.neighbors_memo.clear()
         self.search_memo.clear()
         self.direct_search_memo.clear()
 
@@ -121,7 +186,7 @@ class AStarSolver:
         #let's use id of matcher for now.
         q = (start,id(matcher))
         if q in self.search_memo:
-            return self.search_memo[q]
+            res = self.search_memo[q]
         else:
             logger.debug(f"searching from {start} for matching {matcher}")
             res = astar(
@@ -131,14 +196,20 @@ class AStarSolver:
                 heuristics=self.heuristics
             )
             self.search_memo[q] = res
-            return res
+
+        case res:
+            match Success(res):
+
+                return res
+            match Failure(e,trc):
+                raise e
 
     def search_direct(self,start,end):
         q = (start,end)
         if q in self.direct_search_memo:
-            return self.direct_search_memo[q]
+            res = self.direct_search_memo[q]
         else:
-            logger.debug(f"searching from {start} for {end}")
+            logger.debug(f"searching {start} to {end}")
             res = astar_direct(
                 start=start,
                 end=end,
@@ -146,4 +217,17 @@ class AStarSolver:
                 heuristics=self.heuristics
             )
             self.direct_search_memo[q] = res
-            return res
+        case res:
+            match Success(res):
+                return res
+            match Failure(e,trc):
+                raise e
+
+    def search_direct_any(self,start,ends):
+        for cand in ends:
+            try:
+                res = self.search_direct(start,cand)
+                return res
+            except Exception as e:
+                pass
+        raise NoRouteException(f"no route found from {start} to any of {ends}")

@@ -1,0 +1,147 @@
+from data_tree.coconut.convert import *
+from data_tree.coconut.auto_data import AutoSolver
+from data_tree.coconut.monad import try_monad,Try,Success,Failure
+from frozendict import frozendict
+from typing import Mapping
+def imagedef2dict(imdef:ImageDef):
+    """
+
+    """
+    case imdef:
+        match ImageDef(data_type,tags):
+            case data_type:
+                match Numpy(dtype,arrange,ch_rpr,v_range):
+                    info = dict(type="numpy",dtype=dtype,arrange=arrange,ch_rpr=ch_rpr,v_range=str(v_range))
+                match Torch(dtype,arrange,ch_rpr,v_range):
+                    info = dict(type="torch",dtype=dtype,arrange=arrange,ch_rpr=ch_rpr,v_range=str(v_range))
+                match PILImages(mode,ch_rpr):
+                    info = dict(type="images",ch_rpr=ch_rpr)
+                match PILImage(mode,ch_rpr):
+                    info = dict(type="image",ch_rpr=ch_rpr)
+            else:
+                raise RuntimeError(f"cannot convert unknown imagedef:{imdef} to dict.")
+            return frozendict(
+                **info,
+                **{t:True for t in tags}
+            )
+    else:
+        raise RuntimeError(f"cannot convert unknown imdef:{imdef} to dict.")
+
+def cast_imdef_to_dict(state):
+    if isinstance(state,ImageDef):
+        return [imagedef2dict(state)]
+
+def cast_imdef_str_to_imdef(state):
+    if isinstance(state,str):
+        try:
+            res = str_to_img_def(state)
+            return [res]
+        except Exception as e:
+            pass
+def imdef2imdef_str(imdef):
+    case imdef:
+        match ImageDef(data_type,tags):
+            case data_type:
+                match Numpy(dtype,arrange,ch_rpr,v_range):
+                    base = f"numpy,{dtype},{arrange},{ch_rpr},{v_range}"
+                match Torch(dtype,arrange,ch_rpr,v_range):
+                    base = f"numpy,{dtype},{arrange},{ch_rpr},{v_range}"
+                match PILImages(mode,ch_rpr):
+                    base = f"images,{mode},{ch_rpr}"
+                match PILImage(mode,ch_rpr):
+                    base = f"image,{mode},{ch_rpr}"
+            else:
+                raise RuntimeError(f"cannot convert unknown imagedef:{imdef} to str.")
+            if tags:
+                return base+f"|{','.join(tags)}"
+            else:
+                return base
+    else:
+        raise RuntimeError(f"cannot convert unknown imdef:{imdef} to str.")
+def cast_imdef_to_imdef_str(imdef):
+    case imdef:
+        match ImageDef(_,_):
+            res = [imdef2imdef_str(imdef)]
+            return res
+    else:
+        return None
+
+def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
+    mode = imgs[0].mode
+    ch = len(mode)
+    nrow = int(sqrt(max_image)+0.5)
+    r = int((w-((nrow+1)*padding))/nrow)
+
+    imgs = np.array([(img.resize((r,r)) |> np.array) for img in imgs[:max_image]])
+    if ch == 1:
+        imgs = imgs[:,:,:,None]
+    return make_grid(imgs,nrow,padding=padding)
+
+def rule_imgs2tile(state):
+    case state:
+        match ImageDef(PILImages(mode,chrpr),tags):
+            return [(
+                imgs2tile,
+                ImageDef(Numpy("uint8","HWC",chrpr,VR_0_255),tags),
+                "imgs2tile",
+                10
+            )]
+
+
+def rule_img2widget(state):
+    case state:
+        match ImageDef(PILImage(_,_),tags):
+            return [(
+                infer_widget,
+                "widget",
+                "infer_widget",
+                1
+            )]
+
+def dict2imdef(state):
+    if isinstance(state,Mapping):
+        case state:
+            match {"type":"numpy","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
+                return [ImageDef(Numpy(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
+            match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
+                return [ImageDef(Torch(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
+            match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                return [ImageDef(PILImage(_mode,_ch_rpr),frozenset(tags.keys()))]
+            match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                return [ImageDef(PILImages(_mode,_ch_rpr),frozenset(tags.keys()))]
+
+def rule_numpy2img(state):
+    if isinstance(state,Mapping):
+        case state:
+            match {"type":"numpy","dtype":"uint8","ch_rpr":"RGB","arrange":"HWC","v_range":"0_255",**tags}:
+                return [(
+                    Image.fromarray,
+                    ImageDef(PILImage("RGB","RGB"),frozenset(tags.keys())),
+                    "Image.fromarray",
+                    1
+                )]
+            match {"type":"numpy","dtype":"uint8","ch_rpr":"L","arrange":"HWC" or "HW","v_range":"0_255",**tags}:
+                return [(
+                    Image.fromarray,
+                    ImageDef(PILImage("L","L"),frozenset(tags.keys())),
+                    "Image.fromarray",
+                    1
+                )]
+
+def rule_image2gray(state):
+    case state:
+        match ImageDef(PILImage(ch_rpr,ch_rpr2),tags):
+            return [(.convert("L"),ImageDef(PILImage("L","L"),tags),"image2gray")
+                   ]
+DEFAULT_RULES = AutoImage.default_rules.copy() + [
+    AutoSolver.create_cast_rule(cast_imdef_to_dict,"cast_imdef_to_dict"),
+    AutoSolver.create_cast_rule(cast_imdef_str_to_imdef,"cast_imdef_str_to_imdef"),
+    AutoSolver.create_cast_rule(cast_imdef_to_imdef_str,"cast_imdef_to_imdef_str"),
+    AutoSolver.create_cast_rule(dict2imdef,"dict2imdef"),
+    AutoSolver.create_conversion_rule(rule_imgs2tile),
+    AutoSolver.create_conversion_rule(rule_img2widget),
+    AutoSolver.create_conversion_rule(rule_numpy2img),
+    AutoSolver.create_conversion_rule(rule_image2gray),
+]
+SOLVER = AutoSolver(rules=DEFAULT_RULES.copy())
+auto_img = format->value->SOLVER.new_auto_data(value,format)

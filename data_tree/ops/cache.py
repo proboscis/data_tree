@@ -1,12 +1,15 @@
+import ctypes
 import multiprocessing
 import os
 import pickle
 import queue
 import shelve
 import threading
+from contextlib import contextmanager
 
 import h5py
 import numpy as np
+from PIL import Image
 from lazy import lazy as en_lazy
 # from loguru import logger
 from loguru import logger
@@ -16,7 +19,7 @@ from data_tree import Series, IdentityIndexer, Indexer
 from data_tree.resource import ContextResource
 from data_tree._series import SourcedSeries, IndexedSeries, NumpySeries
 from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_generator
-import data_tree._series as series
+from data_tree import series
 from tqdm.autonotebook import tqdm
 
 from filelock import Timeout, FileLock
@@ -261,9 +264,10 @@ class Hdf5CachedSeries(CachedSeries):
         ensure_path_exists(self.cache_path)
         with self.lock:  # dont let multiple thread check this.
             # why is this repeatedly called in batch gen?
-            logger.info(
-                f"trying to open hdf5 for preparation at thread:{threading.currentThread().name} |pid:{os.getpid()} ")
+            # logger.info(
+            #    f"trying to open hdf5 for preparation at thread:{threading.currentThread().name} |pid:{os.getpid()} ")
             with h5py.File(self.cache_path, mode="a") as f:  # tries to open lock even though it is locked..
+                # sometimes the file is already open after ensured.
                 if "src_hash" in f.attrs and f.attrs["src_hash"] != self.src_hash:
                     os.remove(self.cache_path)
                     logger.warning(f"deleted cache due to inconsistent hash of source. {self.cache_path}")
@@ -323,7 +327,9 @@ class Hdf5CachedSeries(CachedSeries):
                             flags_on_mem[i] = False
             return flags_on_mem
 
-    def ensure(self, _slice=None, batch_size=1000, check_non_zero=False, preload=5):
+    def ensure(self, _slice=None, batch_size=32, check_non_zero=False, preload=5):
+        if batch_size is None:
+            batch_size = 4
         if _slice is None:
             _slice = slice(0, self.total)
             logger.info(f"ensuring whole dataset")
@@ -349,7 +355,13 @@ class Hdf5CachedSeries(CachedSeries):
                 yield from progress_bar(zip(missing_slices, self.src.slice_generator(missing_slices, preload=preload)),
                                         desc=f"{self.__class__.__name__}:filling missing cache batches",
                                         total=len(missing_slices))
-
+            def yielder():
+                for item in missing_batches():
+                    item_queue.put(item)
+                item_queue.put(None)
+            t = threading.Thread(target=yielder)
+            t.start()
+            """
             def saver():
                 with self.lock:
                     with h5py.File(self.cache_path, mode="r+") as f:
@@ -369,12 +381,25 @@ class Hdf5CachedSeries(CachedSeries):
                             # if observed > 1000:
                             f.flush()
                             observed = 0
-
-            t = threading.Thread(target=saver)
-            t.start()
-            for item in missing_batches():
-                item_queue.put(item)
-            item_queue.put(None)
+            """
+            with self.lock:
+                with h5py.File(self.cache_path, mode="r+") as f:
+                    flags = f["flag"]
+                    xs = f["value"]
+                    observed = 0
+                    while True:
+                        item = item_queue.get()
+                        if item is None:
+                            break
+                        _s, x = item
+                        # logger.info(f"item inside: {item}")
+                        xs[_s] = x
+                        saved_count = len(x)
+                        flags[_s] = True
+                        observed += saved_count
+                        # if observed > 1000:
+                        f.flush()
+                        observed = 0
             t.join()
 
     def ensured(self, batch_size=None):
@@ -398,6 +423,19 @@ class Hdf5CachedSeries(CachedSeries):
             logger.warning(ose)
         return Hdf5OpenFileAccessor(
             open_file=h5py.File(self.cache_path, mode="r"),
+            key="value",
+            parents=[self]
+        )
+
+    def ensured_accessor_closed(self, batch_size=None):
+        try:
+            pass
+            #self.ensure(batch_size=batch_size)
+        except OSError as ose:
+            logger.warning(f"failed to open source hdf5 for ensuring. assuming it is already ensured.")
+            logger.warning(ose)
+        return Hdf5ClosedFileAccessor(
+            file_path=self.cache_path,
             key="value",
             parents=[self]
         )
@@ -510,9 +548,10 @@ class Hdf5OpenFileAdapter(Series):
 
 
 class Hdf5Accessor:
-    def __init__(self, hdf5_database, slicer,lock):
+    def __init__(self, hdf5_database, slicer, lock):
         self.slicer = (slicer,)
         self.data = hdf5_database
+        self.shape = self.data.shape[1:]
         self.lock = lock
 
     def __getitem__(self, idx):
@@ -522,12 +561,40 @@ class Hdf5Accessor:
             idx = (idx,)
         index = self.slicer + idx
         try:
-            with self.lock:
-                data = self.data[index]
+            #with self.lock:
+            data = self.data[index]
             return data
         except Exception as e:
             logger.error(f"failed to access hdf5 data with index:{index}")
             raise e
+
+    def __iter__(self):
+        pass
+
+
+class Hdf5ClosedAccessor:
+    def __init__(self, file_opener, key, slicer):
+        self.slicer = (slicer,)
+        self.opener = file_opener
+        self.key = key
+        with self.opener() as data:
+            self.shape = data[self.key].shape[1:]
+
+    def __getitem__(self, idx):
+        with self.opener() as hdf5:
+            if self.shape == ():
+                index = self.slicer
+            elif isinstance(idx, tuple):
+                index = self.slicer + idx
+            else:
+                idx = (idx,)
+                index = self.slicer + idx
+            try:
+                data = hdf5[self.key][index]
+                return data
+            except Exception as e:
+                logger.error(f"failed to access hdf5 data with index:{index}")
+                raise e
 
     def __iter__(self):
         pass
@@ -560,16 +627,208 @@ class Hdf5OpenFileAccessor(Series):
         return self._indexer.total
 
     def _get_item(self, index):
-        return Hdf5Accessor(self.data, index,self.lock)
+        return Hdf5Accessor(self.data, index, self.lock)
 
     def _get_slice(self, _slice):
-        return [Hdf5Accessor(self.data, i,self.lock) for i in self.indices[_slice]]
+        return [Hdf5Accessor(self.data, i, self.lock) for i in self.indices[_slice]]
 
     def _get_indices(self, indices):
-        return [Hdf5Accessor(self.data, i,self.lock) for i in indices]
+        return [Hdf5Accessor(self.data, i, self.lock) for i in indices]
 
     def _get_mask(self, mask):
-        return [Hdf5Accessor(self.data, i,self.lock) for i in self.indices[mask]]
+        return [Hdf5Accessor(self.data, i, self.lock) for i in self.indices[mask]]
 
     def close(self):
         self.hdf5_file.close()
+
+def _h5py_opener(path):
+    def _inner():
+        return h5py.File(path,"r")
+    return _inner
+
+class Hdf5ClosedFileAccessor(Series):
+    def clone(self, parents):
+        return Hdf5ClosedFileAccessor(file_path=self.file_path, key=self.key, parents=self.parents)
+
+    @property
+    def parents(self):
+        return self._parents
+
+    def __init__(self, file_path, key, parents=None):
+        from functools import partial
+        self._parents = [] if parents is None else parents
+        self.key = key
+        self.file_path = file_path
+        self.opener = partial(h5py.File,name=self.file_path,mode="r")
+        with self.opener() as hdf5:
+            self.shape = hdf5[self.key].shape[1:]
+            self.dtype = hdf5[self.key].dtype
+            self._indexer = IdentityIndexer(total=len(hdf5[self.key]))
+        self.indices = np.arange(self.total)
+        #self.lock = multiprocessing.Lock()
+
+    @property
+    def indexer(self):
+        return self._indexer
+
+    @property
+    def total(self):
+        return self._indexer.total
+
+    def _get_item(self, index):
+        return Hdf5ClosedAccessor(self.opener, self.key, index)
+
+    def _get_slice(self, _slice):
+        return [Hdf5ClosedAccessor(self.opener, self.key, i) for i in self.indices[_slice]]
+
+    def _get_indices(self, indices):
+        return [Hdf5ClosedAccessor(self.opener, self.key, i) for i in indices]
+
+    def _get_mask(self, mask):
+        return [Hdf5ClosedAccessor(self.opener, self.key, i) for i in self.indices[mask]]
+
+
+int2bytes = lambda a: a.to_bytes(4, "big")
+from functools import partial
+
+
+def putter(item_queue, result_queue, termination_event, db_path, exception_event):
+    import lmdb
+    with lmdb.open(db_path) as env:
+        with env.begin(write=True) as txn:
+            while not termination_event.is_set():
+                try:
+                    key, value = item_queue.get(timeout=1)
+                    txn.put(key, value)
+                except (TimeoutError, queue.Empty) as e:
+                    pass
+
+
+class LMDBCachedSeries(CachedSeries):
+    """
+    problem: not process safe.
+    mmaped numpy is process safe. for both write and read?
+    hdf5 write is not process safe.
+    """
+
+    def __init__(self, src, db_path, src_hash=None, **options):
+        self.db_path = db_path
+        self.flag_path = os.path.join(self.db_path, "flag.mmap")
+        ensure_path_exists(self.flag_path)
+        self._src = src
+        self._indexer = IdentityIndexer(self.total)
+        self.db_opts = options
+        # keep lazy flags in memory,save it on lmdb.
+        # I just want to edit a single bit, but do I have to write the whole buffer?
+        self.create_flags()
+
+    def create_flags(self):
+        if os.path.exists(self.flag_path):
+            mode = "r+"
+        else:
+            mode = "w+"
+        self.flags = np.memmap(self.flag_path, dtype="bool", mode=mode, shape=(self.total,))
+
+    def clone(self, parents):
+        return LMDBCachedSeries(parents[0], self.db_path)
+
+    def clear(self):
+        os.remove(self.flag_path)
+        self.create_flags()
+        self.flags[:] = False
+        for tgt in ["data.mdb", "lock.mdb"]:
+            p = os.path.join(self.db_path, tgt)
+            if os.path.exists(p):
+                os.remove(p)
+
+    @contextmanager
+    def open_txn(self, write=False, buffers=False):
+        import lmdb
+        with lmdb.open(self.db_path, **self.db_opts) as env:
+            with env.begin(buffers=buffers, write=write) as txn:
+                yield txn
+
+    @en_lazy
+    def index_helper_array(self):
+        return np.arange(self.total)
+
+    def put(self, index: int, data):
+        key = int2bytes(int(index))
+        with self.open_txn(write=True) as txn:
+            res = txn.put(key, pickle.dumps(data))
+        self.flags[index] = True
+        return res
+
+    def get(self, index: int):
+        key = int2bytes(int(index))
+        with self.open_txn(buffers=True, write=False) as txn:
+            return pickle.loads(txn.get(key))
+
+    @property
+    def src(self) -> Series:
+        return self._src
+
+    @property
+    def indexer(self) -> Indexer:
+        return self._indexer
+
+    @property
+    def total(self):
+        return self.src.total
+
+    def _get_item(self, index):
+        if not self.flags[index]:
+            self.put(index, self.src[index])
+        return self.get(index)
+
+    def _get_slice(self, _slice):
+        return [self._get_item(int(i)) for i in self.index_helper_array[_slice]]
+
+    def _get_indices(self, indices):
+        return [self._get_item(int(i)) for i in self.index_helper_array[indices]]
+
+    def _get_mask(self, mask):
+        return [self._get_item(int(i)) for i in self.index_helper_array[mask]]
+
+
+class PNGCachedSeries(CachedSeries):
+    def __init__(self,src:Series,dir:str):
+        super().__init__()
+        self._src = src
+        self._indexer = IdentityIndexer(total=src.total)
+        self.dir = dir
+
+    @property
+    def src(self) -> Series:
+        return self._src
+
+    @property
+    def indexer(self) -> Indexer:
+        return self._indexer
+
+    @property
+    def total(self):
+        return self.src.total
+
+    @en_lazy
+    def index_helper_array(self):
+        return np.arange(self.total)
+
+    def _get_item(self, index):
+        img_path = os.path.join(self.dir, f"{index}.png")
+        if os.path.exists(img_path):
+            return Image.open(img_path)
+        else:
+            img:Image = self.src[index]
+            img.save(img_path)
+            return img
+
+    def _get_slice(self, _slice):
+        return [self._get_item(i) for i in self.index_helper_array[_slice]]
+
+    def _get_indices(self, indices):
+        return [self._get_item(i) for i in self.index_helper_array[indices]]
+
+    def _get_mask(self, mask):
+        return [self._get_item(i) for i in self.index_helper_array[mask]]
+

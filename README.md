@@ -8,3 +8,7 @@ Please use pytest and see examples in test/ for now.
 - documentation
 - index bug fix
 - write simple tutorial
+
+# Configuration
+- place `~/.data_tree/config.yml`
+  - place visdom.username & visdom.server_address
