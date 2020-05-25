@@ -36,7 +36,7 @@ def test_something():
         matcher=matcher,
         neighbors=neighbors,
         heuristics=heuristics
-    ) |> log_conversion
+    ).result |> log_conversion
 
 def imdef_neighbors(imdef):
     return [(e.f,e.b,e.cost,e.name) for e in _edges(imdef)]
@@ -47,7 +47,7 @@ def test_new_astar():
         matcher=d->d==end,
         neighbors = imdef_neighbors,
         heuristics=a->0
-    )   |> log_conversion
+    ).result  |> log_conversion
 
 def log_conversion(converter):
     path = [e.name for e in converter.edges]
@@ -77,4 +77,36 @@ def test_auto_image():
     x.converter(end) |> log_conversion
     x.converter(END()) |> log_conversion
     x.reset_solver()
+
+def test_non_batch_img_op():
+    from data_tree.coconut.convert import AutoImage
+    x = np.zeros((100,100),dtype="float32")
+
+    start = "images,L,L" |> str_to_img_def
+    end = "numpy,float32,HW,L,0_1" |> str_to_img_def
+    auto_x = auto_image(x,"numpy,float32,HW,L,0_1")
+    assert auto_x.image_op(.resize((256,256))).to(end).shape == (256,256),"image_op must work on non batched image"
+    #AutoImage.solver.search_direct(start,end) |> log_conversion
+
+def test_casting():
+    from data_tree.coconut.omni_converter import SOLVER,cast_imdef_to_dict,cast_imdef_str_to_imdef
+    logger.info(f"{cast_imdef_str_to_imdef('numpy,float32,HW,L,0_1')}")
+
+
+def test_omni_converter():
+    from data_tree.coconut.omni_converter import auto_img,cast_imdef_str_to_imdef,cast_imdef_to_imdef_str
+    from data_tree.coconut.auto_data import AutoData
+    x = np.ones((100,100,3),dtype="float32")
+    auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
+    assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()
+    assert (auto_x.to(v_range="0_255") == 255).all()
+    _x = auto_x.to(dtype="uint8",v_range="0_255")
+    assert (_x == 255).all(), f"original:{x},converted:{_x}"
+    _x = auto_x.to(type="torch",dtype="uint8",v_range="0_255")
+    assert (_x == 255).all(), f"original:{x},converted:{_x}"
+    #logger.info(auto_x.convert(type="torch",dtype="uint8",v_range="0_255").format)
+    #logger.info(auto_x.converter(type="torch",dtype="uint8",v_range="0_255"))
+    #format = "numpy,float32,HW,L,0_1"
+    #n_format = cast_imdef_str_to_imdef(format)[0]
+    #assert format == n_format,f"{format} != {n_format}"
 

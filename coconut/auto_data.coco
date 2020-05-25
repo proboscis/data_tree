@@ -1,0 +1,190 @@
+from typing import Mapping
+from data_tree.coconut.astar import AStarSolver
+from IPython.display import display
+import dill # to make the lambda functions picklable
+"""
+What I want to achieve is to generate a class.
+I want to generate a AutoImage class form AutoData
+well the solution is to just use partially applied constructor. that's it.
+"""
+def identity(a):
+    return a
+
+class _CastLambda:
+    def __init__(self,rule,name,swap):
+        self.rule = rule
+        self.name = name
+        self.swap = swap
+    def __call__(self,state):
+        new_states = self.rule(state)
+        if new_states is not None:
+            if self.name is None:
+                cast_name = f"{rule.__name__}"
+            else:
+                cast_name=self.name
+            if self.swap:
+                return [(identity,new_state,cast_name,1) for new_state in new_states]
+            else:
+                return [(identity,new_state,1,cast_name) for new_state in new_states]
+        else:
+            return None
+class _ConversionLambda:
+    def __init__(self,rule):
+        self.rule = rule
+    def __call__(self,state):
+        edges = self.rule(state)
+        if edges is None:
+            return []
+        result = []
+        for edge in edges:
+            case edge:
+                match (converter,new_state):
+                    result.append((converter,new_state,1,converter.__name__))
+                match (converter,new_state,name):
+                    result.append((converter,new_state,1,name))
+                match (converter,new_state,name,score):
+                    result.append((converter,new_state,score,name))
+                match _:
+                    raise RuntimeError(f"rule:{rule} returned invalid edge:{edge}.")
+        return result
+
+class AutoSolver:
+    """
+    TODO stop using local lambda in order to make this class picklable
+    Factory for an AutoData class
+    """
+    def __init__(self,rules):
+        self.initial_rules = rules
+        self.solver = AStarSolver(rules = self.initial_rules.copy())
+
+    @staticmethod
+    def create_cast_rule(rule,name=None,_swap=False):
+        """
+        rule: State->List[State] # should return list of possible casts without data conversion.
+        """
+        return _CastLambda(rule,name,_swap)
+
+    def add_cast(self,rule,name=None):
+        """
+        rule: State->List[State] # should return list of possible casts without data conversion.
+        """
+
+        self.add_conversion(AutoSolver.create_cast_rule(rule,name=name,_swap=True))
+
+    @staticmethod
+    def create_conversion_rule(rule):
+        return _ConversionLambda(rule)
+
+    def add_conversion(self,rule):
+        """
+        rule: State->List[(converter,new_state,name(optional),cost(optional))]
+        """
+        self.solver.add_rule(AutoSolver.create_conversion_rule(rule))
+
+    def reset_solver(self,):
+        self.solver = AStarSolver(rules = self.initial_rules.copy())
+
+    def debug_conversion(self,a,b,samples):
+        x = samples
+        edges = self.solver.search_direct(a,b).edges
+        for edge in edges:
+            print(edge)
+            print(edge.f)
+            x = edge.f(x)
+            print(f"converted to type:{type(x)}")
+            if x `isinstance` np.ndarray:
+                print(x.shape)
+            print(f"converted:{x}")
+        return x
+
+    def new_auto_data(self,value,format):
+        return AutoData(value,format,self.solver)
+
+
+
+
+
+class TagMatcher:
+    def __init__(self,**kwargs):
+        self.kwargs = kwargs
+
+    def __call__(self,state):
+        if isinstance(state,Mapping):
+            for k,v in self.kwargs.items():
+                if not k in state or not state[k] == v:
+                    return False
+            return True #every item matched.
+        else:
+            return False
+    @property
+    def __name__(self):
+        return f"TagMatcher|{self.kwargs}"
+
+    def __str__(self):
+        return self.__name__
+
+
+@memoize(1024)
+def tag_matcher(**kwargs):
+    return TagMatcher(**kwargs)
+
+SOLVERS = dict()
+
+class AutoData:
+    """
+    Interface class for a user
+    """
+    def to_debug(self,format):
+        format = parse_def(format)
+        return AutoData.debug_conversion(self.format,format,self.value)
+
+    def __init__(self,value,format,solver):
+        self.value = value
+        self.format = format
+        self.solver_id = id(solver) # do not hold solver, but hold solver's id. in order to make this picklable.
+        if self.solver_id not in SOLVERS:
+            SOLVERS[self.solver_id] = solver
+
+    @property
+    def solver(self):
+        return SOLVERS[self.solver_id]
+
+    def converter(self,format=None,**kwargs):
+        if format is not None:
+            return self.solver.search_direct(self.format,format)
+        else:
+            return self.solver.search(self.format,tag_matcher(**kwargs))
+
+    def convert(self,format=None,**kwargs):
+        conversion = self.converter(format,**kwargs)
+        if conversion.edges:
+            return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)
+        else:
+            return self
+            
+    def to(self,format=None,**kwargs): # I want 'to' to accept format string too
+        # if format is given, use direct matching.
+        # else use tag matching
+        # format can be of any type, but you need to have a conversion rule to tag_dict, otherwise you won't get any result
+        # so, ask user to provide any state and state->tag_dict rule.
+        # That's it.
+        converted = self.convert(format=format,**kwargs)
+        return converted.value
+
+    def map(self,f):
+        return AutoData(f(self.value),self.format,self.solver)
+
+    def neighbors(self):
+        return self.solver.neighbors(self.format)
+
+    def to_widget(self):
+        return self.to("widget")
+
+    def _repr_html_(self):
+        self.format |> display
+        self.to("widget") |> display
+
+#    def __getstate__(self):
+
+
+

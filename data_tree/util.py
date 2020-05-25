@@ -95,20 +95,25 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
     END_TOKEN = "$$end$$"
 
     def loader():
-        for item in gen:
-            while active:
-                try:
-                    # logger.debug(f"putting item to queue. (max {n_prefetch})")
-                    item_queue.put(item, timeout=1)
+        try:
+            for item in gen:
+                while active:
+                    try:
+                        # logger.debug(f"putting item to queue. (max {n_prefetch})")
+                        item_queue.put(item, timeout=1)
+                        break
+                    except Full:
+                        pass
+                if not active:
+                    # logger.info(f"break due to inactivity")
                     break
-                except Full:
-                    pass
-            if not active:
-                # logger.info(f"break due to inactivity")
-                break
-            # logger.debug("waiting for generator item")
-        # logger.info("putting end token")
-        item_queue.put(END_TOKEN)
+                # logger.debug("waiting for generator item")
+            # logger.info("putting end token")
+            item_queue.put(END_TOKEN)
+        except Exception as e:
+            import traceback
+            logger.error(f"exception in prefetch loader:{e}")
+            logger.error(traceback.format_exc())
 
     t = Thread(target=loader)
     t.daemon = True

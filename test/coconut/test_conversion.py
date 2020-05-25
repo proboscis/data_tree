@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xdb5ac552
+# __coconut_hash__ = 0xbf3e8f03
 
-# Compiled with Coconut version 1.4.1 [Ernest Scribbler]
+# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -77,13 +77,13 @@ def test_something():  # def test_something():
         return node == "aaa"  #         return node == "aaa"
     def heuristics(node):  #     def heuristics(node):
         return 0  #         return 0
-    (log_conversion)(astar(start="a", matcher=matcher, neighbors=neighbors, heuristics=heuristics))  #     astar(
+    (log_conversion)(astar(start="a", matcher=matcher, neighbors=neighbors, heuristics=heuristics).result)  #     astar(
 
 def imdef_neighbors(imdef):  # def imdef_neighbors(imdef):
     return [(e.f, e.b, e.cost, e.name) for e in _edges(imdef)]  #     return [(e.f,e.b,e.cost,e.name) for e in _edges(imdef)]
 
 def test_new_astar():  # def test_new_astar():
-    (log_conversion)(astar(start=start, matcher=lambda d: d == end, neighbors=imdef_neighbors, heuristics=lambda a: 0))  #     astar(
+    (log_conversion)(astar(start=start, matcher=lambda d: d == end, neighbors=imdef_neighbors, heuristics=lambda a: 0).result)  #     astar(
 
 def log_conversion(converter):  # def log_conversion(converter):
     path = [e.name for e in converter.edges]  #     path = [e.name for e in converter.edges]
@@ -111,3 +111,39 @@ def test_auto_image():  # def test_auto_image():
     (log_conversion)(x.converter(end))  #     x.converter(end) |> log_conversion
     (log_conversion)(x.converter(END()))  #     x.converter(END()) |> log_conversion
     x.reset_solver()  #     x.reset_solver()
+
+def test_non_batch_img_op():  # def test_non_batch_img_op():
+    from data_tree.coconut.convert import AutoImage  #     from data_tree.coconut.convert import AutoImage
+    x = np.zeros((100, 100), dtype="float32")  #     x = np.zeros((100,100),dtype="float32")
+
+    start = (str_to_img_def)("images,L,L")  #     start = "images,L,L" |> str_to_img_def
+    end = (str_to_img_def)("numpy,float32,HW,L,0_1")  #     end = "numpy,float32,HW,L,0_1" |> str_to_img_def
+    auto_x = auto_image(x, "numpy,float32,HW,L,0_1")  #     auto_x = auto_image(x,"numpy,float32,HW,L,0_1")
+    assert auto_x.image_op(_coconut.operator.methodcaller("resize", (256, 256))).to(end).shape == (256, 256), "image_op must work on non batched image"  #     assert auto_x.image_op(.resize((256,256))).to(end).shape == (256,256),"image_op must work on non batched image"
+#AutoImage.solver.search_direct(start,end) |> log_conversion
+
+def test_casting():  # def test_casting():
+    from data_tree.coconut.omni_converter import SOLVER  #     from data_tree.coconut.omni_converter import SOLVER,cast_imdef_to_dict,cast_imdef_str_to_imdef
+    from data_tree.coconut.omni_converter import cast_imdef_to_dict  #     from data_tree.coconut.omni_converter import SOLVER,cast_imdef_to_dict,cast_imdef_str_to_imdef
+    from data_tree.coconut.omni_converter import cast_imdef_str_to_imdef  #     from data_tree.coconut.omni_converter import SOLVER,cast_imdef_to_dict,cast_imdef_str_to_imdef
+    logger.info("{_coconut_format_0}".format(_coconut_format_0=(cast_imdef_str_to_imdef('numpy,float32,HW,L,0_1'))))  #     logger.info(f"{cast_imdef_str_to_imdef('numpy,float32,HW,L,0_1')}")
+
+
+def test_omni_converter():  # def test_omni_converter():
+    from data_tree.coconut.omni_converter import auto_img  #     from data_tree.coconut.omni_converter import auto_img,cast_imdef_str_to_imdef,cast_imdef_to_imdef_str
+    from data_tree.coconut.omni_converter import cast_imdef_str_to_imdef  #     from data_tree.coconut.omni_converter import auto_img,cast_imdef_str_to_imdef,cast_imdef_to_imdef_str
+    from data_tree.coconut.omni_converter import cast_imdef_to_imdef_str  #     from data_tree.coconut.omni_converter import auto_img,cast_imdef_str_to_imdef,cast_imdef_to_imdef_str
+    from data_tree.coconut.auto_data import AutoData  #     from data_tree.coconut.auto_data import AutoData
+    x = np.ones((100, 100, 3), dtype="float32")  #     x = np.ones((100,100,3),dtype="float32")
+    auto_x = auto_img("numpy,float32,HW,L,0_1")(x)  # type: AutoData  #     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
+    assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()  #     assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()
+    assert (auto_x.to(v_range="0_255") == 255).all()  #     assert (auto_x.to(v_range="0_255") == 255).all()
+    _x = auto_x.to(dtype="uint8", v_range="0_255")  #     _x = auto_x.to(dtype="uint8",v_range="0_255")
+    assert (_x == 255).all(), "original:{_coconut_format_0},converted:{_coconut_format_1}".format(_coconut_format_0=(x), _coconut_format_1=(_x))  #     assert (_x == 255).all(), f"original:{x},converted:{_x}"
+    _x = auto_x.to(type="torch", dtype="uint8", v_range="0_255")  #     _x = auto_x.to(type="torch",dtype="uint8",v_range="0_255")
+    assert (_x == 255).all(), "original:{_coconut_format_0},converted:{_coconut_format_1}".format(_coconut_format_0=(x), _coconut_format_1=(_x))  #     assert (_x == 255).all(), f"original:{x},converted:{_x}"
+#logger.info(auto_x.convert(type="torch",dtype="uint8",v_range="0_255").format)
+#logger.info(auto_x.converter(type="torch",dtype="uint8",v_range="0_255"))
+#format = "numpy,float32,HW,L,0_1"
+#n_format = cast_imdef_str_to_imdef(format)[0]
+#assert format == n_format,f"{format} != {n_format}"

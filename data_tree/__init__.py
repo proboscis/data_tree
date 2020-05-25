@@ -6,3 +6,11 @@ from data_tree.coconut.convert import AutoImage
 series = Series.from_iterable
 managed_cache = ConditionedFilePathProvider
 auto_image = AutoImage
+
+class CODEC:
+    pass
+
+def auto_img(codec):
+    def _l(img):
+        return AutoImage(img,codec)
+    return _l

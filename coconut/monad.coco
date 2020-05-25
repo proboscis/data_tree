@@ -1,0 +1,14 @@
+
+data Try
+data Success(result) from Try
+data Failure(exception,trace) from Try
+
+def try_monad(f):
+    def _inner(*args,**kwargs):
+        try:
+            res = f(*args,**kwargs)
+            return Success(res)
+        except Exception as e:
+            import traceback
+            return Failure(e,traceback.format_exc())
+    return _inner
