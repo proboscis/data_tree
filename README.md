@@ -2,6 +2,14 @@
 Data science with Series and Tables processing are made back-traceable.
 
 # Tutorial
+## Auto Data Conversion Example
+```python
+from data_tree import auto
+from PIL import Image
+img_path = "anything.png"
+auto_img = auto("image,RGB,RGB")(Image.open(img_path))
+tensor_img = auto_img.to("torch,float32,BCHW,RGB,0_255")
+```
 Please use pytest and see examples in test/ for now.
 
 # TODO
