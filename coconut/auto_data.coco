@@ -171,8 +171,12 @@ class AutoData:
         converted = self.convert(format=format,**kwargs)
         return converted.value
 
-    def map(self,f):
-        return AutoData(f(self.value),self.format,self.solver)
+    def map(self,f,new_format=None):
+        if new_format is not None:
+            format = new_format
+        else:
+            format = self.format
+        return AutoData(f(self.value),format,self.solver)
 
     def neighbors(self):
         return self.solver.neighbors(self.format)
