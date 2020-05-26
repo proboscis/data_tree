@@ -897,7 +897,13 @@ class Hdf5Adapter(Series):
     def parents(self):
         return []
 
+    def clone(self, parents):
+        return Hdf5Adapter(self.hdf5_initializer,self.hdf5_file_name,self.key)
+
     def __init__(self, hdf5_initializer, hdf5_file_name, key):
+        self.hdf5_initializer = hdf5_initializer
+        self.hdf5_file_name = hdf5_file_name
+        self.key = key
         if not os.path.exists(hdf5_file_name):
             hdf5_initializer()
         self.hdf5_file = h5py.File(hdf5_file_name, "r")

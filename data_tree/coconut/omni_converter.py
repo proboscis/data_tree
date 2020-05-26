@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x47562e5
+# __coconut_hash__ = 0x3f408e0b
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -114,7 +114,7 @@ def imdef2imdef_str(imdef):  # def imdef2imdef_str(imdef):
                 v_range = _coconut_match_to[3]  #                 match Torch(dtype,arrange,ch_rpr,v_range):
                 _coconut_case_check_2 = True  #                 match Torch(dtype,arrange,ch_rpr,v_range):
             if _coconut_case_check_2:  #                 match Torch(dtype,arrange,ch_rpr,v_range):
-                base = "numpy,{_coconut_format_0},{_coconut_format_1},{_coconut_format_2},{_coconut_format_3}".format(_coconut_format_0=(dtype), _coconut_format_1=(arrange), _coconut_format_2=(ch_rpr), _coconut_format_3=(v_range))  #                     base = f"numpy,{dtype},{arrange},{ch_rpr},{v_range}"
+                base = "torch,{_coconut_format_0},{_coconut_format_1},{_coconut_format_2},{_coconut_format_3}".format(_coconut_format_0=(dtype), _coconut_format_1=(arrange), _coconut_format_2=(ch_rpr), _coconut_format_3=(v_range))  #                     base = f"torch,{dtype},{arrange},{ch_rpr},{v_range}"
         if not _coconut_case_check_2:  #                 match PILImages(mode,ch_rpr):
             if (_coconut.isinstance(_coconut_match_to, PILImages)) and (_coconut.len(_coconut_match_to) == 2):  #                 match PILImages(mode,ch_rpr):
                 mode = _coconut_match_to[0]  #                 match PILImages(mode,ch_rpr):
@@ -215,17 +215,17 @@ def dict2imdef(state):  # def dict2imdef(state):
                     _coconut_case_check_7 = True  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
             if _coconut_case_check_7:  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
                 return [ImageDef(Torch(_dtype, _arng, _ch_rpr, _v_range), frozenset(tags.keys()))]  #                 return [ImageDef(Torch(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
-        if not _coconut_case_check_7:  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-            if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                _coconut_match_temp_0 = _coconut_match_to.get("typte", _coconut_sentinel)  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                _coconut_match_temp_1 = _coconut_match_to.get("mode", _coconut_sentinel)  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "image") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_2 is not _coconut_sentinel):  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                    _mode = _coconut_match_temp_1  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                    _ch_rpr = _coconut_match_temp_2  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                    tags = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("typte", "mode", "ch_rpr")))  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                    _coconut_case_check_7 = True  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-            if _coconut_case_check_7:  #             match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+        if not _coconut_case_check_7:  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+            if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                _coconut_match_temp_1 = _coconut_match_to.get("mode", _coconut_sentinel)  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "image") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_2 is not _coconut_sentinel):  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                    _mode = _coconut_match_temp_1  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                    _ch_rpr = _coconut_match_temp_2  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                    tags = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "mode", "ch_rpr")))  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+                    _coconut_case_check_7 = True  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+            if _coconut_case_check_7:  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
                 return [ImageDef(PILImage(_mode, _ch_rpr), frozenset(tags.keys()))]  #                 return [ImageDef(PILImage(_mode,_ch_rpr),frozenset(tags.keys()))]
         if not _coconut_case_check_7:  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
             if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
@@ -262,16 +262,7 @@ def rule_numpy2img(state):  # def rule_numpy2img(state):
                 _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #                     Image.fromarray,
                 _coconut_match_temp_3 = _coconut_match_to.get("arrange", _coconut_sentinel)  #                     Image.fromarray,
                 _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #                     Image.fromarray,
-                if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "L") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HWC") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #                     Image.fromarray,
-                    tags = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "ch_rpr", "arrange", "v_range")))  #                     Image.fromarray,
-                    _coconut_case_check_8 = True  #                     Image.fromarray,
-            if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                     Image.fromarray,
-                _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                     Image.fromarray,
-                _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #                     Image.fromarray,
-                _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #                     Image.fromarray,
-                _coconut_match_temp_3 = _coconut_match_to.get("arrange", _coconut_sentinel)  #                     Image.fromarray,
-                if (not _coconut_case_check_8) and (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "L") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HW") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #                     Image.fromarray,
-                    _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #                     Image.fromarray,
+                if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "L") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HW") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #                     Image.fromarray,
                     tags = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "ch_rpr", "arrange", "v_range")))  #                     Image.fromarray,
                     _coconut_case_check_8 = True  #                     Image.fromarray,
             if _coconut_case_check_8:  #                     Image.fromarray,

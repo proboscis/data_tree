@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xb843031f
+# __coconut_hash__ = 0x1a32dc67
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -212,8 +212,12 @@ class AutoData:  # class AutoData:
         converted = self.convert(format=format, **kwargs)  #         converted = self.convert(format=format,**kwargs)
         return converted.value  #         return converted.value
 
-    def map(self, f):  #     def map(self,f):
-        return AutoData(f(self.value), self.format, self.solver)  #         return AutoData(f(self.value),self.format,self.solver)
+    def map(self, f, new_format=None):  #     def map(self,f,new_format=None):
+        if new_format is not None:  #         if new_format is not None:
+            format = new_format  #             format = new_format
+        else:  #         else:
+            format = self.format  #             format = self.format
+        return AutoData(f(self.value), format, self.solver)  #         return AutoData(f(self.value),format,self.solver)
 
     def neighbors(self):  #     def neighbors(self):
         return self.solver.neighbors(self.format)  #         return self.solver.neighbors(self.format)

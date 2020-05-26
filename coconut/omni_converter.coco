@@ -45,7 +45,7 @@ def imdef2imdef_str(imdef):
                 match Numpy(dtype,arrange,ch_rpr,v_range):
                     base = f"numpy,{dtype},{arrange},{ch_rpr},{v_range}"
                 match Torch(dtype,arrange,ch_rpr,v_range):
-                    base = f"numpy,{dtype},{arrange},{ch_rpr},{v_range}"
+                    base = f"torch,{dtype},{arrange},{ch_rpr},{v_range}"
                 match PILImages(mode,ch_rpr):
                     base = f"images,{mode},{ch_rpr}"
                 match PILImage(mode,ch_rpr):
@@ -105,7 +105,7 @@ def dict2imdef(state):
                 return [ImageDef(Numpy(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
                 return [ImageDef(Torch(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
-            match {"typte":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
+            match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
                 return [ImageDef(PILImage(_mode,_ch_rpr),frozenset(tags.keys()))]
             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
                 return [ImageDef(PILImages(_mode,_ch_rpr),frozenset(tags.keys()))]
@@ -120,7 +120,7 @@ def rule_numpy2img(state):
                     "Image.fromarray",
                     1
                 )]
-            match {"type":"numpy","dtype":"uint8","ch_rpr":"L","arrange":"HWC" or "HW","v_range":"0_255",**tags}:
+            match {"type":"numpy","dtype":"uint8","ch_rpr":"L","arrange":"HW","v_range":"0_255",**tags}:
                 return [(
                     Image.fromarray,
                     ImageDef(PILImage("L","L"),frozenset(tags.keys())),
