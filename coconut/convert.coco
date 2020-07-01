@@ -5,13 +5,10 @@ from data_tree.coconut.visualization import infer_widget
 from loguru import logger
 from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from math import sqrt
-data ValueRange(name):
-    def __str__(self):
-        return self.name
-VR_0_1 = ValueRange("0_1")
-VR_0_255 = ValueRange("0_255")
-VR_None = ValueRange("None")
-VR_XYZ_Normalized = ValueRange("XYZ_Normalized")
+VR_0_1 = "0_1"
+VR_0_255 = "0_255"
+VR_None = "None"
+VR_XYZ_Normalized = "XYZ_Normalized"
 
 
 data DataType
@@ -22,7 +19,7 @@ data TensorLike(
     dtype is str,
     arrange is str,
     channel_repr is str,
-    value_range is ValueRange) from DataType:
+    value_range is str) from DataType:
     def __repr__(self):
         return f"Tensor({self.data_type}|{self.dtype}|{self.arrange}|{self.channel_repr}|{self.value_range})"
 
@@ -37,6 +34,12 @@ data Torch(dtype,arrange,channel_repr,value_range) from TensorLike:
         return makedata(cls,*args)
     def __repr__(self):
         return f"Torch({self.dtype},{self.arrange},{self.channel_repr},{self.value_range})"
+
+data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+    def __new__(cls,*args):
+        return makedata(cls,*args)
+    def __repr__(self):
+        return f"Hdf5({self.dtype},{self.arrange},{self.channel_repr},{self.value_range})"
 
 data PILImages(mode,channel_repr) from DataType: # represents iterable of PIL.Images
     def __repr__(self):
@@ -87,15 +90,19 @@ def to_imagedef(f):
             raise e
     return _inner
 
+
+
 @to_imagedef
 def to_PILImages(imdef:ImageDef)->Edge[]:
     #TODO fix pattern match on data class
     case imdef:
         match Numpy("uint8","BHWC",("RGBA" or "RGB" or "LAB") as c_repr, =VR_0_255):
-            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray ..> .convert(c_repr))(img) for img in ary],2,name="to_Images")]
+            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray ..> .convert(c_repr))(img) for img in ary],2,name="numpy batch to Images")]
         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-            return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="to_Images")]
+            return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
     return []
+
+
 @to_imagedef
 def to_numpy(imdef:ImageDef)->List[Edge]:
     case imdef:
@@ -105,6 +112,19 @@ def to_numpy(imdef:ImageDef)->List[Edge]:
                          (.detach() ..> .cpu() ..> .numpy()),
                          1,
                          name="torch_to_numpy")]
+        match PILImage("RGB",ch_repr):
+                    return [Edge(imdef,
+                                Numpy("uint8","HWC",ch_repr,VR_0_255),
+                                np.array,
+                                1,
+                                name="image_to_numpy")]
+        match PILImage("L",ch_repr):
+                    return [Edge(imdef,
+                                Numpy("uint8","HW",ch_repr,VR_0_255),
+                                np.array,
+                                1,
+                                name="image_to_numpy")]
+
         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
             return [Edge(imdef,
                          Numpy("uint8","BHW",ch_repr,VR_0_255),
@@ -176,16 +196,18 @@ def change_arrange(imdef:ImageDef):
 def select_channel(imdef:ImageDef):
     case imdef:
         match TensorLike(dtype,"BHWC",ch_repr,vr) if len(ch_repr) >= 1:
+            selector = i->a->a[:,:,:,[i]]
             return [Edge(a=imdef,
                          b=imdef.__class__(dtype,"BHWC",c,vr),
-                         f=a->a[:,:,:,[i]],
-                         cost=1,
+                         f=selector(i),
+                         cost=10,
                          name=f"select {c} channel") for i,c in enumerate(ch_repr)]
         match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_repr) >= 1:
+            selector = i->a->a[:,[i]]
             return [Edge(a=imdef,
-                         b=imdef.__class__(dtype,"BHWC",c,vr),
-                         f=a->a[:,[i]],
-                         cost=1,
+                         b=imdef.__class__(dtype,"BCHW",c,vr),
+                         f=selector(i),
+                         cost=10,
                          name=f"select {c} channel") for i,c in enumerate(ch_repr)]
     return []
 @to_imagedef
@@ -215,14 +237,14 @@ def en_batch(imdef:ImageDef):
             return [Edge(a=imdef,
                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
                          f=a->a[None],
-                         cost=1,
+                         cost=10,
                          name=f"{imdef.data_type.arrange} to {new_arng}"
                         )]
         match ImageDef(PILImage(mode,channel_repr),tags):
             return [Edge(a=imdef,
                          b=ImageDef(PILImages(mode,channel_repr),tags|frozenset(("en_batched",))),
                          f=a->[a],
-                         cost=1,
+                         cost=10,
                          name=f"wrap image with list"
                         )]
     return []
@@ -231,7 +253,7 @@ def de_batch(imdef:ImageDef):
         match ImageDef(TensorLike(dtype,arng,ch,vr),tags) if "en_batched" in tags and "B" in arng:
             return [Edge(
                 a=imdef,
-                b=ImageDef(imdef.data_type.__class__(dtype,arng[1:],ch,vr),tags-frozenset("en_batched")),
+                b=ImageDef(imdef.data_type.__class__(dtype,arng[1:],ch,vr),tags-frozenset(["en_batched"])),
                 f=a->a[0],
                 cost=1,
                 name=f"de_batch en_batched image"
@@ -239,7 +261,7 @@ def de_batch(imdef:ImageDef):
         match ImageDef(PILImages(mode,ch),tags) if "en_batched" in tags:
             return [Edge(
                 a=imdef,
-                b=ImageDef(PILImage(mode,ch),tags-frozenset("en_batched")),
+                b=ImageDef(PILImage(mode,ch),tags-frozenset(["en_batched"])),
                 f=a->a[0],
                 cost=1,
                 name=f"de_batch en_batched image"
@@ -704,7 +726,7 @@ def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
     else:
         codec = f"numpy,uint8,BHWC,{ch},0_255"
     imgs = self.to(codec)[:max_image]
-    nrow = int(sqrt(max_image)+0.5)
+    nrow = int(sqrt(len(imgs))+0.5)
     r = int((w-((nrow+1)*padding))/nrow)
     imgs = np.array([(Image.fromarray(img).resize((r,r)) |> np.array) for img in imgs])
     if len(ch) == 1:

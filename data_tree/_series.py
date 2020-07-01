@@ -305,14 +305,15 @@ class Series(metaclass=abc.ABCMeta):
     def map_b(self, batch_f):
         return MappedSeries(self, lambda b: batch_f(b[None])[0], batch_f)
 
-    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None,max_pending_result=8):
+    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None, max_pending_result=8):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
         :param global_resources: Mapping[Str,Resource[GlobalHolder]]
         :param num_process:
         :return: beware f must be picklable and each element comes to first argument of f, and global resources will be given as kwargs.
         """
-        return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process,max_pending_result=max_pending_result)  # .lazy()
+        return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process,
+                              max_pending_result=max_pending_result)  # .lazy()
 
     @property
     def values(self):
@@ -326,13 +327,31 @@ class Series(metaclass=abc.ABCMeta):
         # sin you know that all the cache files have distinct names, you need just one prefix.
         return Hdf5CachedSeries(self, cache_path=cache_path, src_hash=src_hash, **dataset_opts)
 
+    def auto(self,format=None):
+        """
+        wraps all elements with auto(format)
+        :param format:
+        :return:
+        """
+        from data_tree.ops.cache import AutoSeries
+        from data_tree.coconut.auto_data import AutoData
+        if format is None:
+            assert isinstance(self[0],AutoData),"element must be a instance of AutoData if format=None"
+            return AutoSeries(self.map(lambda i:i.value),self[0].format)
+        else:
+            return AutoSeries(self,format)
+
+    def auto_hdf5(self, cache_path, format,src_hash=None):
+        from data_tree.ops.cache import Hdf5AutoSeries
+        return Hdf5AutoSeries(self, cache_path=cache_path, format=format,src_hash=src_hash)
+
     def lmdb(self, cache_path, src_hash=None, **dataset_opts):
         from data_tree.ops.cache import LMDBCachedSeries
         # when you replace anything in the tree, this cache must be invalidated.
         # you need a renamed cache when the replaced tree was new
         # but naming is hard.. how about you provide names?
         # sin you know that all the cache files have distinct names, you need just one prefix.
-        return LMDBCachedSeries(self,db_path=cache_path,src_hash=src_hash, **dataset_opts)
+        return LMDBCachedSeries(self, db_path=cache_path, src_hash=src_hash, **dataset_opts)
 
     def auto_hdf5(self, cache_path, src_hash=None, **dataset_opts):
         sample = self[0]
@@ -476,6 +495,10 @@ class Series(metaclass=abc.ABCMeta):
 
     def zip(self, *tgts: "Series"):
         return ZippedSeries(self, *tgts)
+
+    def unzip(self):
+        n_child = len(self[0])
+        return [self.map(lambda item:item[i]) for i in range(n_child)]
 
     def zip_with_index(self):
         return ZippedSeries(self, NumpySeries(np.arange(self.total)))
@@ -792,6 +815,10 @@ class Series(metaclass=abc.ABCMeta):
         return res
 
 
+#    def zip_with_index(self):
+#        return self.zip(Series.from_iterable(list(range(self.total))))
+
+
 class MultiSourcedSeries(Series):
 
     def __init__(self, parents: list):
@@ -898,7 +925,7 @@ class Hdf5Adapter(Series):
         return []
 
     def clone(self, parents):
-        return Hdf5Adapter(self.hdf5_initializer,self.hdf5_file_name,self.key)
+        return Hdf5Adapter(self.hdf5_initializer, self.hdf5_file_name, self.key)
 
     def __init__(self, hdf5_initializer, hdf5_file_name, key):
         self.hdf5_initializer = hdf5_initializer
@@ -1377,6 +1404,7 @@ class MPMappedSeries(IndexedSeries):
                         break
                 stp.enqueue_termination()
                 logger.warning(f"multiprocessing fetcher stopped ")
+
             fetch_thread = threading.Thread(target=_fetcher)
             fetch_thread.start()
             try:
@@ -1385,9 +1413,9 @@ class MPMappedSeries(IndexedSeries):
                     for item, token in tqdm(gen, desc="multi process mapping progress.."):
                         batch_buffer.append(item)
                         if token == "end":
-                            if en_numpy and not isinstance(batch, np.ndarray):
-                                batch = np.array(batch)
-                            #logger.info("yielding batch")
+                            if en_numpy:
+                                batch_buffer = np.array(batch_buffer)
+                            # logger.info("yielding batch")
                             yield batch_buffer
                             # logger.debug("yield batch")
                             batch_buffer = []

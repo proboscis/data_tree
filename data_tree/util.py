@@ -14,6 +14,7 @@ from lazy import lazy
 from loguru import logger
 from easydict import EasyDict as edict
 from tqdm.autonotebook import tqdm
+from contextlib import contextmanager
 
 WARN_SLOW_PREFETCH = False
 import sys
@@ -75,7 +76,16 @@ def ensure_path_exists(fileName):
             makedirs(parent)
         except FileExistsError as fee:
             pass
-
+def ensure_dir_exists(dirname):
+    import os
+    from os import path, makedirs
+    parent = os.path.dirname(fileName)
+    if not path.exists(parent) and parent:
+        try:
+            logger.info(f"making dirs for {fileName}")
+            makedirs(parent)
+        except FileExistsError as fee:
+            pass
 
 def prefetch_generator(gen, n_prefetch=5, name=None):
     """
@@ -183,14 +193,16 @@ class Pickled(PickledTrait):
         self.path = path
         self.proc = proc
 
-    @lazy
+    @property
     def value(self):
         if not self.loaded:
             self._value = load_or_save(self.path, self.proc)
+            self.loaded = True
         return self._value
 
     def clear(self):
         os.remove(self.path)
+        self.loaded = False
         logger.info(f"deleted pickled file at {self.path}")
 
 
@@ -211,11 +223,13 @@ class MappedPickled(PickledTrait):
         return self.src.clear()
 
 
-def scantree(path):
+def scantree(path,yield_dir = False):
     """Recursively yield DirEntry objects for given directory."""
     for entry in os.scandir(path):
         if entry.is_dir(follow_symlinks=False):
-            yield from scantree(entry.path)  # see below for Python 2.x
+            if yield_dir:
+                yield entry
+            yield from scantree(entry.path,yield_dir=yield_dir)  # see below for Python 2.x
         else:
             yield entry
 
@@ -295,3 +309,13 @@ def shared_npy_array_like(ary: np.ndarray):
         ary.size)
     return np.frombuffer(buf, dtype=ary.dtype).reshape(ary.shape)
 
+
+
+
+@contextmanager
+def checktime(label="none"):
+    start = datetime.now()
+    yield
+    end = datetime.now()
+    dt = end - start
+    print(f"time_{label}:{dt.total_seconds():.3f}")

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x6aaa864
+# __coconut_hash__ = 0x8d81ad0d
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -39,23 +39,23 @@ class Edge(_coconut.collections.namedtuple("Edge", "src dst f cost name")):  # d
 
 class NoRouteException(Exception): pass  # class NoRouteException(Exception)
 class ConversionError(Exception): pass  # class ConversionError(Exception)
-class Conversion(_coconut.collections.namedtuple("Conversion", "edges")):  # data Conversion(edges):
-    __slots__ = ()  # data Conversion(edges):
-    __ne__ = _coconut.object.__ne__  # data Conversion(edges):
-    def __eq__(self, other):  # data Conversion(edges):
-        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data Conversion(edges):
-    def __hash__(self):  # data Conversion(edges):
-        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data Conversion(edges):
+class Conversion:  # class Conversion:
+    def __init__(self, edges):  #     def __init__(self,edges):
+        self.edges = edges  #         self.edges = edges
+
     def __call__(self, x):  #     def __call__(self,x):
         for e in self.edges:  #         for e in self.edges:
             try:  #             try:
                 x = e.f(x)  #                 x = e.f(x)
             except Exception as ex:  #             except Exception as ex:
-                raise ConversionError("exception in path:{_coconut_format_0} \n paths:{_coconut_format_1}".format(_coconut_format_0=(e.name), _coconut_format_1=([e.name for e in self.edges]))) from ex  #                 raise ConversionError(f"exception in path:{e.name} \n paths:{[e.name for e in self.edges]}") from ex
+                raise ConversionError("exception in edge:{_coconut_format_0} \n paths:{_coconut_format_1} \n x:{_coconut_format_2}".format(_coconut_format_0=(e.name), _coconut_format_1=([e.name for e in self.edges]), _coconut_format_2=(x))) from ex  #                 raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x}") from ex
         return x  #         return x
 
+    def __getitem__(self, item):  #     def __getitem__(self,item):
+        return Conversion(self.edges[item])  #         return Conversion(self.edges[item])
+
     def __repr__(self):  #     def __repr__(self):
-        if self.edges:  #         if self.edges:
+        if len(self.edges):  #         if len(self.edges):
             start = self.edges[0].src  #             start = self.edges[0].src
             end = self.edges[-1].dst  #             end = self.edges[-1].dst
         else:  #         else:
@@ -63,6 +63,12 @@ class Conversion(_coconut.collections.namedtuple("Conversion", "edges")):  # dat
             end = "None"  #             end = "None"
         info = dict(name="Conversion", start=start, end=end, path=[e.name for e in self.edges])  #         info = dict(
         return pformat(info)  #         return pformat(info)
+    def trace(self, tgt):  #     def trace(self,tgt):
+        x = tgt  #         x = tgt
+        for e in self.edges:  #         for e in self.edges:
+            x = e.f(x)  #             x = e.f(x)
+            yield dict(edge=e, x=x)  #             yield dict(edge= e,x=x)
+
 def new_conversion(edges):  # def new_conversion(edges):
     return Conversion(edges)  #     return Conversion(edges)
 class _HeapContainer:  # class _HeapContainer:

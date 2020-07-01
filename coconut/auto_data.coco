@@ -19,7 +19,7 @@ class _CastLambda:
         new_states = self.rule(state)
         if new_states is not None:
             if self.name is None:
-                cast_name = f"{rule.__name__}"
+                cast_name = f"{self.rule.__name__}"
             else:
                 cast_name=self.name
             if self.swap:
@@ -45,7 +45,7 @@ class _ConversionLambda:
                 match (converter,new_state,name,score):
                     result.append((converter,new_state,score,name))
                 match _:
-                    raise RuntimeError(f"rule:{rule} returned invalid edge:{edge}.")
+                    raise RuntimeError(f"rule:{self.rule} returned invalid edge:{edge}.")
         return result
 
 class AutoSolver:
@@ -70,6 +70,19 @@ class AutoSolver:
         """
 
         self.add_conversion(AutoSolver.create_cast_rule(rule,name=name,_swap=True))
+
+    def add_alias(self,a,b):
+        self.add_cast(state->[b] if state == a else None,name=f"alias: {a}->{b}")
+        self.add_cast(state->[a] if state == b else None,name=f"alias: {b}->{a}")
+
+    @staticmethod
+    def create_alias_rule(a,b):
+        def caster(state):
+           if state == a:
+               return [b]
+           elif state == b:
+               return [a]
+        return AutoSolver.create_cast_rule(caster,f"alias:{a}=={b}")
 
     @staticmethod
     def create_conversion_rule(rule):
@@ -98,7 +111,7 @@ class AutoSolver:
         return x
 
     def new_auto_data(self,value,format):
-        return AutoData(value,format,self.solver)
+        return AutoData(value,format,self)
 
 
 
@@ -151,9 +164,9 @@ class AutoData:
 
     def converter(self,format=None,**kwargs):
         if format is not None:
-            return self.solver.search_direct(self.format,format)
+            return self.solver.solver.search_direct(self.format,format)
         else:
-            return self.solver.search(self.format,tag_matcher(**kwargs))
+            return self.solver.solver.search(self.format,tag_matcher(**kwargs))
 
     def convert(self,format=None,**kwargs):
         conversion = self.converter(format,**kwargs)
@@ -161,6 +174,8 @@ class AutoData:
             return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)
         else:
             return self
+
+
             
     def to(self,format=None,**kwargs): # I want 'to' to accept format string too
         # if format is given, use direct matching.
@@ -178,8 +193,11 @@ class AutoData:
             format = self.format
         return AutoData(f(self.value),format,self.solver)
 
+    def map_in(self,start_format,f,new_format=None):
+        return AutoData(f(self.to(start_format)),new_format??self.format,self.solver)
+
     def neighbors(self):
-        return self.solver.neighbors(self.format)
+        return self.solver.solver.neighbors(self.format)
 
     def to_widget(self):
         return self.to("widget")
@@ -188,7 +206,11 @@ class AutoData:
         self.format |> display
         self.to("widget") |> display
 
+    def cast(self,format):
+        return AutoData(self.value,format,self.solver)
+
 #    def __getstate__(self):
 
 
-
+def AutoData.call(self,name,*args,**kwargs):
+    return self.to(name)(*args,**kwargs)
