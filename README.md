@@ -2,6 +2,10 @@
 Data science with Series and Tables processing are made back-traceable.
 
 # Tutorial
+## Series Example
+### scan_image
+![example](https://gyazo.com/8611701a1213b844bd62b978bac58b81)
+
 ## Auto Data Conversion Example
 ```python
 from data_tree import auto

@@ -3,10 +3,10 @@ from data_tree.coconut.auto_data import AutoSolver
 from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from frozendict import frozendict
 from typing import Mapping
+from ipywidgets import Text
+import torchvision.transforms as transforms
+import torch
 def imagedef2dict(imdef:ImageDef):
-    """
-
-    """
     case imdef:
         match ImageDef(data_type,tags):
             case data_type:
@@ -15,9 +15,9 @@ def imagedef2dict(imdef:ImageDef):
                 match Torch(dtype,arrange,ch_rpr,v_range):
                     info = dict(type="torch",dtype=dtype,arrange=arrange,ch_rpr=ch_rpr,v_range=str(v_range))
                 match PILImages(mode,ch_rpr):
-                    info = dict(type="images",ch_rpr=ch_rpr)
+                    info = dict(type="images",ch_rpr=ch_rpr,mode=mode)
                 match PILImage(mode,ch_rpr):
-                    info = dict(type="image",ch_rpr=ch_rpr)
+                    info = dict(type="image",ch_rpr=ch_rpr,mode=mode)
             else:
                 raise RuntimeError(f"cannot convert unknown imagedef:{imdef} to dict.")
             return frozendict(
@@ -69,7 +69,7 @@ def cast_imdef_to_imdef_str(imdef):
 def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
     mode = imgs[0].mode
     ch = len(mode)
-    nrow = int(sqrt(max_image)+0.5)
+    nrow = int(sqrt(len(imgs[:max_image]))+0.5)
     r = int((w-((nrow+1)*padding))/nrow)
 
     imgs = np.array([(img.resize((r,r)) |> np.array) for img in imgs[:max_image]])
@@ -131,17 +131,189 @@ def rule_numpy2img(state):
 def rule_image2gray(state):
     case state:
         match ImageDef(PILImage(ch_rpr,ch_rpr2),tags):
-            return [(.convert("L"),ImageDef(PILImage("L","L"),tags),"image2gray")
+            return [
+                (.convert("L"),ImageDef(PILImage("L","L"),tags),"image2gray"),
+                (.convert("LA"),ImageDef(PILImage("LA","LA"),tags),"image2gray-alpha"),
                    ]
+
+"""
+def dict2visdomable(state):
+    case state:
+        match {"type":"numpy","dtype":"float32","arrange":"CHW" or "BCHW","ch_rpr":"RGB" or "L",**others} if "visdomable" not in state:
+            return [frozendict(
+                **state,
+                visdomable=True
+            )]
+"""
+def to_visdom_function(state):
+    case state:
+        match {"type":"numpy","dtype":"float32","arrange":"CHW","ch_rpr":"RGB" or "L","v_range":"0_255",**others}:
+            return [
+                (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
+            ]
+        match {"type":"numpy","dtype":"float32","arrange":"BCHW","ch_rpr":"RGB" or "L","v_range":"0_255",**others}:
+            return [
+                (ary->visdom->visdom.images$(ary),"visdom_function","to_visdom_function")
+            ]
+def any2widget(state):
+    return [(ary->Text(str(ary)),"widget","anything_to_text_widget",1000)]
+
+data AutoList(state)
+
+def unlist(items):
+    return SOLVER.new_auto_data([i.value for i in items],AutoList(items[0].format))
+
+def cast_ary_str_to_ary_type(state):
+    case state:
+        match "[" + element_state + "]":
+            return [AutoList(element_state)]
+        match AutoList(es is str):
+            return [f"[{es}]"]
+
+def intra_list_conversions(state):
+    case state:
+        match AutoList(es):
+            return [((f,new_state,cost,name)->(
+                items -> [f(i) for i in items],
+                AutoList(new_state),
+                f"[{name}]",
+                cost+1
+            ))(f,new_state,cost,name) for f,new_state,cost,name in SOLVER.solver.neighbors(es)]
+
+def img_list_is_imgs(state):
+    case state:
+        match AutoList("image,"+formats):
+            return [f"images,{formats}"]
+        match "images,"+formats:
+            return [AutoList("image,"+formats)]
+def numpys_to_numpy(state):
+    case state:
+        match AutoList({"type":"numpy","arrange":arng,**kwargs}) if "B" not in arng:
+            return [
+                (numpys->np.array(numpys),
+                frozendict({"type":"numpy","arrange":"B"+arng,**kwargs}),
+                f"merge arrays to array",
+                10)
+            ]
+def tensor_to_list(state):
+    case state:
+        match {"arrange":arng,**kwargs} if len(arng) > 1:
+
+            return [
+                (tensor->[t for t in tensor],
+                AutoList(frozendict(arrange=arng[1:],**kwargs)),
+                f"tensor to list of tensor",
+                2)
+            ]
+
+def pil_convert(state):
+    case state:
+        match {"type":"image",**kwargs}:
+            new_state = dict(**state)
+            return [
+                (img -> mode -> SOLVER.new_auto_data(img.convert(mode),f"image,{mode},{mode}"),
+                "pil_convert",
+                "image_to_pil_converter",
+                1)
+            ]
+
+def rgb_to_rgba(state):
+    if state == "numpy,uint8,HWC,RGB,0_255":
+        return [(
+            a->np.concatenate((a,np.ones((*a.shape[:2],1),dtype="uint8")*255),axis=2),
+            "numpy,uint8,HWC,RGBA,0_255",
+            "add 255 as alpha channel",
+            10
+        )]
+    elif state == "numpy,uint8,BHWC,RGB,0_255":
+        return [(
+            a->np.concatenate((a,np.ones((*a.shape[:3],1),dtype="uint8")*255),axis=3),
+            "numpy,uint8,BHWC,RGBA,0_255",
+            "add 255 as alpha channel to batch",
+            10
+        )]
+
+@memoize()
+def pix2pix_normalizer(nc):
+    return transforms.Normalize((0.5,)*nc,(0.5,)*nc)
+
+def torch_img_to_pixpix_input(state):
+
+    case state:
+        match {"type":"torch","dtype":"float32","arrange":"CHW","v_range":"0_1","ch_rpr":rpr,**kwargs}:
+            return [(
+                pix2pix_normalizer(len(rpr)),
+                f"pix2pix,nc={len(rpr)}",
+                "convert to pixpix normalized input",
+                1
+            )]
+        match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":rpr,**kwargs}:
+            return [(
+                t->torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t],dim=0),
+                f"pix2pix_batch,nc={len(rpr)}",
+                "convert to pixpix normalized input",
+                1
+            )]
+        match "pix2pix,nc=4":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,CHW,RGBA,0_1",
+                "inverse pix2pix to img",
+                1
+            )]
+        match "pix2pix_batch,nc=4":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,BCHW,RGBA,0_1",
+                "inverse pix2pix batch to img",
+                1
+            )]
+        match "pix2pix,nc=3":
+            return [(
+                a -> a*2+0.5,
+                f"torch,float32,CHW,RGB,0_1",
+                "inverse pix2pix to img",
+                1
+            )]
+
+def repeat_ch(state):
+    case state:
+        match {"type":"image","mode":"L","ch_rpr":ch,**kwargs} if len(ch) == 1:
+            return [
+                (a->np.repeat(np.array(a)[:,:,None],3,axis=2),
+                 frozendict(type="numpy",dtype="uint8",arrange="HWC",ch_rpr=ch*3,v_range="0_255"),
+                "repeat_channel_3",
+                5)
+            ]
+def lll_is_rgb(state):
+    case state:
+        match {"ch_rpr":"LLL",**kwargs}:
+            return [frozendict(ch_rpr="RGB",**kwargs)]
+
 DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_cast_rule(cast_imdef_to_dict,"cast_imdef_to_dict"),
     AutoSolver.create_cast_rule(cast_imdef_str_to_imdef,"cast_imdef_str_to_imdef"),
     AutoSolver.create_cast_rule(cast_imdef_to_imdef_str,"cast_imdef_to_imdef_str"),
     AutoSolver.create_cast_rule(dict2imdef,"dict2imdef"),
+    AutoSolver.create_cast_rule(cast_ary_str_to_ary_type,"cast_ary_str_to_ary_type"),
+    AutoSolver.create_cast_rule(img_list_is_imgs,"img_list_is_imgs"),
+    AutoSolver.create_cast_rule(lll_is_rgb,"lll_is_rgb"),
+    #AutoSolver.create_cast_rule(dict2visdomable),
+    AutoSolver.create_conversion_rule(any2widget),
+    AutoSolver.create_conversion_rule(to_visdom_function),
     AutoSolver.create_conversion_rule(rule_imgs2tile),
     AutoSolver.create_conversion_rule(rule_img2widget),
     AutoSolver.create_conversion_rule(rule_numpy2img),
     AutoSolver.create_conversion_rule(rule_image2gray),
+    AutoSolver.create_conversion_rule(intra_list_conversions),
+    AutoSolver.create_conversion_rule(numpys_to_numpy),
+    AutoSolver.create_conversion_rule(tensor_to_list),
+    AutoSolver.create_conversion_rule(pil_convert),
+    AutoSolver.create_conversion_rule(rgb_to_rgba),
+    AutoSolver.create_conversion_rule(repeat_ch),
+    AutoSolver.create_conversion_rule(torch_img_to_pixpix_input),
+    AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
+    AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255")
 ]
 SOLVER = AutoSolver(rules=DEFAULT_RULES.copy())
 auto_img = format->value->SOLVER.new_auto_data(value,format)

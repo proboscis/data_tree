@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x1a32dc67
+# __coconut_hash__ = 0xacb8ac2a
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -40,7 +40,7 @@ class _CastLambda:  # class _CastLambda:
         new_states = self.rule(state)  #         new_states = self.rule(state)
         if new_states is not None:  #         if new_states is not None:
             if self.name is None:  #             if self.name is None:
-                cast_name = "{_coconut_format_0}".format(_coconut_format_0=(rule.__name__))  #                 cast_name = f"{rule.__name__}"
+                cast_name = "{_coconut_format_0}".format(_coconut_format_0=(self.rule.__name__))  #                 cast_name = f"{self.rule.__name__}"
             else:  #             else:
                 cast_name = self.name  #                 cast_name=self.name
             if self.swap:  #             if self.swap:
@@ -86,7 +86,7 @@ class _ConversionLambda:  # class _ConversionLambda:
             if not _coconut_case_check_0:  #                 match _:
                 _coconut_case_check_0 = True  #                 match _:
                 if _coconut_case_check_0:  #                 match _:
-                    raise RuntimeError("rule:{_coconut_format_0} returned invalid edge:{_coconut_format_1}.".format(_coconut_format_0=(rule), _coconut_format_1=(edge)))  #                     raise RuntimeError(f"rule:{rule} returned invalid edge:{edge}.")
+                    raise RuntimeError("rule:{_coconut_format_0} returned invalid edge:{_coconut_format_1}.".format(_coconut_format_0=(self.rule), _coconut_format_1=(edge)))  #                     raise RuntimeError(f"rule:{self.rule} returned invalid edge:{edge}.")
         return result  #         return result
 
 class AutoSolver:  # class AutoSolver:
@@ -111,6 +111,19 @@ class AutoSolver:  # class AutoSolver:
         """  #         """
 
         self.add_conversion(AutoSolver.create_cast_rule(rule, name=name, _swap=True))  #         self.add_conversion(AutoSolver.create_cast_rule(rule,name=name,_swap=True))
+
+    def add_alias(self, a, b):  #     def add_alias(self,a,b):
+        self.add_cast(lambda state: [b] if state == a else None, name="alias: {_coconut_format_0}->{_coconut_format_1}".format(_coconut_format_0=(a), _coconut_format_1=(b)))  #         self.add_cast(state->[b] if state == a else None,name=f"alias: {a}->{b}")
+        self.add_cast(lambda state: [a] if state == b else None, name="alias: {_coconut_format_0}->{_coconut_format_1}".format(_coconut_format_0=(b), _coconut_format_1=(a)))  #         self.add_cast(state->[a] if state == b else None,name=f"alias: {b}->{a}")
+
+    @staticmethod  #     @staticmethod
+    def create_alias_rule(a, b):  #     def create_alias_rule(a,b):
+        def caster(state):  #         def caster(state):
+            if state == a:  #            if state == a:
+                return [b]  #                return [b]
+            elif state == b:  #            elif state == b:
+                return [a]  #                return [a]
+        return AutoSolver.create_cast_rule(caster, "alias:{_coconut_format_0}=={_coconut_format_1}".format(_coconut_format_0=(a), _coconut_format_1=(b)))  #         return AutoSolver.create_cast_rule(caster,f"alias:{a}=={b}")
 
     @staticmethod  #     @staticmethod
     def create_conversion_rule(rule):  #     def create_conversion_rule(rule):
@@ -139,7 +152,7 @@ class AutoSolver:  # class AutoSolver:
         return x  #         return x
 
     def new_auto_data(self, value, format):  #     def new_auto_data(self,value,format):
-        return AutoData(value, format, self.solver)  #         return AutoData(value,format,self.solver)
+        return AutoData(value, format, self)  #         return AutoData(value,format,self)
 
 
 
@@ -192,9 +205,9 @@ class AutoData:  # class AutoData:
 
     def converter(self, format=None, **kwargs):  #     def converter(self,format=None,**kwargs):
         if format is not None:  #         if format is not None:
-            return self.solver.search_direct(self.format, format)  #             return self.solver.search_direct(self.format,format)
+            return self.solver.solver.search_direct(self.format, format)  #             return self.solver.solver.search_direct(self.format,format)
         else:  #         else:
-            return self.solver.search(self.format, tag_matcher(**kwargs))  #             return self.solver.search(self.format,tag_matcher(**kwargs))
+            return self.solver.solver.search(self.format, tag_matcher(**kwargs))  #             return self.solver.solver.search(self.format,tag_matcher(**kwargs))
 
     def convert(self, format=None, **kwargs):  #     def convert(self,format=None,**kwargs):
         conversion = self.converter(format, **kwargs)  #         conversion = self.converter(format,**kwargs)
@@ -202,6 +215,8 @@ class AutoData:  # class AutoData:
             return AutoData(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)
         else:  #         else:
             return self  #             return self
+
+
 
     def to(self, format=None, **kwargs):  # I want 'to' to accept format string too  #     def to(self,format=None,**kwargs): # I want 'to' to accept format string too
 # if format is given, use direct matching.
@@ -219,8 +234,11 @@ class AutoData:  # class AutoData:
             format = self.format  #             format = self.format
         return AutoData(f(self.value), format, self.solver)  #         return AutoData(f(self.value),format,self.solver)
 
+    def map_in(self, start_format, f, new_format=None):  #     def map_in(self,start_format,f,new_format=None):
+        return AutoData(f(self.to(start_format)), (lambda _coconut_none_coalesce_item: self.format if _coconut_none_coalesce_item is None else _coconut_none_coalesce_item)(new_format), self.solver)  #         return AutoData(f(self.to(start_format)),new_format??self.format,self.solver)
+
     def neighbors(self):  #     def neighbors(self):
-        return self.solver.neighbors(self.format)  #         return self.solver.neighbors(self.format)
+        return self.solver.solver.neighbors(self.format)  #         return self.solver.solver.neighbors(self.format)
 
     def to_widget(self):  #     def to_widget(self):
         return self.to("widget")  #         return self.to("widget")
@@ -229,4 +247,18 @@ class AutoData:  # class AutoData:
         (display)(self.format)  #         self.format |> display
         (display)(self.to("widget"))  #         self.to("widget") |> display
 
+    def cast(self, format):  #     def cast(self,format):
+        return AutoData(self.value, format, self.solver)  #         return AutoData(self.value,format,self.solver)
+
 #    def __getstate__(self):
+
+
+try:  # def AutoData.call(self,name,*args,**kwargs):
+    _coconut_dotted_func_name_store_0 = call  # def AutoData.call(self,name,*args,**kwargs):
+except _coconut.NameError:  # def AutoData.call(self,name,*args,**kwargs):
+    _coconut_dotted_func_name_store_0 = None  # def AutoData.call(self,name,*args,**kwargs):
+def call(self, name, *args, **kwargs):  # def AutoData.call(self,name,*args,**kwargs):
+    return self.to(name)(*args, **kwargs)  #     return self.to(name)(*args,**kwargs)
+
+AutoData.call = call  #     return self.to(name)(*args,**kwargs)
+call = _coconut_dotted_func_name_store_0  #     return self.to(name)(*args,**kwargs)

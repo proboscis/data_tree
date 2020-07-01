@@ -109,11 +109,16 @@ def infer_widget(value):
         match _ is PIL.Image.Image:
             return value |> img_to_widget
         match _ is TensorType:
-            return infer_widget(value.detach().numpy())
+            return infer_widget(value.detach().cpu().numpy())
         match _ is np.ndarray:
             return ary_to_widget(value)
         match _ is tuple if value `hasattr` "_asdict":
             return value |> output_widget
+        match _ is dict:
+            return widgets.VBox([
+                widgets.VBox([widgets.Text(k),infer_widget(v)])
+                for k,v in value.items()
+            ])
         match _ is (tuple,list):
             items = [infer_widget(item) for item in value]
             return widgets.VBox([

@@ -93,3 +93,4 @@ class ConditionedFilePathProvider:
 
     def __call__(self, **conditions):
         return self.get_managed_file_path(conditions)
+

@@ -6,17 +6,23 @@ import dill # for pickling inner lambda...
 data Edge(src,dst,f,cost,name="unnamed")
 class NoRouteException(Exception)
 class ConversionError(Exception)
-data Conversion(edges):
+class Conversion:
+    def __init__(self,edges):
+        self.edges = edges
+
     def __call__(self,x):
         for e in self.edges:
             try:
                 x = e.f(x)
             except Exception as ex:
-                raise ConversionError(f"exception in path:{e.name} \n paths:{[e.name for e in self.edges]}") from ex
+                raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x}") from ex
         return x
 
+    def __getitem__(self,item):
+        return Conversion(self.edges[item])
+
     def __repr__(self):
-        if self.edges:
+        if len(self.edges):
             start = self.edges[0].src
             end = self.edges[-1].dst
         else:
@@ -29,6 +35,12 @@ data Conversion(edges):
             path = [e.name for e in self.edges]
         )
         return pformat(info)
+    def trace(self,tgt):
+        x = tgt
+        for e in self.edges:
+            x = e.f(x)
+            yield dict(edge= e,x=x)
+
 def new_conversion(edges):
     return Conversion(edges)
 class _HeapContainer:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x60083752
+# __coconut_hash__ = 0xbe7d0b30
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -28,19 +28,10 @@ from data_tree.coconut.astar import new_conversion  # from data_tree.coconut.ast
 from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from data_tree.coconut.astar import NoRouteException  # from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from math import sqrt  # from math import sqrt
-class ValueRange(_coconut.collections.namedtuple("ValueRange", "name")):  # data ValueRange(name):
-    __slots__ = ()  # data ValueRange(name):
-    __ne__ = _coconut.object.__ne__  # data ValueRange(name):
-    def __eq__(self, other):  # data ValueRange(name):
-        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data ValueRange(name):
-    def __hash__(self):  # data ValueRange(name):
-        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data ValueRange(name):
-    def __str__(self):  #     def __str__(self):
-        return self.name  #         return self.name
-VR_0_1 = ValueRange("0_1")  # VR_0_1 = ValueRange("0_1")
-VR_0_255 = ValueRange("0_255")  # VR_0_255 = ValueRange("0_255")
-VR_None = ValueRange("None")  # VR_None = ValueRange("None")
-VR_XYZ_Normalized = ValueRange("XYZ_Normalized")  # VR_XYZ_Normalized = ValueRange("XYZ_Normalized")
+VR_0_1 = "0_1"  # VR_0_1 = "0_1"
+VR_0_255 = "0_255"  # VR_0_255 = "0_255"
+VR_None = "None"  # VR_None = "None"
+VR_XYZ_Normalized = "XYZ_Normalized"  # VR_XYZ_Normalized = "XYZ_Normalized"
 
 
 class DataType(_coconut.collections.namedtuple("DataType", "")):  # data DataType
@@ -69,7 +60,7 @@ class TensorLike(_coconut.collections.namedtuple("TensorLike", "dtype, arrange, 
             _coconut_match_temp_1 = _coconut_match_to_args[1] if _coconut.len(_coconut_match_to_args) > 1 else _coconut_match_to_kwargs.pop("arrange")  # data TensorLike(
             _coconut_match_temp_2 = _coconut_match_to_args[2] if _coconut.len(_coconut_match_to_args) > 2 else _coconut_match_to_kwargs.pop("channel_repr")  # data TensorLike(
             _coconut_match_temp_3 = _coconut_match_to_args[3] if _coconut.len(_coconut_match_to_args) > 3 else _coconut_match_to_kwargs.pop("value_range")  # data TensorLike(
-            if (_coconut.isinstance(_coconut_match_temp_0, str)) and (_coconut.isinstance(_coconut_match_temp_1, str)) and (_coconut.isinstance(_coconut_match_temp_2, str)) and (_coconut.isinstance(_coconut_match_temp_3, ValueRange)) and (not _coconut_match_to_kwargs):  # data TensorLike(
+            if (_coconut.isinstance(_coconut_match_temp_0, str)) and (_coconut.isinstance(_coconut_match_temp_1, str)) and (_coconut.isinstance(_coconut_match_temp_2, str)) and (_coconut.isinstance(_coconut_match_temp_3, str)) and (not _coconut_match_to_kwargs):  # data TensorLike(
                 dtype = _coconut_match_temp_0  # data TensorLike(
                 arrange = _coconut_match_temp_1  # data TensorLike(
                 channel_repr = _coconut_match_temp_2  # data TensorLike(
@@ -78,8 +69,8 @@ class TensorLike(_coconut.collections.namedtuple("TensorLike", "dtype, arrange, 
 
         if not _coconut_match_check:  # data TensorLike(
             _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  # data TensorLike(
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is ValueRange) from DataType:'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data TensorLike(
-            _coconut_match_err.pattern = 'data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is ValueRange) from DataType:'  # data TensorLike(
+            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is str) from DataType:'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data TensorLike(
+            _coconut_match_err.pattern = 'data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is str) from DataType:'  # data TensorLike(
             _coconut_match_err.value = _coconut_match_to_args  # data TensorLike(
             raise _coconut_match_err  # data TensorLike(
 
@@ -110,6 +101,18 @@ class Torch(_coconut.collections.namedtuple("Torch", "dtype arrange channel_repr
         return makedata(cls, *args)  #         return makedata(cls,*args)
     def __repr__(self):  #     def __repr__(self):
         return "Torch({_coconut_format_0},{_coconut_format_1},{_coconut_format_2},{_coconut_format_3})".format(_coconut_format_0=(self.dtype), _coconut_format_1=(self.arrange), _coconut_format_2=(self.channel_repr), _coconut_format_3=(self.value_range))  #         return f"Torch({self.dtype},{self.arrange},{self.channel_repr},{self.value_range})"
+
+class Hdf5(_coconut.collections.namedtuple("Hdf5", "dtype arrange channel_repr value_range"), TensorLike):  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+    __slots__ = ()  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+    __ne__ = _coconut.object.__ne__  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+    def __eq__(self, other):  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+    def __hash__(self):  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data Hdf5(dtype,arrange,channel_repr,value_range) from TensorLike:
+    def __new__(cls, *args):  #     def __new__(cls,*args):
+        return makedata(cls, *args)  #         return makedata(cls,*args)
+    def __repr__(self):  #     def __repr__(self):
+        return "Hdf5({_coconut_format_0},{_coconut_format_1},{_coconut_format_2},{_coconut_format_3})".format(_coconut_format_0=(self.dtype), _coconut_format_1=(self.arrange), _coconut_format_2=(self.channel_repr), _coconut_format_3=(self.value_range))  #         return f"Hdf5({self.dtype},{self.arrange},{self.channel_repr},{self.value_range})"
 
 class PILImages(_coconut.collections.namedtuple("PILImages", "mode channel_repr"), DataType):  # represents iterable of PIL.Images  # data PILImages(mode,channel_repr) from DataType: # represents iterable of PIL.Images
     __slots__ = ()  # represents iterable of PIL.Images  # data PILImages(mode,channel_repr) from DataType: # represents iterable of PIL.Images
@@ -205,6 +208,8 @@ def to_imagedef(f):  # def to_imagedef(f):
             raise e  #             raise e
     return _inner  #     return _inner
 
+
+
 @to_imagedef  # @to_imagedef
 def to_PILImages(imdef: 'ImageDef') -> '_coconut.typing.Sequence[Edge]':  # def to_PILImages(imdef:ImageDef)->Edge[]:
 #TODO fix pattern match on data class
@@ -220,7 +225,7 @@ def to_PILImages(imdef: 'ImageDef') -> '_coconut.typing.Sequence[Edge]':  # def 
         c_repr = _coconut_match_to[2]  #     case imdef:
         _coconut_case_check_0 = True  #     case imdef:
     if _coconut_case_check_0:  #     case imdef:
-        return [Edge(imdef, PILImages(c_repr, c_repr), lambda ary: [(_coconut_base_compose(Image.fromarray, (_coconut.operator.methodcaller("convert", c_repr), 0)))(img) for img in ary], 2, name="to_Images")]  #             return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray ..> .convert(c_repr))(img) for img in ary],2,name="to_Images")]
+        return [Edge(imdef, PILImages(c_repr, c_repr), lambda ary: [(_coconut_base_compose(Image.fromarray, (_coconut.operator.methodcaller("convert", c_repr), 0)))(img) for img in ary], 2, name="numpy batch to Images")]  #             return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray ..> .convert(c_repr))(img) for img in ary],2,name="numpy batch to Images")]
     if not _coconut_case_check_0:  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
         if (_coconut.isinstance(_coconut_match_to, Numpy)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "uint8") and (_coconut_match_to[1] == "BHW") and (_coconut_match_to[3] == VR_0_255):  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
             c_repr = _coconut_match_to[2]  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
@@ -228,8 +233,10 @@ def to_PILImages(imdef: 'ImageDef') -> '_coconut.typing.Sequence[Edge]':  # def 
         if _coconut_case_check_0 and not (len(c_repr) == 1):  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
             _coconut_case_check_0 = False  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
         if _coconut_case_check_0:  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-            return [Edge(imdef, PILImages("L", c_repr), lambda ary: [(_coconut_base_compose(Image.fromarray, (_coconut.operator.methodcaller("convert", "L"), 0)))(img) for img in ary], 2, name="to_Images")]  #             return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="to_Images")]
+            return [Edge(imdef, PILImages("L", c_repr), lambda ary: [(_coconut_base_compose(Image.fromarray, (_coconut.operator.methodcaller("convert", "L"), 0)))(img) for img in ary], 2, name="numpy batch to images")]  #             return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
     return []  #     return []
+
+
 @to_imagedef  # @to_imagedef
 def to_numpy(imdef: 'ImageDef') -> 'List[Edge]':  # def to_numpy(imdef:ImageDef)->List[Edge]:
     _coconut_match_to = imdef  #     case imdef:
@@ -243,10 +250,23 @@ def to_numpy(imdef: 'ImageDef') -> 'List[Edge]':  # def to_numpy(imdef:ImageDef)
     if _coconut_case_check_1:  #     case imdef:
         return [Edge(imdef, Numpy(dtype, arng, ch_repr, vr), (_coconut_base_compose(_coconut.operator.methodcaller("detach"), (_coconut.operator.methodcaller("cpu"), 0), (_coconut.operator.methodcaller("numpy"), 0))), 1, name="torch_to_numpy")]  #             return [Edge(imdef,
     if not _coconut_case_check_1:  #                          Numpy(dtype  ,arng ,ch_repr,vr),
-        if (_coconut.isinstance(_coconut_match_to, PILImages)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut_match_to[0] == "L"):  #                          Numpy(dtype  ,arng ,ch_repr,vr),
+        if (_coconut.isinstance(_coconut_match_to, PILImage)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut_match_to[0] == "RGB"):  #                          Numpy(dtype  ,arng ,ch_repr,vr),
             ch_repr = _coconut_match_to[1]  #                          Numpy(dtype  ,arng ,ch_repr,vr),
             _coconut_case_check_1 = True  #                          Numpy(dtype  ,arng ,ch_repr,vr),
         if _coconut_case_check_1:  #                          Numpy(dtype  ,arng ,ch_repr,vr),
+            return [Edge(imdef, Numpy("uint8", "HWC", ch_repr, VR_0_255), np.array, 1, name="image_to_numpy")]  #                     return [Edge(imdef,
+    if not _coconut_case_check_1:  #                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
+        if (_coconut.isinstance(_coconut_match_to, PILImage)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut_match_to[0] == "L"):  #                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
+            ch_repr = _coconut_match_to[1]  #                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
+            _coconut_case_check_1 = True  #                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
+        if _coconut_case_check_1:  #                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
+            return [Edge(imdef, Numpy("uint8", "HW", ch_repr, VR_0_255), np.array, 1, name="image_to_numpy")]  #                     return [Edge(imdef,
+
+    if not _coconut_case_check_1:  # A grayscale Image becomes a numpy array  #         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
+        if (_coconut.isinstance(_coconut_match_to, PILImages)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut_match_to[0] == "L"):  # A grayscale Image becomes a numpy array  #         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
+            ch_repr = _coconut_match_to[1]  # A grayscale Image becomes a numpy array  #         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
+            _coconut_case_check_1 = True  # A grayscale Image becomes a numpy array  #         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
+        if _coconut_case_check_1:  # A grayscale Image becomes a numpy array  #         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
             return [Edge(imdef, Numpy("uint8", "BHW", ch_repr, VR_0_255), (_coconut_base_compose(_coconut.functools.partial(fmap, np.array), (np.array, 0))), 1, name="image_to_numpy")]  #             return [Edge(imdef,
     if not _coconut_case_check_1:  #                          Numpy("uint8","BHW",ch_repr,VR_0_255),
         if (_coconut.isinstance(_coconut_match_to, PILImages)) and (_coconut.len(_coconut_match_to) == 2):  #                          Numpy("uint8","BHW",ch_repr,VR_0_255),
@@ -352,7 +372,8 @@ def select_channel(imdef: 'ImageDef'):  # def select_channel(imdef:ImageDef):
     if _coconut_case_check_6 and not (len(ch_repr) >= 1):  #     case imdef:
         _coconut_case_check_6 = False  #     case imdef:
     if _coconut_case_check_6:  #     case imdef:
-        return [Edge(a=imdef, b=imdef.__class__(dtype, "BHWC", c, vr), f=lambda a: a[:, :, :, [i]], cost=1, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_repr)]  #             return [Edge(a=imdef,
+        selector = lambda i: lambda a: a[:, :, :, [i]]  #             selector = i->a->a[:,:,:,[i]]
+        return [Edge(a=imdef, b=imdef.__class__(dtype, "BHWC", c, vr), f=selector(i), cost=10, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_repr)]  #             return [Edge(a=imdef,
     if not _coconut_case_check_6:  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
         if (_coconut.isinstance(_coconut_match_to, TensorLike)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[1] == "BCHW"):  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
             dtype = _coconut_match_to[0]  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
@@ -362,7 +383,8 @@ def select_channel(imdef: 'ImageDef'):  # def select_channel(imdef:ImageDef):
         if _coconut_case_check_6 and not (len(ch_repr) >= 1):  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
             _coconut_case_check_6 = False  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
         if _coconut_case_check_6:  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
-            return [Edge(a=imdef, b=imdef.__class__(dtype, "BHWC", c, vr), f=lambda a: a[:, [i]], cost=1, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_repr)]  #             return [Edge(a=imdef,
+            selector = lambda i: lambda a: a[:, [i]]  #             selector = i->a->a[:,[i]]
+            return [Edge(a=imdef, b=imdef.__class__(dtype, "BCHW", c, vr), f=selector(i), cost=10, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_repr)]  #             return [Edge(a=imdef,
     return []  #     return []
 @to_imagedef  # @to_imagedef
 def drop_channel(imdef: 'ImageDef'):  # def drop_channel(imdef:ImageDef):
@@ -413,7 +435,7 @@ def en_batch(imdef: 'ImageDef'):  # def en_batch(imdef:ImageDef):
         _coconut_case_check_8 = True  #     case imdef:
     if _coconut_case_check_8:  #     case imdef:
         new_arng = "B" + imdef.data_type.arrange  #             new_arng = "B"+imdef.data_type.arrange
-        return [Edge(a=imdef, b=ImageDef(imdef.data_type.__class__(dtype, new_arng, ch_repr, vr), tags | frozenset(("en_batched",))), f=lambda a: a[None], cost=1, name="{_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(imdef.data_type.arrange), _coconut_format_1=(new_arng)))]  #             return [Edge(a=imdef,
+        return [Edge(a=imdef, b=ImageDef(imdef.data_type.__class__(dtype, new_arng, ch_repr, vr), tags | frozenset(("en_batched",))), f=lambda a: a[None], cost=10, name="{_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(imdef.data_type.arrange), _coconut_format_1=(new_arng)))]  #             return [Edge(a=imdef,
     if not _coconut_case_check_8:  #                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImage)) and (_coconut.len(_coconut_match_to[0]) == 2):  #                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
             mode = _coconut_match_to[0][0]  #                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
@@ -421,7 +443,7 @@ def en_batch(imdef: 'ImageDef'):  # def en_batch(imdef:ImageDef):
             tags = _coconut_match_to[1]  #                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
             _coconut_case_check_8 = True  #                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
         if _coconut_case_check_8:  #                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
-            return [Edge(a=imdef, b=ImageDef(PILImages(mode, channel_repr), tags | frozenset(("en_batched",))), f=lambda a: [a], cost=1, name="wrap image with list".format())]  #             return [Edge(a=imdef,
+            return [Edge(a=imdef, b=ImageDef(PILImages(mode, channel_repr), tags | frozenset(("en_batched",))), f=lambda a: [a], cost=10, name="wrap image with list".format())]  #             return [Edge(a=imdef,
     return []  #     return []
 def de_batch(imdef: 'ImageDef'):  # def de_batch(imdef:ImageDef):
     _coconut_match_to = imdef  #     case imdef:
@@ -436,7 +458,7 @@ def de_batch(imdef: 'ImageDef'):  # def de_batch(imdef:ImageDef):
     if _coconut_case_check_9 and not ("en_batched" in tags and "B" in arng):  #     case imdef:
         _coconut_case_check_9 = False  #     case imdef:
     if _coconut_case_check_9:  #     case imdef:
-        return [Edge(a=imdef, b=ImageDef(imdef.data_type.__class__(dtype, arng[1:], ch, vr), tags - frozenset("en_batched")), f=lambda a: a[0], cost=1, name="de_batch en_batched image".format())]  #             return [Edge(
+        return [Edge(a=imdef, b=ImageDef(imdef.data_type.__class__(dtype, arng[1:], ch, vr), tags - frozenset(["en_batched"])), f=lambda a: a[0], cost=1, name="de_batch en_batched image".format())]  #             return [Edge(
     if not _coconut_case_check_9:  #                 a=imdef,
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImages)) and (_coconut.len(_coconut_match_to[0]) == 2):  #                 a=imdef,
             mode = _coconut_match_to[0][0]  #                 a=imdef,
@@ -446,7 +468,7 @@ def de_batch(imdef: 'ImageDef'):  # def de_batch(imdef:ImageDef):
         if _coconut_case_check_9 and not ("en_batched" in tags):  #                 a=imdef,
             _coconut_case_check_9 = False  #                 a=imdef,
         if _coconut_case_check_9:  #                 a=imdef,
-            return [Edge(a=imdef, b=ImageDef(PILImage(mode, ch), tags - frozenset("en_batched")), f=lambda a: a[0], cost=1, name="de_batch en_batched image".format())]  #             return [Edge(
+            return [Edge(a=imdef, b=ImageDef(PILImage(mode, ch), tags - frozenset(["en_batched"])), f=lambda a: a[0], cost=1, name="de_batch en_batched image".format())]  #             return [Edge(
 
 def drop_batch_tag(imdef: 'ImageDef'):  # def drop_batch_tag(imdef:ImageDef):
     _coconut_match_to = imdef  #     case imdef:
@@ -1068,7 +1090,7 @@ def tile_image(self, w=1024, h=1024, max_image=100, padding=1):  # def AutoImage
     else:  #     else:
         codec = "numpy,uint8,BHWC,{_coconut_format_0},0_255".format(_coconut_format_0=(ch))  #         codec = f"numpy,uint8,BHWC,{ch},0_255"
     imgs = self.to(codec)[:max_image]  #     imgs = self.to(codec)[:max_image]
-    nrow = int(sqrt(max_image) + 0.5)  #     nrow = int(sqrt(max_image)+0.5)
+    nrow = int(sqrt(len(imgs)) + 0.5)  #     nrow = int(sqrt(len(imgs))+0.5)
     r = int((w - ((nrow + 1) * padding)) / nrow)  #     r = int((w-((nrow+1)*padding))/nrow)
     imgs = np.array([((np.array)(Image.fromarray(img).resize((r, r)))) for img in imgs])  #     imgs = np.array([(Image.fromarray(img).resize((r,r)) |> np.array) for img in imgs])
     if len(ch) == 1:  #     if len(ch) == 1:
