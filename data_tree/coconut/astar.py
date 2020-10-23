@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x8d81ad0d
+# __coconut_hash__ = 0x36dab0d
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -27,6 +27,7 @@ from data_tree.coconut.monad import Try  # from data_tree.coconut.monad import t
 from data_tree.coconut.monad import Success  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Failure  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 import dill  # for pickling inner lambda...  # import dill # for pickling inner lambda...
+from tqdm.autonotebook import tqdm  # from tqdm.autonotebook import tqdm
 class Edge(_coconut.collections.namedtuple("Edge", "src dst f cost name")):  # data Edge(src,dst,f,cost,name="unnamed")
     __slots__ = ()  # data Edge(src,dst,f,cost,name="unnamed")
     __ne__ = _coconut.object.__ne__  # data Edge(src,dst,f,cost,name="unnamed")
@@ -44,11 +45,22 @@ class Conversion:  # class Conversion:
         self.edges = edges  #         self.edges = edges
 
     def __call__(self, x):  #     def __call__(self,x):
+        init_x = x  #         init_x = x
         for e in self.edges:  #         for e in self.edges:
             try:  #             try:
                 x = e.f(x)  #                 x = e.f(x)
             except Exception as ex:  #             except Exception as ex:
-                raise ConversionError("exception in edge:{_coconut_format_0} \n paths:{_coconut_format_1} \n x:{_coconut_format_2}".format(_coconut_format_0=(e.name), _coconut_format_1=([e.name for e in self.edges]), _coconut_format_2=(x))) from ex  #                 raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x}") from ex
+                import inspect  #                 import inspect
+                import pickle  #                 import pickle
+                logger.error("caught an exception. inspecting..{_coconut_format_0}".format(_coconut_format_0=(ex)))  #                 logger.error(f"caught an exception. inspecting..{ex}")
+                logger.warning("saving erroneous conversion for debug".format())  #                 logger.warning(f"saving erroneous conversion for debug")
+                info = dict(start=self.edges[0].src, end=self.edges[-1].dst, x=init_x)  #                 info= dict(
+                logger.debug("conversion info = start:{_coconut_format_0},x:{_coconut_format_1}".format(_coconut_format_0=(info['start']), _coconut_format_1=(info['x'])))  #                 logger.debug(f"conversion info = start:{info['start']},x:{info['x']}")
+                with open("last_erroneous_conversion.pkl", "wb") as f:  #                 with open("last_erroneous_conversion.pkl","wb") as f:
+                    pickle.dump(info, f)  #                     pickle.dump(info,f)
+                source = inspect.getsource(e.f)  #                 source = inspect.getsource(e.f)
+                logger.warning("saved last conversion error cause")  #                 logger.warning("saved last conversion error cause")
+                raise ConversionError("exception in edge:{_coconut_format_0} \n paths:{_coconut_format_1} \n x:{_coconut_format_2} \n edge source:{_coconut_format_3}".format(_coconut_format_0=(e.name), _coconut_format_1=([e.name for e in self.edges]), _coconut_format_2=(x), _coconut_format_3=(source))) from ex  #                 raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x} \n edge source:{source}") from ex
         return x  #         return x
 
     def __getitem__(self, item):  #     def __getitem__(self,item):
@@ -87,7 +99,9 @@ def _astar(start, matcher, neighbors, heuristics, max_depth=100):  # def _astar(
     scores[start] = heuristics(start)  #     scores[start] = heuristics(start)
     heapq.heappush(to_visit, _HeapContainer(scores[start], (start, [])))  #     heapq.heappush(to_visit,
     visited = 0  #     visited = 0
+    bar = tqdm(desc="solving with astar")  #     bar = tqdm(desc="solving with astar")
     while to_visit:  #     while to_visit:
+        bar.update(1)  #         bar.update(1)
         hc = heapq.heappop(to_visit)  #         hc = heapq.heappop(to_visit)
         score = hc.score  #         score = hc.score
         (pos, trace) = hc.data  #         (pos,trace) = hc.data
@@ -100,6 +114,7 @@ def _astar(start, matcher, neighbors, heuristics, max_depth=100):  # def _astar(
         if matcher(pos):  # reached a goal  #         if matcher(pos): # reached a goal
             logger.debug("found after {_coconut_format_0} visits.".format(_coconut_format_0=(visited)))  #             logger.debug(f"found after {visited} visits.")
             logger.debug("search result:\n{_coconut_format_0}".format(_coconut_format_0=(new_conversion(trace))))  #             logger.debug(f"search result:\n{new_conversion(trace)}")
+            bar.close()  #             bar.close()
             return trace  #             return trace
         for mapper, next_node, cost, name in neighbors(pos):  #         for mapper,next_node,cost,name in neighbors(pos):
             assert isinstance(cost, int), "cost is not a number. cost:{_coconut_format_0},name:{_coconut_format_1},pos:{_coconut_format_2}".format(_coconut_format_0=(cost), _coconut_format_1=(name), _coconut_format_2=(pos))  #             assert isinstance(cost,int),f"cost is not a number. cost:{cost},name:{name},pos:{pos}"
@@ -129,7 +144,9 @@ def _astar_direct(start, end, neighbors, heuristics, max_depth=100):  # def _ast
     scores[start] = heuristics(start)  #     scores[start] = heuristics(start)
     heapq.heappush(to_visit, _HeapContainer(scores[start], (start, [])))  #     heapq.heappush(to_visit,
     visited = 0  #     visited = 0
+    bar = tqdm(desc="solving with astar_direct")  #     bar = tqdm(desc="solving with astar_direct")
     while to_visit:  #     while to_visit:
+        bar.update(1)  #         bar.update(1)
         hc = heapq.heappop(to_visit)  #         hc = heapq.heappop(to_visit)
         score = hc.score  #         score = hc.score
         (pos, trace) = hc.data  #         (pos,trace) = hc.data
@@ -143,6 +160,7 @@ def _astar_direct(start, end, neighbors, heuristics, max_depth=100):  # def _ast
         if pos == end:  # reached a goal  #         if pos == end: # reached a goal
             logger.debug("found after {_coconut_format_0} visits.".format(_coconut_format_0=(visited)))  #             logger.debug(f"found after {visited} visits.")
             logger.debug("search result:\n{_coconut_format_0}".format(_coconut_format_0=(new_conversion(trace))))  #             logger.debug(f"search result:\n{new_conversion(trace)}")
+            bar.close()  #             bar.close()
             return trace  #             return trace
         for mapper, next_node, cost, name in neighbors(pos):  #         for mapper,next_node,cost,name in neighbors(pos):
             assert isinstance(cost, int), "cost is not a number:{_coconut_format_0}".format(_coconut_format_0=(pos))  #             assert isinstance(cost,int),f"cost is not a number:{pos}"
@@ -264,5 +282,5 @@ class AStarSolver:  # class AStarSolver:
                 res = self.search_direct(start, cand)  #                 res = self.search_direct(start,cand)
                 return res  #                 return res
             except Exception as e:  #             except Exception as e:
-                pass  #                 pass
+                raise e  #                 raise e
         raise NoRouteException("no route found from {_coconut_format_0} to any of {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(ends)))  #         raise NoRouteException(f"no route found from {start} to any of {ends}")

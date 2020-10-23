@@ -2,6 +2,7 @@ from typing import Mapping
 from data_tree.coconut.astar import AStarSolver
 from IPython.display import display
 import dill # to make the lambda functions picklable
+from loguru import logger
 """
 What I want to achieve is to generate a class.
 I want to generate a AutoImage class form AutoData
@@ -11,10 +12,11 @@ def identity(a):
     return a
 
 class _CastLambda:
-    def __init__(self,rule,name,swap):
+    def __init__(self,rule,name,swap,cost=1):
         self.rule = rule
         self.name = name
         self.swap = swap
+        self.cost = cost
     def __call__(self,state):
         new_states = self.rule(state)
         if new_states is not None:
@@ -23,14 +25,15 @@ class _CastLambda:
             else:
                 cast_name=self.name
             if self.swap:
-                return [(identity,new_state,cast_name,1) for new_state in new_states]
+                return [(identity,new_state,cast_name,self.cost) for new_state in new_states]
             else:
-                return [(identity,new_state,1,cast_name) for new_state in new_states]
+                return [(identity,new_state,self.cost,cast_name) for new_state in new_states]
         else:
             return None
 class _ConversionLambda:
-    def __init__(self,rule):
+    def __init__(self,rule,cost=1):
         self.rule = rule
+        self.cost = cost
     def __call__(self,state):
         edges = self.rule(state)
         if edges is None:
@@ -39,9 +42,9 @@ class _ConversionLambda:
         for edge in edges:
             case edge:
                 match (converter,new_state):
-                    result.append((converter,new_state,1,converter.__name__))
+                    result.append((converter,new_state,self.cost,converter.__name__))
                 match (converter,new_state,name):
-                    result.append((converter,new_state,1,name))
+                    result.append((converter,new_state,self.cost,name))
                 match (converter,new_state,name,score):
                     result.append((converter,new_state,score,name))
                 match _:
@@ -58,11 +61,11 @@ class AutoSolver:
         self.solver = AStarSolver(rules = self.initial_rules.copy())
 
     @staticmethod
-    def create_cast_rule(rule,name=None,_swap=False):
+    def create_cast_rule(rule,name=None,_swap=False,cost=1):
         """
         rule: State->List[State] # should return list of possible casts without data conversion.
         """
-        return _CastLambda(rule,name,_swap)
+        return _CastLambda(rule,name,_swap,cost=cost)
 
     def add_cast(self,rule,name=None):
         """
@@ -205,9 +208,24 @@ class AutoData:
     def _repr_html_(self):
         self.format |> display
         self.to("widget") |> display
+    def __repr__(self):
+        return f"<AutoData {self.format}>"
+
+    def _repr_png_(self):
+        try:
+            return self.to(type="image")._repr_png_()
+        except Exception as e:
+            logger.warning(f"cannot convert data to an image:{self.format}")
+            return None
 
     def cast(self,format):
         return AutoData(self.value,format,self.solver)
+
+    def show(self):
+        from matplotlib.pyplot import imshow,show
+        imshow(self.to("numpy_rgb"))
+        show()
+
 
 #    def __getstate__(self):
 

@@ -11,6 +11,8 @@ from typing import Union
 import h5py
 import numpy as np
 from PIL import Image
+from lru import LRU
+
 from data_tree.coconut.astar import Conversion
 from lazy import lazy as en_lazy
 # from loguru import logger
@@ -28,6 +30,7 @@ from filelock import Timeout, FileLock
 # from threading import RLock
 from multiprocessing import RLock
 from data_tree import auto
+from loguru import logger
 
 
 class CachedSeries(SourcedSeries):
@@ -200,6 +203,9 @@ class LazySeries(CachedSeries):
         if not self.flags[index]:
             self.cache[index] = self.src._values(index)
             self.flags[index] = True
+        else:
+            pass
+            #logger.debug(f"hit")
         return self.cache[index]
 
     def _ensure_and_return_smart(self, smart_indexer):
@@ -213,6 +219,9 @@ class LazySeries(CachedSeries):
                 for v, i in zip(self.src._values(non_cached_indices), non_cached_indices):
                     self.cache[i] = v
                 self.flags[non_cached_indices] = True
+        else:
+            pass
+            #logger.debug(f"hit")
         if isinstance(smart_indexer, slice):
             return self.cache[smart_indexer]
         else:
@@ -936,3 +945,46 @@ class Hdf5AutoSeries(CachedSeries):
 
     def _get_slice(self, _slice):
         return [self.auto(a) for a in self.cache._get_slice(_slice)]
+
+
+class LRUSeries(SourcedSeries):
+    def __init__(self, src, max_memo=1000):
+        self._src = src
+        self._indexer = IdentityIndexer(self._src.total)
+        self.indices = np.arange(self._src.total)
+        self.max_memo = 1000
+        self.cache = LRU(size=max_memo)
+
+    @property
+    def src(self) -> Series:
+        return self._src
+
+    @property
+    def indexer(self) -> Indexer:
+        return self._indexer
+
+    @property
+    def total(self):
+        return self._src.total
+
+    def _get_item(self, index):
+        i = int(index)
+        if i not in self.cache:
+            self.cache[i] = self.src[i]
+        return self.cache[i]
+
+    def _smart_get(self, smart):
+        data = [self._get_item(i) for i in self.indices[smart]]
+        if isinstance(data[0], np.ndarray):
+            return np.array(data)
+        else:
+            return data
+
+    def _get_slice(self, _slice):
+        return self._smart_get(_slice)
+
+    def _get_indices(self, indices):
+        return self._smart_get(indices)
+
+    def _get_mask(self, mask):
+        return self._smart_get(mask)

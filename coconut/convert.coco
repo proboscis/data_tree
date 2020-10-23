@@ -96,8 +96,8 @@ def to_imagedef(f):
 def to_PILImages(imdef:ImageDef)->Edge[]:
     #TODO fix pattern match on data class
     case imdef:
-        match Numpy("uint8","BHWC",("RGBA" or "RGB" or "LAB") as c_repr, =VR_0_255):
-            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray ..> .convert(c_repr))(img) for img in ary],2,name="numpy batch to Images")]
+        match Numpy("uint8","BHWC", c_repr, =VR_0_255) if len(c_repr) == 3 or len(c_repr) == 4:
+            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name="numpy batch to Images")]
         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
             return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
     return []
@@ -238,14 +238,14 @@ def en_batch(imdef:ImageDef):
                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
                          f=a->a[None],
                          cost=10,
-                         name=f"{imdef.data_type.arrange} to {new_arng}"
+                         name=f"{imdef.data_type.arrange} to {new_arng} (en_batch)"
                         )]
         match ImageDef(PILImage(mode,channel_repr),tags):
             return [Edge(a=imdef,
                          b=ImageDef(PILImages(mode,channel_repr),tags|frozenset(("en_batched",))),
                          f=a->[a],
                          cost=10,
-                         name=f"wrap image with list"
+                         name=f"wrap image with list (en_batch)"
                         )]
     return []
 def de_batch(imdef:ImageDef):
@@ -280,16 +280,16 @@ def drop_batch_tag(imdef:ImageDef):
 @to_imagedef
 def to_rgba(imdef:ImageDef):
     case imdef:
-        match TensorLike(dtype,arng,ch_repr,vr) if len(ch_repr) == 4:
+        match TensorLike(dtype,arng,ch_repr,"0_1") if len(ch_repr) == 4:
             return [Edge(a=imdef,
-                         b=imdef.__class__(dtype,arng,"RGBA",vr),
+                         b=imdef.__class__(dtype,arng,"RGBA","0_1"),
                          f=a->a,
                          cost=10,
                          name=f"view {ch_repr} as RGBA "
                         )]
-        match TensorLike(dtype,arng,ch_repr,vr) if len(ch_repr) == 3:
+        match TensorLike(dtype,arng,ch_repr,"0_1") if len(ch_repr) == 3:
             return [Edge(a=imdef,
-                         b=imdef.__class__(dtype,arng,"RGB",vr),
+                         b=imdef.__class__(dtype,arng,"RGB","0_1"),
                          f=a->a,
                          cost=10,
                          name=f"view {ch_repr} as RGB "

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x8f891e6
+# __coconut_hash__ = 0x7313bb09
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -204,10 +204,10 @@ def infer_widget(value):  # def infer_widget(value):
                 _coconut_case_check_1 = True  #         match _ is dict:
             if _coconut_case_check_1:  #         match _ is dict:
                 return widgets.VBox([widgets.VBox([widgets.Text(k), infer_widget(v)]) for k, v in value.items()])  #             return widgets.VBox([
-        if not _coconut_case_check_1:  #                 widgets.VBox([widgets.Text(k),infer_widget(v)])
-            if _coconut.isinstance(_coconut_match_to, (tuple, list)):  #                 widgets.VBox([widgets.Text(k),infer_widget(v)])
-                _coconut_case_check_1 = True  #                 widgets.VBox([widgets.Text(k),infer_widget(v)])
-            if _coconut_case_check_1:  #                 widgets.VBox([widgets.Text(k),infer_widget(v)])
+        if not _coconut_case_check_1:  #                 widgets.VBox([widgets.Text(k),infer_widget(v)]) for k,v in value.items()
+            if _coconut.isinstance(_coconut_match_to, (tuple, list)):  #                 widgets.VBox([widgets.Text(k),infer_widget(v)]) for k,v in value.items()
+                _coconut_case_check_1 = True  #                 widgets.VBox([widgets.Text(k),infer_widget(v)]) for k,v in value.items()
+            if _coconut_case_check_1:  #                 widgets.VBox([widgets.Text(k),infer_widget(v)]) for k,v in value.items()
                 items = [infer_widget(item) for item in value]  #             items = [infer_widget(item) for item in value]
                 return widgets.VBox([widgets.GridBox(items, layout=widgets.Layout(grid_template_columns="auto auto auto", border="solid 2px")), widgets.Label(value="displaying tuple with {_coconut_format_0} elements".format(_coconut_format_0=(len(value))))])  #             return widgets.VBox([
         if not _coconut_case_check_1:  #     else:

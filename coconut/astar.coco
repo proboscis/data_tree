@@ -3,6 +3,7 @@ from loguru import logger
 from pprint import pformat
 from data_tree.coconut.monad import try_monad,Try,Success,Failure
 import dill # for pickling inner lambda...
+from tqdm.autonotebook import tqdm
 data Edge(src,dst,f,cost,name="unnamed")
 class NoRouteException(Exception)
 class ConversionError(Exception)
@@ -11,11 +12,26 @@ class Conversion:
         self.edges = edges
 
     def __call__(self,x):
+        init_x = x
         for e in self.edges:
             try:
                 x = e.f(x)
             except Exception as ex:
-                raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x}") from ex
+                import inspect
+                import pickle
+                logger.error(f"caught an exception. inspecting..{ex}")
+                logger.warning(f"saving erroneous conversion for debug")
+                info= dict(
+                    start = self.edges[0].src,
+                    end = self.edges[-1].dst,
+                    x = init_x
+                )
+                logger.debug(f"conversion info = start:{info['start']},x:{info['x']}")
+                with open("last_erroneous_conversion.pkl","wb") as f:
+                    pickle.dump(info,f)
+                source = inspect.getsource(e.f)
+                logger.warning("saved last conversion error cause")
+                raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x} \n edge source:{source}") from ex
         return x
 
     def __getitem__(self,item):
@@ -65,7 +81,9 @@ def _astar(
     heapq.heappush(to_visit,
                    _HeapContainer(scores[start],(start,[])))
     visited = 0
+    bar = tqdm(desc="solving with astar")
     while to_visit:
+        bar.update(1)
         hc = heapq.heappop(to_visit)
         score = hc.score
         (pos,trace) = hc.data
@@ -78,6 +96,7 @@ def _astar(
         if matcher(pos): # reached a goal
             logger.debug(f"found after {visited} visits.")
             logger.debug(f"search result:\n{new_conversion(trace)}")
+            bar.close()
             return trace
         for mapper,next_node,cost,name in neighbors(pos):
             assert isinstance(cost,int),f"cost is not a number. cost:{cost},name:{name},pos:{pos}"
@@ -113,7 +132,9 @@ def _astar_direct(
     heapq.heappush(to_visit,
                    _HeapContainer(scores[start],(start,[])))
     visited = 0
+    bar = tqdm(desc="solving with astar_direct")
     while to_visit:
+        bar.update(1)
         hc = heapq.heappop(to_visit)
         score = hc.score
         (pos,trace) = hc.data
@@ -127,6 +148,7 @@ def _astar_direct(
         if pos == end: # reached a goal
             logger.debug(f"found after {visited} visits.")
             logger.debug(f"search result:\n{new_conversion(trace)}")
+            bar.close()
             return trace
         for mapper,next_node,cost,name in neighbors(pos):
             assert isinstance(cost,int),f"cost is not a number:{pos}"
@@ -211,7 +233,6 @@ class AStarSolver:
 
         case res:
             match Success(res):
-
                 return res
             match Failure(e,trc):
                 raise e
@@ -241,5 +262,5 @@ class AStarSolver:
                 res = self.search_direct(start,cand)
                 return res
             except Exception as e:
-                pass
+                raise e
         raise NoRouteException(f"no route found from {start} to any of {ends}")

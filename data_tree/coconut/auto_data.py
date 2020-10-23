@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xacb8ac2a
+# __coconut_hash__ = 0x9eed80c3
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -23,6 +23,7 @@ from typing import Mapping  # from typing import Mapping
 from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import AStarSolver
 from IPython.display import display  # from IPython.display import display
 import dill  # to make the lambda functions picklable  # import dill # to make the lambda functions picklable
+from loguru import logger  # from loguru import logger
 """
 What I want to achieve is to generate a class.
 I want to generate a AutoImage class form AutoData
@@ -32,10 +33,11 @@ def identity(a):  # def identity(a):
     return a  #     return a
 
 class _CastLambda:  # class _CastLambda:
-    def __init__(self, rule, name, swap):  #     def __init__(self,rule,name,swap):
+    def __init__(self, rule, name, swap, cost=1):  #     def __init__(self,rule,name,swap,cost=1):
         self.rule = rule  #         self.rule = rule
         self.name = name  #         self.name = name
         self.swap = swap  #         self.swap = swap
+        self.cost = cost  #         self.cost = cost
     def __call__(self, state):  #     def __call__(self,state):
         new_states = self.rule(state)  #         new_states = self.rule(state)
         if new_states is not None:  #         if new_states is not None:
@@ -44,14 +46,15 @@ class _CastLambda:  # class _CastLambda:
             else:  #             else:
                 cast_name = self.name  #                 cast_name=self.name
             if self.swap:  #             if self.swap:
-                return [(identity, new_state, cast_name, 1) for new_state in new_states]  #                 return [(identity,new_state,cast_name,1) for new_state in new_states]
+                return [(identity, new_state, cast_name, self.cost) for new_state in new_states]  #                 return [(identity,new_state,cast_name,self.cost) for new_state in new_states]
             else:  #             else:
-                return [(identity, new_state, 1, cast_name) for new_state in new_states]  #                 return [(identity,new_state,1,cast_name) for new_state in new_states]
+                return [(identity, new_state, self.cost, cast_name) for new_state in new_states]  #                 return [(identity,new_state,self.cost,cast_name) for new_state in new_states]
         else:  #         else:
             return None  #             return None
 class _ConversionLambda:  # class _ConversionLambda:
-    def __init__(self, rule):  #     def __init__(self,rule):
+    def __init__(self, rule, cost=1):  #     def __init__(self,rule,cost=1):
         self.rule = rule  #         self.rule = rule
+        self.cost = cost  #         self.cost = cost
     def __call__(self, state):  #     def __call__(self,state):
         edges = self.rule(state)  #         edges = self.rule(state)
         if edges is None:  #         if edges is None:
@@ -65,7 +68,7 @@ class _ConversionLambda:  # class _ConversionLambda:
                 new_state = _coconut_match_to[1]  #             case edge:
                 _coconut_case_check_0 = True  #             case edge:
             if _coconut_case_check_0:  #             case edge:
-                result.append((converter, new_state, 1, converter.__name__))  #                     result.append((converter,new_state,1,converter.__name__))
+                result.append((converter, new_state, self.cost, converter.__name__))  #                     result.append((converter,new_state,self.cost,converter.__name__))
             if not _coconut_case_check_0:  #                 match (converter,new_state,name):
                 if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 3):  #                 match (converter,new_state,name):
                     converter = _coconut_match_to[0]  #                 match (converter,new_state,name):
@@ -73,7 +76,7 @@ class _ConversionLambda:  # class _ConversionLambda:
                     name = _coconut_match_to[2]  #                 match (converter,new_state,name):
                     _coconut_case_check_0 = True  #                 match (converter,new_state,name):
                 if _coconut_case_check_0:  #                 match (converter,new_state,name):
-                    result.append((converter, new_state, 1, name))  #                     result.append((converter,new_state,1,name))
+                    result.append((converter, new_state, self.cost, name))  #                     result.append((converter,new_state,self.cost,name))
             if not _coconut_case_check_0:  #                 match (converter,new_state,name,score):
                 if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 4):  #                 match (converter,new_state,name,score):
                     converter = _coconut_match_to[0]  #                 match (converter,new_state,name,score):
@@ -99,11 +102,11 @@ class AutoSolver:  # class AutoSolver:
         self.solver = AStarSolver(rules=self.initial_rules.copy())  #         self.solver = AStarSolver(rules = self.initial_rules.copy())
 
     @staticmethod  #     @staticmethod
-    def create_cast_rule(rule, name=None, _swap=False):  #     def create_cast_rule(rule,name=None,_swap=False):
+    def create_cast_rule(rule, name=None, _swap=False, cost=1):  #     def create_cast_rule(rule,name=None,_swap=False,cost=1):
         """
         rule: State->List[State] # should return list of possible casts without data conversion.
         """  #         """
-        return _CastLambda(rule, name, _swap)  #         return _CastLambda(rule,name,_swap)
+        return _CastLambda(rule, name, _swap, cost=cost)  #         return _CastLambda(rule,name,_swap,cost=cost)
 
     def add_cast(self, rule, name=None):  #     def add_cast(self,rule,name=None):
         """
@@ -246,9 +249,25 @@ class AutoData:  # class AutoData:
     def _repr_html_(self):  #     def _repr_html_(self):
         (display)(self.format)  #         self.format |> display
         (display)(self.to("widget"))  #         self.to("widget") |> display
+    def __repr__(self):  #     def __repr__(self):
+        return "<AutoData {_coconut_format_0}>".format(_coconut_format_0=(self.format))  #         return f"<AutoData {self.format}>"
+
+    def _repr_png_(self):  #     def _repr_png_(self):
+        try:  #         try:
+            return self.to(type="image")._repr_png_()  #             return self.to(type="image")._repr_png_()
+        except Exception as e:  #         except Exception as e:
+            logger.warning("cannot convert data to an image:{_coconut_format_0}".format(_coconut_format_0=(self.format)))  #             logger.warning(f"cannot convert data to an image:{self.format}")
+            return None  #             return None
 
     def cast(self, format):  #     def cast(self,format):
         return AutoData(self.value, format, self.solver)  #         return AutoData(self.value,format,self.solver)
+
+    def show(self):  #     def show(self):
+        from matplotlib.pyplot import imshow  #         from matplotlib.pyplot import imshow,show
+        from matplotlib.pyplot import show  #         from matplotlib.pyplot import imshow,show
+        imshow(self.to("numpy_rgb"))  #         imshow(self.to("numpy_rgb"))
+        show()  #         show()
+
 
 #    def __getstate__(self):
 
