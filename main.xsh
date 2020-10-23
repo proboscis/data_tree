@@ -7,7 +7,7 @@ import socket
 from tqdm import tqdm
 from loguru import logger
 
-from data_tree import auto
+
 from loguru import logger
 
 @group()
@@ -25,8 +25,9 @@ def build():
 @argument("src")
 @argument("dst")
 def test_convert(src,dst):
-    coconut -k --no-tco --target 35 coconut data_tree/coconut --force
+    coconut -k --no-tco --target 35 coconut data_tree/coconut
     coconut -k --no-tco --target 35 coconut_test data_tree/test/coconut
+    from data_tree import auto
     logger.info(auto(eval(src))(None).converter(eval(dst)))
 
 if __name__ == '__main__':

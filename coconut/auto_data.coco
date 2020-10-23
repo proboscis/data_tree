@@ -50,15 +50,40 @@ class _ConversionLambda:
                 match _:
                     raise RuntimeError(f"rule:{self.rule} returned invalid edge:{edge}.")
         return result
-
+class _SmartConversionLambda:
+    def __init__(self,rule,cost=1):
+        self.rule = rule
+        self.cost = cost
+    def __call__(self,state,end):
+        edges = self.rule(state,end)
+        if edges is None:
+            return []
+        result = []
+        for edge in edges:
+            case edge:
+                match (converter,new_state):
+                    result.append((converter,new_state,self.cost,converter.__name__))
+                match (converter,new_state,name):
+                    result.append((converter,new_state,self.cost,name))
+                match (converter,new_state,name,score):
+                    result.append((converter,new_state,score,name))
+                match _:
+                    raise RuntimeError(f"rule:{self.rule} returned invalid edge:{edge}.")
+        return result
 class AutoSolver:
     """
     TODO stop using local lambda in order to make this class picklable
     Factory for an AutoData class
     """
-    def __init__(self,rules):
+    def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False):
         self.initial_rules = rules
-        self.solver = AStarSolver(rules = self.initial_rules.copy())
+        self.smart_rules = smart_rules
+        self.solver = AStarSolver(
+            rules = self.initial_rules.copy(),
+            smart_rules = self.smart_rules.copy(),
+            heuristics = heuristics,
+            edge_cutter =edge_cutter
+        )
 
     @staticmethod
     def create_cast_rule(rule,name=None,_swap=False,cost=1):
@@ -90,6 +115,9 @@ class AutoSolver:
     @staticmethod
     def create_conversion_rule(rule):
         return _ConversionLambda(rule)
+    @staticmethod
+    def create_smart_conversion_rule(rule):
+        return _SmartConversionLambda(rule)
 
     def add_conversion(self,rule):
         """
@@ -98,7 +126,12 @@ class AutoSolver:
         self.solver.add_rule(AutoSolver.create_conversion_rule(rule))
 
     def reset_solver(self,):
-        self.solver = AStarSolver(rules = self.initial_rules.copy())
+        self.solver = AStarSolver(
+            rules = self.initial_rules.copy(),
+            smart_rules = self.smart_rules.copy(),
+            heuristics = heuristics,
+            edge_cutter =edge_cutter
+        )
 
     def debug_conversion(self,a,b,samples):
         x = samples

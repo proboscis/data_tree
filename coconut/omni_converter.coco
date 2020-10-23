@@ -4,9 +4,11 @@ from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from frozendict import frozendict
 from typing import Mapping
 from ipywidgets import Text
+import ipywidgets as widgets
 from itertools import product
 from loguru import logger
 from collections import namedtuple
+import numpy as np
 def imagedef2dict(imdef:ImageDef):
     case imdef:
         match ImageDef(data_type,tags):
@@ -220,8 +222,19 @@ def to_visdom_function(state):
             ]
 def any2widget(state):
     return [(ary->Text(str(ary)),"widget","anything_to_text_widget",1000)]
-
 data AutoTuple(formats is tuple)
+
+def auto_tuple2widget(state):
+    case state:
+        match AutoTuple(items) if all(i == "widget" for i in items):
+            return [
+                (
+                values-> widgets.VBox(values),
+                "widget",
+                "auto_tuple of widgets to a widget",
+                1
+                )
+            ]
 
 def isnamedtuple(x):
     t = type(x)
@@ -264,10 +277,38 @@ def intra_tuple_conversions(state):
                     values->map_tuple_i(values,i,f),
                     AutoTuple(map_state(items,i,new_state)),
                     f"map {i}th element with {name}",
-                    cost+1
+                    cost
                 ))(f,new_state,cost,name) for f,new_state,cost,name in SOLVER.solver.neighbors(ith_state)]
             return res
 
+
+def map_each(t,mappers):
+    return tuple([f(item) for f,item in zip(mappers,t)])
+
+def smart_tuple_conversion(state,end):
+    case (state,end):
+        match (AutoTuple(formats),t) if type(t) == tuple and len(formats) == len(t):
+            cs = []
+            cost = 0
+            for i in range(len(formats)):
+                c = SOLVER.solver.search_direct(formats[i],end[i])
+                cost += sum(e.cost for e in c.edges)
+            res = [
+                (t->map_each(t,cs),
+                end,
+                f"{state}->{end}",
+                cost)
+            ]
+            logger.debug(res)
+            return res
+        match (AutoTuple(formats),"widget"):
+            f,new_state,name,cost = smart_tuple_conversion(state[0],("widgets",)*len(state[0].formats))
+            return [(
+                t-> widgets.VBox(f(t)),
+                end,
+                f"{state}->{end}",
+                cost+1
+            )]
 
 data AutoList(state)
 
@@ -495,10 +536,77 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(repeat_ch),
     AutoSolver.create_conversion_rule(torch_img_to_pixpix_input),
     AutoSolver.create_conversion_rule(torch_img_to_vgg_prep),
-    AutoSolver.create_conversion_rule(intra_tuple_conversions),
+    #AutoSolver.create_conversion_rule(intra_tuple_conversions),
+
+    AutoSolver.create_conversion_rule(auto_tuple2widget),
     AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
     AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255"),
-
 ]
-SOLVER = AutoSolver(rules=DEFAULT_RULES.copy())
+SMART_RULES =[
+    AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),
+]
+def tuple_distance(x,y):
+    assert len(x) == len(y),"cannot compare two tuples with different length"
+    return len(x) - sum(tuple([i==j for i,j in zip(x,y)]))
+
+
+@memoize()
+def state_distance(x,y):
+    conversion = SOLVER.solver.search_direct(x,y,silent=True)
+    d = len(conversion.edges)
+    #logger.info(f"heuristic conversion:{conversion}")
+    #logger.info(f"{x} to {y}:{d}")
+    return d
+
+@memoize()
+def tuple_state_distance(x,y):
+    return sum([state_distance(i,j) for i,j in  zip(x,y)])
+
+@memoize()
+def tuple_widget_heuristics(x,y):
+    """
+    you have to make the solver solve one by one.
+    """
+    res = 0
+    return 0
+    if type(x) == tuple and type(y) == tuple:
+        if len(x) == len(y):
+            res = tuple_distance(x,y)
+    if isinstance(x,AutoTuple) and type(y) == tuple:
+        if len(x.formats) == len(y):
+            xs = x.formats
+            ys = y
+            res = tuple_distance(xs,ys)
+    elif isinstance(x,AutoTuple) and y == "widget":
+        xs = x.formats
+        ys = ("widget",)*len(x.formats)
+        res = tuple_distance(xs,ys)
+    #if res == 0:
+    #    logger.info(f"{x}->{y}:{res}")
+    #    pass
+    return res
+
+def tuple_edge_cutter(x,y,end):
+    return False
+    if isinstance(x,AutoTuple) and type(y) == tuple and type(end) == tuple:
+         n = len(x.formats)
+         if n == len(y) and n == len(end):
+             x2end = tuple_distance(x.formats,end)
+             y2end = tuple_distance(y,end)
+             x_matching = n - x2end
+             y_matching = n - y2end
+             if y_matching < x_matching:
+                 logger.debug(f"cut {x} to {y} for {end}")
+                 return True
+    return False
+
+
+
+
+SOLVER = AutoSolver(
+    rules=DEFAULT_RULES.copy(),
+    smart_rules=SMART_RULES.copy(),
+    heuristics=tuple_widget_heuristics,
+    edge_cutter=tuple_edge_cutter,
+    )
 auto_img = format->value->SOLVER.new_auto_data(value,format)

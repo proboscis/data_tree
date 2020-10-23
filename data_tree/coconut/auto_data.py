@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x9eed80c3
+# __coconut_hash__ = 0xc9713a7c
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -91,15 +91,55 @@ class _ConversionLambda:  # class _ConversionLambda:
                 if _coconut_case_check_0:  #                 match _:
                     raise RuntimeError("rule:{_coconut_format_0} returned invalid edge:{_coconut_format_1}.".format(_coconut_format_0=(self.rule), _coconut_format_1=(edge)))  #                     raise RuntimeError(f"rule:{self.rule} returned invalid edge:{edge}.")
         return result  #         return result
-
+class _SmartConversionLambda:  # class _SmartConversionLambda:
+    def __init__(self, rule, cost=1):  #     def __init__(self,rule,cost=1):
+        self.rule = rule  #         self.rule = rule
+        self.cost = cost  #         self.cost = cost
+    def __call__(self, state, end):  #     def __call__(self,state,end):
+        edges = self.rule(state, end)  #         edges = self.rule(state,end)
+        if edges is None:  #         if edges is None:
+            return []  #             return []
+        result = []  #         result = []
+        for edge in edges:  #         for edge in edges:
+            _coconut_match_to = edge  #             case edge:
+            _coconut_case_check_1 = False  #             case edge:
+            if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2):  #             case edge:
+                converter = _coconut_match_to[0]  #             case edge:
+                new_state = _coconut_match_to[1]  #             case edge:
+                _coconut_case_check_1 = True  #             case edge:
+            if _coconut_case_check_1:  #             case edge:
+                result.append((converter, new_state, self.cost, converter.__name__))  #                     result.append((converter,new_state,self.cost,converter.__name__))
+            if not _coconut_case_check_1:  #                 match (converter,new_state,name):
+                if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 3):  #                 match (converter,new_state,name):
+                    converter = _coconut_match_to[0]  #                 match (converter,new_state,name):
+                    new_state = _coconut_match_to[1]  #                 match (converter,new_state,name):
+                    name = _coconut_match_to[2]  #                 match (converter,new_state,name):
+                    _coconut_case_check_1 = True  #                 match (converter,new_state,name):
+                if _coconut_case_check_1:  #                 match (converter,new_state,name):
+                    result.append((converter, new_state, self.cost, name))  #                     result.append((converter,new_state,self.cost,name))
+            if not _coconut_case_check_1:  #                 match (converter,new_state,name,score):
+                if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 4):  #                 match (converter,new_state,name,score):
+                    converter = _coconut_match_to[0]  #                 match (converter,new_state,name,score):
+                    new_state = _coconut_match_to[1]  #                 match (converter,new_state,name,score):
+                    name = _coconut_match_to[2]  #                 match (converter,new_state,name,score):
+                    score = _coconut_match_to[3]  #                 match (converter,new_state,name,score):
+                    _coconut_case_check_1 = True  #                 match (converter,new_state,name,score):
+                if _coconut_case_check_1:  #                 match (converter,new_state,name,score):
+                    result.append((converter, new_state, score, name))  #                     result.append((converter,new_state,score,name))
+            if not _coconut_case_check_1:  #                 match _:
+                _coconut_case_check_1 = True  #                 match _:
+                if _coconut_case_check_1:  #                 match _:
+                    raise RuntimeError("rule:{_coconut_format_0} returned invalid edge:{_coconut_format_1}.".format(_coconut_format_0=(self.rule), _coconut_format_1=(edge)))  #                     raise RuntimeError(f"rule:{self.rule} returned invalid edge:{edge}.")
+        return result  #         return result
 class AutoSolver:  # class AutoSolver:
     """
     TODO stop using local lambda in order to make this class picklable
     Factory for an AutoData class
     """  #     """
-    def __init__(self, rules):  #     def __init__(self,rules):
+    def __init__(self, rules, smart_rules, heuristics=lambda x, y: 0, edge_cutter=lambda x, y, end: False):  #     def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False):
         self.initial_rules = rules  #         self.initial_rules = rules
-        self.solver = AStarSolver(rules=self.initial_rules.copy())  #         self.solver = AStarSolver(rules = self.initial_rules.copy())
+        self.smart_rules = smart_rules  #         self.smart_rules = smart_rules
+        self.solver = AStarSolver(rules=self.initial_rules.copy(), smart_rules=self.smart_rules.copy(), heuristics=heuristics, edge_cutter=edge_cutter)  #         self.solver = AStarSolver(
 
     @staticmethod  #     @staticmethod
     def create_cast_rule(rule, name=None, _swap=False, cost=1):  #     def create_cast_rule(rule,name=None,_swap=False,cost=1):
@@ -131,6 +171,9 @@ class AutoSolver:  # class AutoSolver:
     @staticmethod  #     @staticmethod
     def create_conversion_rule(rule):  #     def create_conversion_rule(rule):
         return _ConversionLambda(rule)  #         return _ConversionLambda(rule)
+    @staticmethod  #     @staticmethod
+    def create_smart_conversion_rule(rule):  #     def create_smart_conversion_rule(rule):
+        return _SmartConversionLambda(rule)  #         return _SmartConversionLambda(rule)
 
     def add_conversion(self, rule):  #     def add_conversion(self,rule):
         """
@@ -139,7 +182,7 @@ class AutoSolver:  # class AutoSolver:
         self.solver.add_rule(AutoSolver.create_conversion_rule(rule))  #         self.solver.add_rule(AutoSolver.create_conversion_rule(rule))
 
     def reset_solver(self,):  #     def reset_solver(self,):
-        self.solver = AStarSolver(rules=self.initial_rules.copy())  #         self.solver = AStarSolver(rules = self.initial_rules.copy())
+        self.solver = AStarSolver(rules=self.initial_rules.copy(), smart_rules=self.smart_rules.copy(), heuristics=heuristics, edge_cutter=edge_cutter)  #         self.solver = AStarSolver(
 
     def debug_conversion(self, a, b, samples):  #     def debug_conversion(self,a,b,samples):
         x = samples  #         x = samples
