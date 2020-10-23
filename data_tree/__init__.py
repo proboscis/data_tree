@@ -12,6 +12,9 @@ series = Series.from_iterable
 managed_cache = ConditionedFilePathProvider
 auto_image = AutoImage
 auto = omni_auto_img
+"""
+example:torch,float32,BCHW,RGB,0_1
+"""
 unlist_auto = unlist
 solver = omni_solver
 

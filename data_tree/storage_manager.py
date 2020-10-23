@@ -9,6 +9,7 @@ import re
 from data_tree.util import ensure_path_exists, scantree, Pickled
 from loguru import logger
 from tqdm.autonotebook import tqdm
+import socket
 
 class DBProvider:
 
@@ -38,9 +39,13 @@ class FileStorageManager(DBProvider):
         """
         self.db_path = os.path.expanduser(db_path)
         os.makedirs(self.db_path, exist_ok=True)
+        logger.info(f"scan targets:{tgt_dirs}")
         self.tgt_dirs = [os.path.expanduser(p) for p in tgt_dirs]
-        self.scan_cache = Pickled(os.path.join(self.db_path, "scan_cache.pkl"), self._scan)
-        self.info_cache = Pickled(os.path.join(self.db_path, "info_cache.pkl"), self.gather_info)
+        logger.debug(f"expanded scan targets:{self.tgt_dirs}")
+        logger.info(f"scan targets expanded:{tgt_dirs}")
+
+        self.scan_cache = Pickled(os.path.join(self.db_path, f"scan_cache_{socket.gethostname()}.pkl"), self._scan)
+        self.info_cache = Pickled(os.path.join(self.db_path, f"info_cache_{socket.gethostname()}.pkl"), self.gather_info)
 
     def gather_info(self):
         info = dict()
@@ -69,10 +74,15 @@ class FileStorageManager(DBProvider):
         for p in paths():
             match = prog.fullmatch(p.name)
             if match is not None:
-                candidates[match[1]].append(os.path.abspath(p.path))
+                if not os.path.basename(p.path).startswith("."):
+                    candidates[match[1]].append(os.path.abspath(p.path))
         return candidates
 
-    def find(self, **conditions):
+    def find(self, **conditions)->str:
+        """
+        :param conditions:
+        :return: absolute path matching condition
+        """
         def find_matching():
             for k, c in self.info_cache.value.items():
                 matched = True
@@ -96,7 +106,8 @@ class FileStorageManager(DBProvider):
             self.scan_cache.clear()
             res = find_matching()
         if res is None:
-            raise RuntimeError(f"no matching path for {conditions}. please check.")
+            candidate = self.get_filename("any_name",**conditions)
+            raise RuntimeError(f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
         return res
 
     def get_filename(self, basename, **conditions):

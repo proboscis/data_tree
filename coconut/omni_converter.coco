@@ -4,8 +4,9 @@ from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from frozendict import frozendict
 from typing import Mapping
 from ipywidgets import Text
-import torchvision.transforms as transforms
-import torch
+from itertools import product
+from loguru import logger
+from collections import namedtuple
 def imagedef2dict(imdef:ImageDef):
     case imdef:
         match ImageDef(data_type,tags):
@@ -69,8 +70,10 @@ def cast_imdef_to_imdef_str(imdef):
 def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
     mode = imgs[0].mode
     ch = len(mode)
-    nrow = int(sqrt(len(imgs[:max_image]))+0.5)
+    #nrow = int(sqrt(len(imgs[:max_image]))+0.5)
+    nrow = int(sqrt(len(imgs[:max_image]))) + 1
     r = int((w-((nrow+1)*padding))/nrow)
+
 
     imgs = np.array([(img.resize((r,r)) |> np.array) for img in imgs[:max_image]])
     if ch == 1:
@@ -132,9 +135,69 @@ def rule_image2gray(state):
     case state:
         match ImageDef(PILImage(ch_rpr,ch_rpr2),tags):
             return [
-                (.convert("L"),ImageDef(PILImage("L","L"),tags),"image2gray"),
-                (.convert("LA"),ImageDef(PILImage("LA","LA"),tags),"image2gray-alpha"),
+                (.convert("L"),ImageDef(PILImage("L","L"),tags),"image2gray",10),
+                (.convert("LA"),ImageDef(PILImage("LA","LA"),tags),"image2gray-alpha",10),
                    ]
+
+def rule_image2lab(state):
+    from skimage import color
+    case state:
+        match ImageDef(Numpy("float64","HWC","RGB","0_1"),tags):
+            return [
+                (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),tags),"sklearn.color.rgb2lab")
+            ]
+        match ImageDef(Numpy("float64","HWC","LAB","LAB"),tags):
+            return [
+                (color.lab2rgb,ImageDef(Numpy("float64","HWC","RGB","0_1"),tags),"sklearn.color.lab2rgb")
+            ]
+
+def convert_ignore_channel(ary,f):
+    """
+    shape:(H,W,C)
+    """
+    ignored = ary[:,:,[-1]]
+    tgt = ary[:,:,:-1]
+    converted = f(tgt)
+    result = np.concatenate((tgt,ignored),axis=-1)
+    return result
+
+def rule_rgba2laba(state):
+    from skimage import color
+    case state:
+        match ImageDef(Numpy("float64","HWC","RGBA","0_1"),tags):
+            return [
+                (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),tags),"rgba2laba (ignores alpha)")
+            ]
+        match ImageDef(Numpy("float64","HWC","LABA","LABA"),tags):
+            return [
+                (a->convert_ignore_channel(a,color.lab2rgb),ImageDef(Numpy("float64","HWC","RGBA","0_1"),tags),"laba2rgba (ignores alpha)")
+            ]
+
+
+def rule_lab_value_conversion(state):
+    case state:
+        match ImageDef(Numpy("float64","HWC","LAB","LAB"),tags):
+            return [((_vr_lab_to_0_1,ImageDef(Numpy("float64","HWC","LAB","0_1"),tags),"vr_lab_to_0_1"))]
+        match ImageDef(Numpy("float64","HWC","LABA","LABA"),tags):
+            return [((a->convert_ignore_channel(a,_vr_lab_to_0_1),ImageDef(Numpy("float64","HWC","LABA","0_1"),tags),"vr_laba_to_0_1"))]
+        match ImageDef(Numpy("float64","HWC","LAB","0_1"),tags):
+            return [((_0_1_to_vr_lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),tags),"0_1_to_vr_lab"))]
+        match ImageDef(Numpy("float64","HWC","LABA","0_1"),tags):
+            return [((a->convert_ignore_channel(a,_0_1_to_vr_lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),tags),"vr_0_1_to_laba"))]
+
+def _vr_lab_to_0_1(ary):
+    r = ary.copy()
+    r[:,:,0] = ary[:,:,0] * 0.01
+    r[:,:,1] = (ary[:,:,1] + 128.0) / 255.0
+    r[:,:,2] = (ary[:,:,2] + 128.0) / 255.0
+    return r
+
+def _0_1_to_vr_lab(ary):
+    r = ary.copy()
+    r[:,:,0] = ary[:,:,0] * 100
+    r[:,:,1] = (ary[:,:,1] * 255) - 128.0
+    r[:,:,2] = (ary[:,:,2] * 255) - 128.0
+    return r
 
 """
 def dict2visdomable(state):
@@ -158,7 +221,56 @@ def to_visdom_function(state):
 def any2widget(state):
     return [(ary->Text(str(ary)),"widget","anything_to_text_widget",1000)]
 
+data AutoTuple(formats is tuple)
+
+def isnamedtuple(x):
+    t = type(x)
+    b = t.__bases__
+    if hasattr(x,"__slots__"): return True
+    if len(b) != 1 or b[0] != tuple: return False
+    f = getattr(t, '_fields', None)
+    if not isinstance(f, tuple): return False
+    return all(type(n)==str for n in f)
+
+def cast_tuple2auto_tuple(state):
+    if isinstance(state,str):
+        return None
+    if isinstance(state,AutoTuple):
+        res = [state.formats]
+        return res
+    elif type(state) == tuple:
+        res = [AutoTuple(state)]
+        return res
+
+def map_tuple_i(t,i,f):
+    res = list(t)
+    res[i] = f(res[i])
+    return tuple(res)
+
+def map_state(states,i,new_state):
+    res = list(states)
+    res[i] = new_state
+    return tuple(res)
+
+def intra_tuple_conversions(state):
+    case state:
+        match AutoTuple(items):
+            # I think I should only change a part of state.
+            res = []
+            for i in range(len(items)):
+                ith_state = items[i]
+                res += [
+                ((f,new_state,cost,name)->(
+                    values->map_tuple_i(values,i,f),
+                    AutoTuple(map_state(items,i,new_state)),
+                    f"map {i}th element with {name}",
+                    cost+1
+                ))(f,new_state,cost,name) for f,new_state,cost,name in SOLVER.solver.neighbors(ith_state)]
+            return res
+
+
 data AutoList(state)
+
 
 def unlist(items):
     return SOLVER.new_auto_data([i.value for i in items],AutoList(items[0].format))
@@ -235,23 +347,52 @@ def rgb_to_rgba(state):
 
 @memoize()
 def pix2pix_normalizer(nc):
+    import torchvision.transforms as transforms
     return transforms.Normalize((0.5,)*nc,(0.5,)*nc)
 
 def torch_img_to_pixpix_input(state):
-
+    import torch
     case state:
-        match {"type":"torch","dtype":"float32","arrange":"CHW","v_range":"0_1","ch_rpr":rpr,**kwargs}:
+        match {"type":"torch","dtype":"float32","arrange":"CHW","v_range":"0_1","ch_rpr":("RGB" or "RGBA" or "L") as rpr,**kwargs}:
             return [(
                 pix2pix_normalizer(len(rpr)),
                 f"pix2pix,nc={len(rpr)}",
                 "convert to pixpix normalized input",
                 1
             )]
-        match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":rpr,**kwargs}:
+        match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":("RGB" or "RGBA" or "L") as rpr,**kwargs}:
             return [(
                 t->torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t],dim=0),
                 f"pix2pix_batch,nc={len(rpr)}",
                 "convert to pixpix normalized input",
+                1
+            )]
+        match "pix2pix_laba":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,CHW,LABA,0_1",
+                "inverse pix2pix_laba to img ",
+                1
+            )]
+        match "pix2pix_lab":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,CHW,LAB,0_1",
+                "inverse pix2pix_lab to img ",
+                1
+            )]
+        match "pix2pix_laba_batch":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,BCHW,LABA,0_1",
+                "inverse pix2pix_laba batch to img",
+                1
+            )]
+        match "pix2pix_lab_batch":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,BCHW,LAB,0_1",
+                "inverse pix2pix_laba batch to img",
                 1
             )]
         match "pix2pix,nc=4":
@@ -265,17 +406,53 @@ def torch_img_to_pixpix_input(state):
             return [(
                 a -> a*0.5+0.5,
                 f"torch,float32,BCHW,RGBA,0_1",
-                "inverse pix2pix batch to img",
+                "inverse pix2pix batch nc=4 to img",
+                1
+            )]
+        match "pix2pix_batch,nc=3":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,BCHW,RGB,0_1",
+                "inverse pix2pix batch nc=3 to img",
                 1
             )]
         match "pix2pix,nc=3":
             return [(
-                a -> a*2+0.5,
+                a -> a*0.5+0.5,
                 f"torch,float32,CHW,RGB,0_1",
                 "inverse pix2pix to img",
                 1
             )]
-
+@memoize()
+def _VGG_NORMALIZER():
+    import torchvision.transforms as transforms
+    return transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
+def torch_img_to_vgg_prep(state):
+    VGG_NORMALIZER = _VGG_NORMALIZER()
+    case state:
+        match {"type":"torch","dtype":"float32","arrange":"CHW","v_range":"0_1","ch_rpr":"RGB",**kwargs}:
+            return [(
+                VGG_NORMALIZER,
+                f"vgg_prep",
+                "convert to vgg normalized input",
+                1
+            )]
+        match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":"RGB",**kwargs}:
+            return [(
+                t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
+                f"vgg_prep_batch",
+                "convert to vgg normalized input batch",
+                1
+            )]
+        match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":"RGBA",**kwargs}:
+            return [(
+                t->torch.cat([
+                    torch.cat((VGG_NORMALIZER(i[:3])[None],i[[3]][None]),dim=1) for i in t
+                ],dim=0),
+                f"vgg_prep_batch_masked",
+                "convert to vgg normalized input batch",
+                1
+            )]
 def repeat_ch(state):
     case state:
         match {"type":"image","mode":"L","ch_rpr":ch,**kwargs} if len(ch) == 1:
@@ -285,6 +462,7 @@ def repeat_ch(state):
                 "repeat_channel_3",
                 5)
             ]
+
 def lll_is_rgb(state):
     case state:
         match {"ch_rpr":"LLL",**kwargs}:
@@ -297,7 +475,8 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_cast_rule(dict2imdef,"dict2imdef"),
     AutoSolver.create_cast_rule(cast_ary_str_to_ary_type,"cast_ary_str_to_ary_type"),
     AutoSolver.create_cast_rule(img_list_is_imgs,"img_list_is_imgs"),
-    AutoSolver.create_cast_rule(lll_is_rgb,"lll_is_rgb"),
+    AutoSolver.create_cast_rule(lll_is_rgb,"lll_is_rgb",cost=10),
+    AutoSolver.create_cast_rule(cast_tuple2auto_tuple,"tuple <--> auto_tuple"),
     #AutoSolver.create_cast_rule(dict2visdomable),
     AutoSolver.create_conversion_rule(any2widget),
     AutoSolver.create_conversion_rule(to_visdom_function),
@@ -305,6 +484,9 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(rule_img2widget),
     AutoSolver.create_conversion_rule(rule_numpy2img),
     AutoSolver.create_conversion_rule(rule_image2gray),
+    AutoSolver.create_conversion_rule(rule_image2lab),
+    AutoSolver.create_conversion_rule(rule_rgba2laba),
+    AutoSolver.create_conversion_rule(rule_lab_value_conversion),
     AutoSolver.create_conversion_rule(intra_list_conversions),
     AutoSolver.create_conversion_rule(numpys_to_numpy),
     AutoSolver.create_conversion_rule(tensor_to_list),
@@ -312,8 +494,11 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(rgb_to_rgba),
     AutoSolver.create_conversion_rule(repeat_ch),
     AutoSolver.create_conversion_rule(torch_img_to_pixpix_input),
+    AutoSolver.create_conversion_rule(torch_img_to_vgg_prep),
+    AutoSolver.create_conversion_rule(intra_tuple_conversions),
     AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
-    AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255")
+    AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255"),
+
 ]
 SOLVER = AutoSolver(rules=DEFAULT_RULES.copy())
 auto_img = format->value->SOLVER.new_auto_data(value,format)

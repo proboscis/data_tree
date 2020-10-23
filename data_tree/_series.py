@@ -7,6 +7,7 @@ from collections import OrderedDict
 from concurrent.futures import Executor
 from datetime import datetime
 from hashlib import sha1
+from random import randint
 from typing import Iterable, NamedTuple, Union, Mapping, Callable, List
 
 import h5py
@@ -16,13 +17,14 @@ from frozendict import frozendict
 from ipywidgets import interactive
 from lazy import lazy as en_lazy
 from loguru import logger
+from lru import LRU
 from sklearn.preprocessing import MinMaxScaler
 from tqdm.autonotebook import tqdm
 
 from data_tree.cache import ConditionedFilePathProvider
 from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
-from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2
+from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2, get_global_holder
 
 from data_tree.resource import Resource
 from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled, shared_npy_array_like
@@ -74,13 +76,11 @@ class Trace(NamedTuple):
         return self.series[self.index]
 
     def trace_string(self, metadata_generator=None):
-
         def _print_trace(trace, indent):
             indent_str = '-' * indent
             meta = trace.metadata.copy()
             if metadata_generator is not None:
                 meta.update(metadata_generator(trace))
-
             buf = f"{indent_str}:{str(trace.series)} | {meta}\n"
             if not trace.parents:
                 buf += indent_str + ">" + str(trace.get_value()) + "\n"
@@ -202,6 +202,10 @@ class Trace(NamedTuple):
                 display(hbox)
 
 
+def mp_each_helper(_self, i, f):
+    f(_self.value[i])
+
+
 class Series(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -315,6 +319,18 @@ class Series(metaclass=abc.ABCMeta):
         return MPMappedSeries(self, f, resources_kwargs=global_resources, num_process=num_process,
                               max_pending_result=max_pending_result)  # .lazy()
 
+    def mp_each(self, f, num_process=None, show_progress=True):
+        from multiprocessing import Pool
+        holder = get_global_holder(self)
+
+        def gen():
+            for i in range(self.total):
+                yield holder, i, f
+
+        with Pool(num_process) as p:
+            for item in tqdm(p.imap_unordered(mp_each_helper, gen()), total=self.total):
+                pass
+
     @property
     def values(self):
         return self._values(slice(None))
@@ -327,7 +343,11 @@ class Series(metaclass=abc.ABCMeta):
         # sin you know that all the cache files have distinct names, you need just one prefix.
         return Hdf5CachedSeries(self, cache_path=cache_path, src_hash=src_hash, **dataset_opts)
 
-    def auto(self,format=None):
+    def lru(self, size=1000):
+        from data_tree.ops.cache import LRUSeries
+        return LRUSeries(self, max_memo=size)
+
+    def auto(self, format=None):
         """
         wraps all elements with auto(format)
         :param format:
@@ -336,14 +356,14 @@ class Series(metaclass=abc.ABCMeta):
         from data_tree.ops.cache import AutoSeries
         from data_tree.coconut.auto_data import AutoData
         if format is None:
-            assert isinstance(self[0],AutoData),"element must be a instance of AutoData if format=None"
-            return AutoSeries(self.map(lambda i:i.value),self[0].format)
+            assert isinstance(self[0], AutoData), "element must be a instance of AutoData if format=None"
+            return AutoSeries(self.map(lambda i: i.value), self[0].format)
         else:
-            return AutoSeries(self,format)
+            return AutoSeries(self, format)
 
-    def auto_hdf5(self, cache_path, format,src_hash=None):
+    def auto_hdf5(self, cache_path, format, src_hash=None):
         from data_tree.ops.cache import Hdf5AutoSeries
-        return Hdf5AutoSeries(self, cache_path=cache_path, format=format,src_hash=src_hash)
+        return Hdf5AutoSeries(self, cache_path=cache_path, format=format, src_hash=src_hash)
 
     def lmdb(self, cache_path, src_hash=None, **dataset_opts):
         from data_tree.ops.cache import LMDBCachedSeries
@@ -467,6 +487,9 @@ class Series(metaclass=abc.ABCMeta):
 
         return MetadataOpsSeries(self, operator=_update_metadata)
 
+    def meta(self, **metadata):
+        return self.update_metadata(**metadata)
+
     def visualization(self, visualizer):
         return self.update_metadata(visualization=visualizer)
 
@@ -498,7 +521,7 @@ class Series(metaclass=abc.ABCMeta):
 
     def unzip(self):
         n_child = len(self[0])
-        return [self.map(lambda item:item[i]) for i in range(n_child)]
+        return [self.map(lambda item: item[i]) for i in range(n_child)]
 
     def zip_with_index(self):
         return ZippedSeries(self, NumpySeries(np.arange(self.total)))
@@ -509,12 +532,15 @@ class Series(metaclass=abc.ABCMeta):
 
     def sorted(self, key=None):
         """make sure everything can be loaded on to memory"""
+        return self[self.argsort(key=key)]
+
+    def argsort(self, key=None):
         if key is not None:
             values_for_sort = self.map(key).values
         else:
             values_for_sort = self.values
         indices = np.argsort(values_for_sort)
-        return self[indices]
+        return indices
 
     def filter(self, _filter):
         # filter must check whole element since a series requires predetermined length...
@@ -671,7 +697,24 @@ class Series(metaclass=abc.ABCMeta):
                 parents=[_str_(p) for p in s.parents]
             )
 
-        return pformat(_str_(self), indent=2)  # self.trace(0).trace_string()
+        # return pformat(_str_(self), indent=2)  # self.trace(0).trace_string()
+        return self.trace_string()
+
+    def trace_string(self):
+        def _print_trace(s, indent):
+            meta = s._metadata.copy()
+            if isinstance(s, MetadataOpsSeries):
+                indent -= 1
+                indent_str = ' ' * (indent)
+                buf = f"{indent_str}|{s.operator(meta)}\n"
+            else:
+                indent_str = '-' * indent
+                buf = f"{indent_str}:{str(s)} | {meta}\n"
+            for p in s.parents:
+                buf += _print_trace(p, indent + 1)
+            return buf
+
+        return _print_trace(self, 0)
 
     def acc(self, identifier, op):
         path = self.managed_cache_path(identifier)
@@ -703,8 +746,14 @@ class Series(metaclass=abc.ABCMeta):
         return scaler
         # return self.map(scaler.transform).update_metadata(scaler=scaler)
 
-    def tagged_value(self, tag):
-        return self.traces.map(lambda t: t.find_by_tag(tag)[0].get_value())
+    def tagged_value(self, tag) -> "Series":
+        def tag_getter(t):
+            try:
+                return t.find_by_tag(tag)[0].get_value()
+            except IndexError as ie:
+                raise RuntimeError(f"specified tag({tag}) does not exist in this trace! \n {self.traces[0]}") from ie
+
+        return self.traces.map(tag_getter)
 
     def interact(self, depth=None,
                  skip_tags=("slow",),
@@ -771,6 +820,10 @@ class Series(metaclass=abc.ABCMeta):
         return display(self.widget())
 
     def replace(self, replacer):
+        """
+        :param replacer: (self,parents)-> new series
+        :return:
+        """
         replaced = replacer(self, self.parents)
         if replaced is not None:
             return replaced
@@ -813,6 +866,10 @@ class Series(metaclass=abc.ABCMeta):
         for batch in self.batch_generator(batch_size=batch_size, preload=0, progress_bar=progress_bar):
             res += batch
         return res
+
+    def random(self):
+        i = randint(0, self.total - 1)
+        return self[i]
 
 
 #    def zip_with_index(self):
@@ -1293,11 +1350,25 @@ class MappedSeries(IndexedSeries):
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
+    def __str__(self):
+        single_name = self.single_mapper.__name__ if self.single_mapper is not None else None
+        slice_name = self.slice_mapper.__name__ if self.slice_mapper is not None else None
+        return f"{self.__class__.__name__} #{id(self)} | {single_name} | {slice_name}"
+
 
 def mp_mapper(f, global_resources: Mapping[str, GlobalHolder], value):
     resources = {k: g.value for k, g in global_resources.items()}
     result = f(value, **resources)
     return result
+
+
+"""
+def mp_i_mapper(self_holder,f,global_resources,i):
+    resources = {k: g.value for k, g in global_resources.items()}
+    self = self_holder.value
+    result = f(self[i], **resources)
+    return result
+"""
 
 
 def stp_worker_generator(mapper, global_resources):
@@ -1356,6 +1427,22 @@ class MPMappedSeries(IndexedSeries):
         for k, r in self.resources.items():
             r.release(r)
         return results
+
+    """
+    def _map_indices(self,indices,show_progress=True):
+        resources = {k: r.prepare() for k, r in self.resources.items()}
+        g_holder = get_global_holder(self)
+        if show_progress:
+            bar = tqdm
+        else:
+            bar = lambda seq, *args: seq
+        with multiprocessing.Pool(processes=self.num_process) as pool:
+            futures = [pool.apply_async(mp_i_mapper, args=(g_holder,self.single_mapper, resources, v)) for v in indices]
+            results = [f.get() for f in bar(futures, desc="waiting for mp map results")]
+        for k, r in self.resources.items():
+            r.release(r)
+        return results
+    """
 
     def _get_item(self, index):
         return self._map_values([self.src._values(index)])[0]

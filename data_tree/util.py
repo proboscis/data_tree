@@ -9,6 +9,7 @@ from threading import Thread
 
 import numpy as np
 import pandas as pd
+from filelock import FileLock
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
@@ -76,6 +77,8 @@ def ensure_path_exists(fileName):
             makedirs(parent)
         except FileExistsError as fee:
             pass
+
+
 def ensure_dir_exists(dirname):
     import os
     from os import path, makedirs
@@ -86,6 +89,7 @@ def ensure_dir_exists(dirname):
             makedirs(parent)
         except FileExistsError as fee:
             pass
+
 
 def prefetch_generator(gen, n_prefetch=5, name=None):
     """
@@ -192,19 +196,21 @@ class Pickled(PickledTrait):
         self._value = None
         self.path = path
         self.proc = proc
+        self.lock = FileLock(self.path + ".lock")
 
     @property
     def value(self):
-        if not self.loaded:
-            self._value = load_or_save(self.path, self.proc)
-            self.loaded = True
-        return self._value
+        with self.lock:
+            if not self.loaded:
+                self._value = load_or_save(self.path, self.proc)
+                self.loaded = True
+            return self._value
 
     def clear(self):
-        os.remove(self.path)
-        self.loaded = False
-        logger.info(f"deleted pickled file at {self.path}")
-
+        with self.lock:
+            os.remove(self.path)
+            self.loaded = False
+            logger.info(f"deleted pickled file at {self.path}")
 
     def map(self, f):
         return MappedPickled(self, f)
@@ -223,24 +229,24 @@ class MappedPickled(PickledTrait):
         return self.src.clear()
 
 
-def scantree(path,yield_dir = False):
+def scantree(path, yield_dir=False):
     """Recursively yield DirEntry objects for given directory."""
     for entry in os.scandir(path):
         if entry.is_dir(follow_symlinks=False):
             if yield_dir:
                 yield entry
-            yield from scantree(entry.path,yield_dir=yield_dir)  # see below for Python 2.x
+            yield from scantree(entry.path, yield_dir=yield_dir)  # see below for Python 2.x
         else:
             yield entry
+
 
 def scanfiles(path):
     def gen():
         for item in tqdm(scantree(path), desc="scanning files.."):
             yield item
+
     from data_tree import series
     return series(gen())
-
-
 
 
 def scan_images(path):
@@ -256,9 +262,7 @@ def scan_images(path):
             if ext in EXTS:
                 yield item
 
-    return series(gen()).tag("dir_entries").map(
-        lambda p: Image.open(p.path)
-    ).tag("load_image")
+    return series(gen()).tag("dir_entries").update_metadata(scan_path=path).map(lambda p:p.path).tag("path").map(Image.open).tag("load_image")
 
 
 def scan_images_cached(cache_path, scan_path) -> PickledTrait:
@@ -274,12 +278,12 @@ def scan_images_cached(cache_path, scan_path) -> PickledTrait:
         cache_path,
         lambda: series(
             scan_images(scan_path).tagged_value("dir_entries").map(
-                lambda de:edict(path=de.path,name=de.name)
+                lambda de: edict(path=de.path, name=de.name)
             ).values_progress(512, tqdm))
     )
     return paths.map(
         lambda ps: series(ps).tag("dir_entries").map(
-            lambda d:d.path).tag("image_path").map(
+            lambda d: d.path).tag("image_path").map(
             Image.open).tag("loaded_image"))
 
 
@@ -310,8 +314,6 @@ def shared_npy_array_like(ary: np.ndarray):
     return np.frombuffer(buf, dtype=ary.dtype).reshape(ary.shape)
 
 
-
-
 @contextmanager
 def checktime(label="none"):
     start = datetime.now()
@@ -319,3 +321,20 @@ def checktime(label="none"):
     end = datetime.now()
     dt = end - start
     print(f"time_{label}:{dt.total_seconds():.3f}")
+
+
+def embed_qt(locals):
+    from qtpy.QtWidgets import QApplication
+    from pyqtconsole.console import PythonConsole
+    from pyqtconsole.highlighter import format
+    app = QApplication([])
+
+    console = PythonConsole(formats={
+        'keyword': format('darkBlue', 'bold')
+    }, locals=locals
+    )
+    console.show()
+
+    console.eval_queued()
+
+    return app.exec_()

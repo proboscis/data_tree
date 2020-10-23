@@ -1,0 +1,184 @@
+Created by PLY version 3.11 (http://www.dabeaz.com/ply)
+
+Grammar
+
+Rule 0     S' -> expr
+Rule 1     expr -> STR
+Rule 2     expr -> LPAREN exprs RPAREN
+Rule 3     expr -> LSB exprs RSB
+Rule 4     exprs -> expr COMMA exprs
+Rule 5     exprs -> expr COMMA
+Rule 6     exprs -> expr
+Rule 7     expr -> NAME
+
+Terminals, with rules where they appear
+
+COMMA                : 4 5
+LPAREN               : 2
+LSB                  : 3
+NAME                 : 7
+RPAREN               : 2
+RSB                  : 3
+STR                  : 1
+error                : 
+
+Nonterminals, with rules where they appear
+
+expr                 : 4 5 6 0
+exprs                : 2 3 4
+
+Parsing method: LALR
+
+state 0
+
+    (0) S' -> . expr
+    (1) expr -> . STR
+    (2) expr -> . LPAREN exprs RPAREN
+    (3) expr -> . LSB exprs RSB
+    (7) expr -> . NAME
+
+    STR             shift and go to state 2
+    LPAREN          shift and go to state 3
+    LSB             shift and go to state 4
+    NAME            shift and go to state 5
+
+    expr                           shift and go to state 1
+
+state 1
+
+    (0) S' -> expr .
+
+
+
+state 2
+
+    (1) expr -> STR .
+
+    $end            reduce using rule 1 (expr -> STR .)
+    COMMA           reduce using rule 1 (expr -> STR .)
+    RPAREN          reduce using rule 1 (expr -> STR .)
+    RSB             reduce using rule 1 (expr -> STR .)
+
+
+state 3
+
+    (2) expr -> LPAREN . exprs RPAREN
+    (4) exprs -> . expr COMMA exprs
+    (5) exprs -> . expr COMMA
+    (6) exprs -> . expr
+    (1) expr -> . STR
+    (2) expr -> . LPAREN exprs RPAREN
+    (3) expr -> . LSB exprs RSB
+    (7) expr -> . NAME
+
+    STR             shift and go to state 2
+    LPAREN          shift and go to state 3
+    LSB             shift and go to state 4
+    NAME            shift and go to state 5
+
+    exprs                          shift and go to state 6
+    expr                           shift and go to state 7
+
+state 4
+
+    (3) expr -> LSB . exprs RSB
+    (4) exprs -> . expr COMMA exprs
+    (5) exprs -> . expr COMMA
+    (6) exprs -> . expr
+    (1) expr -> . STR
+    (2) expr -> . LPAREN exprs RPAREN
+    (3) expr -> . LSB exprs RSB
+    (7) expr -> . NAME
+
+    STR             shift and go to state 2
+    LPAREN          shift and go to state 3
+    LSB             shift and go to state 4
+    NAME            shift and go to state 5
+
+    exprs                          shift and go to state 8
+    expr                           shift and go to state 7
+
+state 5
+
+    (7) expr -> NAME .
+
+    $end            reduce using rule 7 (expr -> NAME .)
+    COMMA           reduce using rule 7 (expr -> NAME .)
+    RPAREN          reduce using rule 7 (expr -> NAME .)
+    RSB             reduce using rule 7 (expr -> NAME .)
+
+
+state 6
+
+    (2) expr -> LPAREN exprs . RPAREN
+
+    RPAREN          shift and go to state 9
+
+
+state 7
+
+    (4) exprs -> expr . COMMA exprs
+    (5) exprs -> expr . COMMA
+    (6) exprs -> expr .
+
+    COMMA           shift and go to state 10
+    RPAREN          reduce using rule 6 (exprs -> expr .)
+    RSB             reduce using rule 6 (exprs -> expr .)
+
+
+state 8
+
+    (3) expr -> LSB exprs . RSB
+
+    RSB             shift and go to state 11
+
+
+state 9
+
+    (2) expr -> LPAREN exprs RPAREN .
+
+    $end            reduce using rule 2 (expr -> LPAREN exprs RPAREN .)
+    COMMA           reduce using rule 2 (expr -> LPAREN exprs RPAREN .)
+    RPAREN          reduce using rule 2 (expr -> LPAREN exprs RPAREN .)
+    RSB             reduce using rule 2 (expr -> LPAREN exprs RPAREN .)
+
+
+state 10
+
+    (4) exprs -> expr COMMA . exprs
+    (5) exprs -> expr COMMA .
+    (4) exprs -> . expr COMMA exprs
+    (5) exprs -> . expr COMMA
+    (6) exprs -> . expr
+    (1) expr -> . STR
+    (2) expr -> . LPAREN exprs RPAREN
+    (3) expr -> . LSB exprs RSB
+    (7) expr -> . NAME
+
+    RPAREN          reduce using rule 5 (exprs -> expr COMMA .)
+    RSB             reduce using rule 5 (exprs -> expr COMMA .)
+    STR             shift and go to state 2
+    LPAREN          shift and go to state 3
+    LSB             shift and go to state 4
+    NAME            shift and go to state 5
+
+    expr                           shift and go to state 7
+    exprs                          shift and go to state 12
+
+state 11
+
+    (3) expr -> LSB exprs RSB .
+
+    $end            reduce using rule 3 (expr -> LSB exprs RSB .)
+    COMMA           reduce using rule 3 (expr -> LSB exprs RSB .)
+    RPAREN          reduce using rule 3 (expr -> LSB exprs RSB .)
+    RSB             reduce using rule 3 (expr -> LSB exprs RSB .)
+
+
+state 12
+
+    (4) exprs -> expr COMMA exprs .
+
+    RPAREN          reduce using rule 4 (exprs -> expr COMMA exprs .)
+    RSB             reduce using rule 4 (exprs -> expr COMMA exprs .)
+
