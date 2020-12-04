@@ -50,7 +50,8 @@ class Conversion:
             name="Conversion",
             start = start,
             end = end,
-            path = [e.name for e in self.edges]
+            path = [e.name for e in self.edges],
+            cost = sum([e.cost for e in self.edges])
         )
         return pformat(info)
     def trace(self,tgt):
@@ -72,15 +73,13 @@ def _astar(
           start,
           matcher,
           neighbors,
-          heuristics,
-          edge_cutter,
           max_depth = 100):
     """
     neighbors: node->[(mapper,next_node,cost,name)]
     """
     to_visit = []
     scores = dict()
-    scores[start] = heuristics(start,None)
+    scores[start] = 0#heuristics(start,None)
     heapq.heappush(to_visit,
                    _HeapContainer(scores[start],(start,[])))
     visited = 0
@@ -105,14 +104,13 @@ def _astar(
             assert isinstance(cost,int),f"cost is not a number. cost:{cost},name:{name},pos:{pos}"
             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
             try:
-                new_score = scores[pos] + cost + heuristics(next_node,end)
+                new_score = scores[pos] + cost #+ heuristics(next_node,end)
             except Exception as e:
                 logger.error(f"pos:{pos},cost:{cost},next_node:{next_node}")
                 raise e
             if next_node in scores and scores[next_node] <= new_score:
                 continue
-            elif(edge_cutter(pos,next_node,end)):
-                continue
+
             else:
                 scores[next_node] = new_score
                 heapq.heappush(to_visit,_HeapContainer(new_score,(next_node,new_trace)))
@@ -267,8 +265,6 @@ class AStarSolver:
                 start=start,
                 matcher=matcher,
                 neighbors=self.neighbors,
-                heuristics=self.heuristics,
-                edge_cutter=self.edge_cutter
             )
             self.search_memo[q] = res
 

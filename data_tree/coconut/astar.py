@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x97c9a2e6
+# __coconut_hash__ = 0xad80867a
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -75,7 +75,7 @@ class Conversion:  # class Conversion:
         else:  #         else:
             start = "None"  #             start = "None"
             end = "None"  #             end = "None"
-        info = dict(name="Conversion", start=start, end=end, path=[e.name for e in self.edges])  #         info = dict(
+        info = dict(name="Conversion", start=start, end=end, path=[e.name for e in self.edges], cost=sum([e.cost for e in self.edges]))  #         info = dict(
         return pformat(info)  #         return pformat(info)
     def trace(self, tgt):  #     def trace(self,tgt):
         x = tgt  #         x = tgt
@@ -92,13 +92,13 @@ class _HeapContainer:  # class _HeapContainer:
     def __lt__(self, other):  #     def __lt__(self,other):
         return self.score < other.score  #         return self.score < other.score
 
-def _astar(start, matcher, neighbors, heuristics, edge_cutter, max_depth=100):  # def _astar(
+def _astar(start, matcher, neighbors, max_depth=100):  # def _astar(
     """
     neighbors: node->[(mapper,next_node,cost,name)]
     """  #     """
     to_visit = []  #     to_visit = []
     scores = dict()  #     scores = dict()
-    scores[start] = heuristics(start, None)  #     scores[start] = heuristics(start,None)
+    scores[start] = 0  #heuristics(start,None)  #     scores[start] = 0#heuristics(start,None)
     heapq.heappush(to_visit, _HeapContainer(scores[start], (start, [])))  #     heapq.heappush(to_visit,
     visited = 0  #     visited = 0
     bar = tqdm(desc="solving with astar")  #     bar = tqdm(desc="solving with astar")
@@ -122,14 +122,13 @@ def _astar(start, matcher, neighbors, heuristics, edge_cutter, max_depth=100):  
             assert isinstance(cost, int), "cost is not a number. cost:{_coconut_format_0},name:{_coconut_format_1},pos:{_coconut_format_2}".format(_coconut_format_0=(cost), _coconut_format_1=(name), _coconut_format_2=(pos))  #             assert isinstance(cost,int),f"cost is not a number. cost:{cost},name:{name},pos:{pos}"
             new_trace = trace + [Edge(pos, next_node, mapper, cost, name)]  #             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
             try:  #             try:
-                new_score = scores[pos] + cost + heuristics(next_node, end)  #                 new_score = scores[pos] + cost + heuristics(next_node,end)
+                new_score = scores[pos] + cost  #+ heuristics(next_node,end)  #                 new_score = scores[pos] + cost #+ heuristics(next_node,end)
             except Exception as e:  #             except Exception as e:
                 logger.error("pos:{_coconut_format_0},cost:{_coconut_format_1},next_node:{_coconut_format_2}".format(_coconut_format_0=(pos), _coconut_format_1=(cost), _coconut_format_2=(next_node)))  #                 logger.error(f"pos:{pos},cost:{cost},next_node:{next_node}")
                 raise e  #                 raise e
             if next_node in scores and scores[next_node] <= new_score:  #             if next_node in scores and scores[next_node] <= new_score:
                 continue  #                 continue
-            elif (edge_cutter(pos, next_node, end)):  #             elif(edge_cutter(pos,next_node,end)):
-                continue  #                 continue
+
             else:  #             else:
                 scores[next_node] = new_score  #                 scores[next_node] = new_score
                 heapq.heappush(to_visit, _HeapContainer(new_score, (next_node, new_trace)))  #                 heapq.heappush(to_visit,_HeapContainer(new_score,(next_node,new_trace)))
@@ -266,7 +265,7 @@ class AStarSolver:  # class AStarSolver:
             res = self.search_memo[q]  #             res = self.search_memo[q]
         else:  #         else:
             logger.debug("searching from {_coconut_format_0} for matching {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(matcher)))  #             logger.debug(f"searching from {start} for matching {matcher}")
-            res = astar(start=start, matcher=matcher, neighbors=self.neighbors, heuristics=self.heuristics, edge_cutter=self.edge_cutter)  #             res = astar(
+            res = astar(start=start, matcher=matcher, neighbors=self.neighbors)  #             res = astar(
             self.search_memo[q] = res  #             self.search_memo[q] = res
 
         _coconut_match_to = res  #         case res:

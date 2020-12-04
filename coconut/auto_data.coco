@@ -241,6 +241,7 @@ class AutoData:
     def _repr_html_(self):
         self.format |> display
         self.to("widget") |> display
+
     def __repr__(self):
         return f"<AutoData {self.format}>"
 

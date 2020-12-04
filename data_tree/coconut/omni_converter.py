@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x3191982b
+# __coconut_hash__ = 0x99e9269f
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -532,7 +532,8 @@ def smart_tuple_conversion(state, end):  # def smart_tuple_conversion(state,end)
             formats = _coconut_match_to[0][0]  #         match (AutoTuple(formats),"widget"):
             _coconut_case_check_16 = True  #         match (AutoTuple(formats),"widget"):
         if _coconut_case_check_16:  #         match (AutoTuple(formats),"widget"):
-            f, new_state, name, cost = smart_tuple_conversion(state[0], ("widgets",) * len(state[0].formats))  #             f,new_state,name,cost = smart_tuple_conversion(state[0],("widgets",)*len(state[0].formats))
+            f, new_state, name, cost = smart_tuple_conversion(state, ("widget",) * len(state.formats))[0]  #             f,new_state,name,cost = smart_tuple_conversion(state,("widget",)*len(state.formats))[0]
+            logger.debug("cost:{_coconut_format_0}".format(_coconut_format_0=(cost)))  #             logger.debug(f"cost:{cost}")
             return [(lambda t: widgets.VBox(f(t)), end, "{_coconut_format_0}->{_coconut_format_1}".format(_coconut_format_0=(state), _coconut_format_1=(end)), cost + 1)]  #             return [(
 
 class AutoList(_coconut.collections.namedtuple("AutoList", "state")):  # data AutoList(state)
@@ -746,7 +747,18 @@ def torch_img_to_pixpix_input(state):  # def torch_img_to_pixpix_input(state):
             _coconut_case_check_23 = True  #                 a -> a*0.5+0.5,
         if _coconut_case_check_23:  #                 a -> a*0.5+0.5,
             return [(lambda a: a * 0.5 + 0.5, "torch,float32,CHW,RGB,0_1".format(), "inverse pix2pix to img", 1)]  #             return [(
-@memoize()  #                 a -> a*0.5+0.5,
+    if not _coconut_case_check_23:  #                 a -> a*0.5+0.5,
+        if _coconut_match_to == "pix2pix_batch,nc=1":  #                 a -> a*0.5+0.5,
+            _coconut_case_check_23 = True  #                 a -> a*0.5+0.5,
+        if _coconut_case_check_23:  #                 a -> a*0.5+0.5,
+            return [(lambda a: a * 0.5 + 0.5, "torch,float32,BCHW,L,0_1".format(), "inverse pix2pix_batch,nc=1 to img", 1)]  #             return [(
+    if not _coconut_case_check_23:  #                a -> a*0.5+0.5,
+        if _coconut_match_to == "pix2pix,nc=1":  #                a -> a*0.5+0.5,
+            _coconut_case_check_23 = True  #                a -> a*0.5+0.5,
+        if _coconut_case_check_23:  #                a -> a*0.5+0.5,
+            return [(lambda a: a * 0.5 + 0.5, "torch,float32,CHW,L,0_1".format(), "inverse pix2pix,nc=1 to img", 1)]  #             return [(
+
+@memoize()  # @memoize()
 def _VGG_NORMALIZER():  # def _VGG_NORMALIZER():
     from torchvision import transforms  #     import torchvision.transforms as transforms
     return transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  #     return transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
