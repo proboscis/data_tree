@@ -108,6 +108,7 @@ class FileStorageManager(DBProvider):
         if res is None:
             candidate = self.get_filename("any_name",**conditions)
             raise RuntimeError(f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
+        logger.debug(f"found path for {conditions} : {res}")
         return res
 
     def get_filename(self, basename, **conditions):

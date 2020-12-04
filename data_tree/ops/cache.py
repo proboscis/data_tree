@@ -192,12 +192,14 @@ class LazySeries(CachedSeries):
         return self._indexer
 
     def __init__(self, src: Series, prefer_slice=True):
+        logger.debug(f"lazy series created")
+        self.manager = multiprocessing.Manager()
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
-        self.flags = np.zeros(src.total, dtype=bool)
-        self.cache = [None] * self.total
+        self.flags = self.manager.list([False] * self.total)
+        self.cache = self.manager.list([None] * self.total)
         self._index = np.arange(src.total)
-        self.prefer_slice = prefer_slice
+        self.prefer_slice = prefer_slice # not used currently
 
     def _get_item(self, index):
         if not self.flags[index]:
@@ -205,23 +207,17 @@ class LazySeries(CachedSeries):
             self.flags[index] = True
         else:
             pass
-            #logger.debug(f"hit")
         return self.cache[index]
 
     def _ensure_and_return_smart(self, smart_indexer):
         if not self.flags[smart_indexer].all():
             non_cached_indices = self._index[smart_indexer][~self.flags[smart_indexer]]
-            if self.prefer_slice and isinstance(smart_indexer, slice):
-                self.cache[smart_indexer] = self.src._values(smart_indexer)
-                self.flags[smart_indexer] = True
-
-            else:
-                for v, i in zip(self.src._values(non_cached_indices), non_cached_indices):
-                    self.cache[i] = v
-                self.flags[non_cached_indices] = True
+            for v, i in zip(self.src._values(non_cached_indices), non_cached_indices):
+                self.cache[i] = v
+                self.flags[i] = True
         else:
             pass
-            #logger.debug(f"hit")
+            # logger.debug(f"hit")
         if isinstance(smart_indexer, slice):
             return self.cache[smart_indexer]
         else:

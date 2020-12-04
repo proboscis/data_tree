@@ -1351,8 +1351,8 @@ class MappedSeries(IndexedSeries):
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
     def __str__(self):
-        single_name = self.single_mapper.__name__ if self.single_mapper is not None else None
-        slice_name = self.slice_mapper.__name__ if self.slice_mapper is not None else None
+        single_name = self.single_mapper.__name__ if hasattr(self.single_mapper,"__name__")  else None
+        slice_name = self.slice_mapper.__name__ if hasattr(self.slice_mapper,"__name__") else None
         return f"{self.__class__.__name__} #{id(self)} | {single_name} | {slice_name}"
 
 

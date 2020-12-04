@@ -302,7 +302,8 @@ def smart_tuple_conversion(state,end):
             logger.debug(res)
             return res
         match (AutoTuple(formats),"widget"):
-            f,new_state,name,cost = smart_tuple_conversion(state[0],("widgets",)*len(state[0].formats))
+            f,new_state,name,cost = smart_tuple_conversion(state,("widget",)*len(state.formats))[0]
+            logger.debug(f"cost:{cost}")
             return [(
                 t-> widgets.VBox(f(t)),
                 end,
@@ -464,6 +465,21 @@ def torch_img_to_pixpix_input(state):
                 "inverse pix2pix to img",
                 1
             )]
+        match "pix2pix_batch,nc=1":
+            return [(
+               a -> a*0.5+0.5,
+               f"torch,float32,BCHW,L,0_1",
+               "inverse pix2pix_batch,nc=1 to img",
+               1
+            )]
+        match "pix2pix,nc=1":
+            return [(
+                a -> a*0.5+0.5,
+                f"torch,float32,CHW,L,0_1",
+                "inverse pix2pix,nc=1 to img",
+                1
+                )]
+
 @memoize()
 def _VGG_NORMALIZER():
     import torchvision.transforms as transforms
