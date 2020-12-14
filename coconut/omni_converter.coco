@@ -283,8 +283,8 @@ def intra_tuple_conversions(state):
 
 
 def map_each(t,mappers):
-    logger.warning(f"items:{t}")
-    logger.warning(f"mappers:{mappers}")
+    #logger.warning(f"items:{t}")
+    #logger.warning(f"mappers:{mappers}")
     return tuple([f(item) for f,item in zip(mappers,t)])
 
 def smart_tuple_conversion(state,end):
