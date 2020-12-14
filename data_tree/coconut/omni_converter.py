@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x99e9269f
+# __coconut_hash__ = 0xa3aef8c8
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -507,6 +507,8 @@ def intra_tuple_conversions(state):  # def intra_tuple_conversions(state):
 
 
 def map_each(t, mappers):  # def map_each(t,mappers):
+    logger.warning("items:{_coconut_format_0}".format(_coconut_format_0=(t)))  #     logger.warning(f"items:{t}")
+    logger.warning("mappers:{_coconut_format_0}".format(_coconut_format_0=(mappers)))  #     logger.warning(f"mappers:{mappers}")
     return tuple([f(item) for f, item in zip(mappers, t)])  #     return tuple([f(item) for f,item in zip(mappers,t)])
 
 def smart_tuple_conversion(state, end):  # def smart_tuple_conversion(state,end):
@@ -524,6 +526,7 @@ def smart_tuple_conversion(state, end):  # def smart_tuple_conversion(state,end)
         for i in range(len(formats)):  #             for i in range(len(formats)):
             c = SOLVER.solver.search_direct(formats[i], end[i])  #                 c = SOLVER.solver.search_direct(formats[i],end[i])
             cost += sum((e.cost for e in c.edges))  #                 cost += sum(e.cost for e in c.edges)
+            cs.append(c)  #                 cs.append(c)
         res = [(lambda t: map_each(t, cs), end, "{_coconut_format_0}->{_coconut_format_1}".format(_coconut_format_0=(state), _coconut_format_1=(end)), cost)]  #             res = [
         logger.debug(res)  #             logger.debug(res)
         return res  #             return res

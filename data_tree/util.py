@@ -231,13 +231,16 @@ class MappedPickled(PickledTrait):
 
 def scantree(path, yield_dir=False):
     """Recursively yield DirEntry objects for given directory."""
-    for entry in os.scandir(path):
-        if entry.is_dir(follow_symlinks=False):
-            if yield_dir:
+    try:
+        for entry in os.scandir(path):
+            if entry.is_dir(follow_symlinks=False):
+                if yield_dir:
+                    yield entry
+                yield from scantree(entry.path, yield_dir=yield_dir)  # see below for Python 2.x
+            else:
                 yield entry
-            yield from scantree(entry.path, yield_dir=yield_dir)  # see below for Python 2.x
-        else:
-            yield entry
+    except PermissionError as e:
+        logger.warning(f"permission error at {path}. ignoring...")
 
 
 def scanfiles(path):
