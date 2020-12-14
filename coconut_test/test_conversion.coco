@@ -110,3 +110,8 @@ def test_omni_converter():
     #n_format = cast_imdef_str_to_imdef(format)[0]
     #assert format == n_format,f"{format} != {n_format}"
 
+def test_tuple_conversion():
+    from data_tree import auto
+    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    logger.info(auto(("image,RGB,RGB","image,RGB,RGB"))((None,None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))
+

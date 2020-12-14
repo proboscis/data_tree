@@ -283,6 +283,8 @@ def intra_tuple_conversions(state):
 
 
 def map_each(t,mappers):
+    logger.warning(f"items:{t}")
+    logger.warning(f"mappers:{mappers}")
     return tuple([f(item) for f,item in zip(mappers,t)])
 
 def smart_tuple_conversion(state,end):
@@ -293,6 +295,7 @@ def smart_tuple_conversion(state,end):
             for i in range(len(formats)):
                 c = SOLVER.solver.search_direct(formats[i],end[i])
                 cost += sum(e.cost for e in c.edges)
+                cs.append(c)
             res = [
                 (t->map_each(t,cs),
                 end,
