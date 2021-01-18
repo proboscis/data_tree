@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x19399837
+# __coconut_hash__ = 0xef1ec0a7
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -255,7 +255,8 @@ class AutoData:  # class AutoData:
         else:  #         else:
             return self.solver.solver.search(self.format, tag_matcher(**kwargs))  #             return self.solver.solver.search(self.format,tag_matcher(**kwargs))
 
-    def convert(self, format=None, **kwargs):  #     def convert(self,format=None,**kwargs):
+    def convert(self, format=None, **kwargs) -> 'AutoData':  #     def convert(self,format=None,**kwargs) -> AutoData:
+        """converts internal data to specified format."""  #         """converts internal data to specified format."""
         conversion = self.converter(format, **kwargs)  #         conversion = self.converter(format,**kwargs)
         if conversion.edges:  #         if conversion.edges:
             return AutoData(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)

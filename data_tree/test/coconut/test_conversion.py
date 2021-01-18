@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xbf3e8f03
+# __coconut_hash__ = 0xf4c4d607
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -147,3 +147,17 @@ def test_omni_converter():  # def test_omni_converter():
 #format = "numpy,float32,HW,L,0_1"
 #n_format = cast_imdef_str_to_imdef(format)[0]
 #assert format == n_format,f"{format} != {n_format}"
+
+def test_tuple_conversion():  # def test_tuple_conversion():
+    from data_tree import auto  #     from data_tree import auto
+    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    logger.info(auto(("image,RGB,RGB", "image,RGB,RGB"))((None, None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))  #     logger.info(auto(("image,RGB,RGB","image,RGB,RGB"))((None,None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))
+
+def test_rgb_to_yuv():  # def test_rgb_to_yuv():
+    from data_tree import auto  #     from data_tree import auto
+    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))  #     logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))

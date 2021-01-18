@@ -31,6 +31,8 @@ from filelock import Timeout, FileLock
 from multiprocessing import RLock
 from data_tree import auto
 from loguru import logger
+import numpy as np
+import numbers
 
 
 class CachedSeries(SourcedSeries):
@@ -199,7 +201,7 @@ class LazySeries(CachedSeries):
         self.flags = self.manager.list([False] * self.total)
         self.cache = self.manager.list([None] * self.total)
         self._index = np.arange(src.total)
-        self.prefer_slice = prefer_slice # not used currently
+        self.prefer_slice = prefer_slice  # not used currently
 
     def _get_item(self, index):
         if not self.flags[index]:
@@ -984,3 +986,95 @@ class LRUSeries(SourcedSeries):
 
     def _get_mask(self, mask):
         return self._smart_get(mask)
+
+
+class StructuredHdf5:
+    def __init__(self, hdf5file, key, size):
+        self.size = size
+        self.hdf5file = hdf5file
+        self.key = key
+
+    def set_value(self, index, value):
+        pass
+
+    def smart_get(self, smart):
+        pass
+
+
+def sample2SHdf5(hdf5file, key, sample, size):
+    if isinstance(sample, numbers.Number):
+        return NumberSHdf5(hdf5file, key, sample, size=size)
+    elif isinstance(sample, np.ndarray):
+        return NumberSHdf5(hdf5file, key, sample, size=size)
+    elif isinstance(sample, dict):
+        return DictSHdf5(hdf5file, key, sample, size)
+    elif isinstance(sample, tuple):
+        return TupleSHdf5(hdf5file, key, sample, size)
+    else:
+        raise RuntimeError(f"Structured Hdf5 does not support ")
+
+
+class NumberSHdf5(StructuredHdf5):
+    def __init__(self, hdf5file, key, sample, size):
+        super().__init__(hdf5file, key, size)
+        # TODO create dataset
+        if isinstance(sample, int):
+            sample = np.int64(sample)
+        elif isinstance(sample, float):
+            sample = np.float64(sample)
+        f = hdf5file
+        f.create_dataset("value", shape=shape, dtype=sample.dtype, **self.dataset_opts)
+
+        self.dataset = hdf5file[key]
+        ensure_path_exists(self.cache_path)
+        with self.lock:  # dont let multiple thread check this.
+            # why is this repeatedly called in batch gen?
+            # logger.info(
+            #    f"trying to open hdf5 for preparation at thread:{threading.currentThread().name} |pid:{os.getpid()} ")
+            with h5py.File(self.cache_path, mode="a") as f:  # tries to open lock even though it is locked..
+                # sometimes the file is already open after ensured.
+                if "src_hash" in f.attrs and f.attrs["src_hash"] != self.src_hash:
+                    os.remove(self.cache_path)
+                    logger.warning(f"deleted cache due to inconsistent hash of source. {self.cache_path}")
+
+            with h5py.File(self.cache_path, mode="a") as f:
+                if "src_hash" not in f.attrs:
+                    f.attrs["src_hash"] = self.src_hash
+                if not all(map(lambda item: item in f, "value flag".split())):
+                    sample = self.src[0]
+                    if isinstance(sample, int):
+                        sample = np.int64(sample)
+                    elif isinstance(sample, float):
+                        sample = np.float64(sample)
+                    if "value" not in f:
+                        if hasattr(sample, "shape"):
+                            shape = (self.total, *sample.shape)
+                        else:
+                            shape = (self.total,)
+                        if sample.dtype == np.float64:
+                            logger.warning(f"this dataset({self.__class__.__name__}) returns value with dtype:float64 ")
+
+                        if self.dataset_opts.get("chunks") is True:
+                            items_per_chunk = max(1024 * 1024 * 1 // sample.nbytes, 1)  # chunk is set to 1 MBytes
+
+                            self.dataset_opts["chunks"] = (items_per_chunk, *sample.shape)
+                        logger.info(f"dataset created with options:{self.dataset_opts}")
+                        logger.warning(f"dataset dtype: {sample.dtype}")
+                        f.create_dataset("value", shape=shape, dtype=sample.dtype, **self.dataset_opts)
+                        logger.info(f"created value in hdf5")
+                    if "flag" not in f:
+                        f.create_dataset("flag", data=np.zeros((self.total,), dtype=np.bool))
+                        logger.info(f"created flag in hdf5")
+                    logger.info(f"created hdf5 cache at {self.cache_path}.")
+                    f.flush()
+                    logger.info(f"{list(f.keys())}")
+
+
+class TupleSHdf5(StructuredHdf5):
+    def __init__(self, hdf5file, key, sample, size):
+        super().__init__(hdf5file, key, size)
+
+
+class DictSHdf5(StructuredHdf5):
+    def __init__(self, hdf5file, key, sample, size):
+        super().__init__(hdf5file, size)

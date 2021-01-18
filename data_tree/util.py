@@ -1,4 +1,5 @@
 import abc
+import json
 import os
 import pickle
 import shutil
@@ -19,7 +20,7 @@ from contextlib import contextmanager
 
 WARN_SLOW_PREFETCH = False
 import sys
-
+import pickle
 
 # logger.remove()
 # logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
@@ -82,10 +83,10 @@ def ensure_path_exists(fileName):
 def ensure_dir_exists(dirname):
     import os
     from os import path, makedirs
-    parent = os.path.dirname(fileName)
+    parent = os.path.dirname(dirname)
     if not path.exists(parent) and parent:
         try:
-            logger.info(f"making dirs for {fileName}")
+            logger.info(f"making dirs for {dirname}")
             makedirs(parent)
         except FileExistsError as fee:
             pass
@@ -177,6 +178,90 @@ def sorted_frozendict(_dict):
     return frozendict(sorted(_dict.items(), key=lambda item: item[0]))
 
 
+class ShelvedCache:
+    """
+    a cache that uses shelve and memory as backend
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.mem_cache = dict()
+        logger.info(f"using cache at {path}")
+        for k, v in self.items():
+            logger.debug(f"k:{k},v:{v}")
+
+    def get_cache(self):
+        import shelve
+        return shelve.open(self.path, writeback=True)
+
+    def __contains__(self, key):
+        key = pickle.dumps(key,0).decode()
+        #logger.info(f"query:{key},type:{type(key)}")
+        #logger.info(list(self.mem_cache.keys()))
+        if key in self.mem_cache:
+            return True
+        else:
+            with self.get_cache() as db:
+                #logger.info(list(db.keys()))
+                return key in db
+
+    def __setitem__(self, key, value):
+        logger.info(f"writing {value} to {key}")
+        key = pickle.dumps(key,0).decode()
+        self.mem_cache[key] = value
+        with self.get_cache() as db:
+            db[key] = value
+            db.sync()
+
+    def __getitem__(self, key):
+        key = pickle.dumps(key,0).decode()
+        if key in self.mem_cache:
+            return self.mem_cache[key]
+        else:
+            with self.get_cache() as db:
+                if key in db:
+                    res = db[key]
+                    self.mem_cache[key] = res
+                    return res
+                else:
+                    return self.__missing__(key)
+
+    def __missing__(self, key):
+        raise KeyError(key)
+
+    def items(self):
+        with self.get_cache() as db:
+            for k, v in db.items():
+                yield pickle.loads(k.encode()), v
+
+    def clear(self):
+        os.remove(self.path + ".db")
+
+
+class DefaultDict(dict):
+    def __init__(self, f):
+        super().__init__()
+        self.f = f
+
+    def __missing__(self, key):
+        logger.debug(f"missing:{key}")
+        res = self.f(key)
+        self[key] = res
+        return res
+
+
+class DefaultShelveCache(ShelvedCache):
+    def __init__(self, f, path):
+        super().__init__(path)
+        self.f = f
+
+    def __missing__(self, key):
+        jsonkey = pickle.loads(key.encode())
+        res = self.f(jsonkey)
+        self[jsonkey] = res
+        return res
+
+
 class PickledTrait:
 
     @property
@@ -265,7 +350,8 @@ def scan_images(path):
             if ext in EXTS:
                 yield item
 
-    return series(gen()).tag("dir_entries").update_metadata(scan_path=path).map(lambda p:p.path).tag("path").map(Image.open).tag("load_image")
+    return series(gen()).tag("dir_entries").update_metadata(scan_path=path).map(lambda p: p.path).tag("path").map(
+        Image.open).tag("load_image")
 
 
 def scan_images_cached(cache_path, scan_path) -> PickledTrait:

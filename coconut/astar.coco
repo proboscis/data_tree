@@ -6,6 +6,11 @@ import dill # for pickling inner lambda...
 from tqdm.autonotebook import tqdm
 from loguru import logger
 from itertools import chain
+from os.path import expanduser
+from data_tree.util import DefaultShelveCache
+import shelve
+import os
+from itertools import chain
 data Edge(src,dst,f,cost,name="unnamed")
 class NoRouteException(Exception)
 class ConversionError(Exception)
@@ -206,7 +211,9 @@ class AStarSolver:
         rules=None,
         smart_rules=None,
         heuristics = _zero_heuristics,
-        edge_cutter=_no_cutter):
+        edge_cutter=_no_cutter,
+        cache_path=os.path.join(expanduser("~"),".cache/autodata.shelve")
+        ):
         """
         rules: List[Rule]
         Rule: (state)->List[(converter:(data)->data,new_state,cost,conversion_name)]
@@ -219,6 +226,7 @@ class AStarSolver:
         self.neighbors_memo = LRU(MAX_MEMO) # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.
         self.search_memo = LRU(MAX_MEMO)
         self.smart_neighbors_memo = LRU(MAX_MEMO)
+        self.direct_search_cache = DefaultShelveCache(self._search_direct,cache_path)
         self.direct_search_memo = LRU(MAX_MEMO)
 
     def neighbors(self,node):
@@ -273,29 +281,46 @@ class AStarSolver:
                 return res
             match Failure(e,trc):
                 raise e
+    def _research_from_edges(self,edges):
+        searched_edges = list(chain(*[self._search_direct((src,dst,False)).edges for src,dst in edges]))
+        #logger.info(f"searched_edges:{searched_edges}")
+        return Conversion(searched_edges)
 
-    def search_direct(self,start,end,silent=False):
-        q = (start,end)
-        if q in self.direct_search_memo:
-            res = self.direct_search_memo[q]
-        else:
-            if not silent:
-                logger.debug(f"searching {start} to {end}")
-            res = astar_direct(
-                start=start,
-                end=end,
-                neighbors=self.neighbors,
-                smart_neighbors=self.smart_neighbors,
-                heuristics=self.heuristics,
-                edge_cutter=self.edge_cutter,
-                silent=silent
-            )
-            self.direct_search_memo[q] = res
+    def _search_direct(self,q):
+        # you cannot directly save the function.
+        # so you need to save the paths and re-search it
+        start,end,silent = q
+        if not silent:
+            logger.debug(f"searching {start} to {end}")
+        res = astar_direct(
+            start=start,
+            end=end,
+            neighbors=self.neighbors,
+            smart_neighbors=self.smart_neighbors,
+            heuristics=self.heuristics,
+            edge_cutter=self.edge_cutter,
+            silent=silent
+        )
         case res:
             match Success(res):
                 return res
             match Failure(e,trc):
                 raise e
+    def search_direct(self,start,end,silent=False):
+        key = (start,end,silent)
+        if key in self.direct_search_memo:
+            return self.direct_search_memo[key]
+        elif key in self.direct_search_cache:
+            edges = self.direct_search_cache[key]
+            conversion = self._research_from_edges(edges)
+            self.direct_search_memo[key] = conversion
+            logger.debug(f"researched_conversion:\n{conversion}")
+            return conversion
+        else:
+            conversion = self._search_direct(key)
+            self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
+            self.direct_search_memo[key] = conversion
+            return conversion
 
     def search_direct_any(self,start,ends):
         for cand in ends:
