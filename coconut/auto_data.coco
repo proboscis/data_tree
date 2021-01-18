@@ -204,7 +204,8 @@ class AutoData:
         else:
             return self.solver.solver.search(self.format,tag_matcher(**kwargs))
 
-    def convert(self,format=None,**kwargs):
+    def convert(self,format=None,**kwargs) -> AutoData:
+        """converts internal data to specified format."""
         conversion = self.converter(format,**kwargs)
         if conversion.edges:
             return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)

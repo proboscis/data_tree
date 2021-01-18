@@ -5,6 +5,7 @@ from data_tree.coconut.visualization import infer_widget
 from loguru import logger
 from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from math import sqrt
+from PIL import Image
 VR_0_1 = "0_1"
 VR_0_255 = "0_255"
 VR_None = "None"
@@ -124,6 +125,13 @@ def to_numpy(imdef:ImageDef)->List[Edge]:
                                 np.array,
                                 1,
                                 name="image_to_numpy")]
+        match PILImage("YCbCr",ch_repr):
+                    return [Edge(imdef,
+                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
+                                 np.array,
+                                 1,
+                                 name="YCbCr image to numpy"
+                    )]
 
         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
             return [Edge(imdef,
@@ -228,6 +236,28 @@ def drop_channel(imdef:ImageDef):
                         name=f"BCHW to BHW"
                        )]
     return []
+def enforce_mode(img,mode):
+    return Image.fromarray(np.array(img),mode)
+@to_imagedef
+def RGB_to_YCbCr(state):
+    case state:
+        match PILImage("RGB","RGB"):
+            return [Edge(
+            a=state,
+            b=PILImage("YCbCr","YCbCr"),
+            f= enforce_mode$(mode="RGB") ..> .convert("YCbCr"),
+            cost=1,
+            name="RGB to YCbCr"
+            )]
+        match PILImage("YCbCr","YCbCr"):
+            return [Edge(
+            a=state,
+            b=PILImage("RGB","RGB"),
+            f= enforce_mode$(mode="YCbCr") ..> .convert("RGB"),
+            cost=1,
+            name="YCbCr to RGB"
+            )]
+
 
 
 def en_batch(imdef:ImageDef):
@@ -397,6 +427,7 @@ _conversions =[
     to_rgba,
     drop_batch_tag,
     de_batch,
+    RGB_to_YCbCr,
 ]
 
 

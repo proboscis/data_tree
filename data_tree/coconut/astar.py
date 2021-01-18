@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xad80867a
+# __coconut_hash__ = 0x846b2f57
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -29,6 +29,11 @@ from data_tree.coconut.monad import Failure  # from data_tree.coconut.monad impo
 import dill  # for pickling inner lambda...  # import dill # for pickling inner lambda...
 from tqdm.autonotebook import tqdm  # from tqdm.autonotebook import tqdm
 from loguru import logger  # from loguru import logger
+from itertools import chain  # from itertools import chain
+from os.path import expanduser  # from os.path import expanduser
+from data_tree.util import DefaultShelveCache  # from data_tree.util import DefaultShelveCache
+import shelve  # import shelve
+import os  # import os
 from itertools import chain  # from itertools import chain
 class Edge(_coconut.collections.namedtuple("Edge", "src dst f cost name")):  # data Edge(src,dst,f,cost,name="unnamed")
     __slots__ = ()  # data Edge(src,dst,f,cost,name="unnamed")
@@ -210,7 +215,7 @@ class AStarSolver:  # class AStarSolver:
     so, lets have auto_data to hold solver in global variable and never pickle AStarSolver!.
     so forget about lru_cache pickling issues.
     """  #     """
-    def __init__(self, rules=None, smart_rules=None, heuristics=_zero_heuristics, edge_cutter=_no_cutter):  #     def __init__(self,
+    def __init__(self, rules=None, smart_rules=None, heuristics=_zero_heuristics, edge_cutter=_no_cutter, cache_path=os.path.join(expanduser("~"), ".cache/autodata.shelve")):  #     def __init__(self,
         """
         rules: List[Rule]
         Rule: (state)->List[(converter:(data)->data,new_state,cost,conversion_name)]
@@ -223,6 +228,7 @@ class AStarSolver:  # class AStarSolver:
         self.neighbors_memo = LRU(MAX_MEMO)  # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.  #         self.neighbors_memo = LRU(MAX_MEMO) # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.
         self.search_memo = LRU(MAX_MEMO)  #         self.search_memo = LRU(MAX_MEMO)
         self.smart_neighbors_memo = LRU(MAX_MEMO)  #         self.smart_neighbors_memo = LRU(MAX_MEMO)
+        self.direct_search_cache = DefaultShelveCache(self._search_direct, cache_path)  #         self.direct_search_cache = DefaultShelveCache(self._search_direct,cache_path)
         self.direct_search_memo = LRU(MAX_MEMO)  #         self.direct_search_memo = LRU(MAX_MEMO)
 
     def neighbors(self, node):  #     def neighbors(self,node):
@@ -282,22 +288,24 @@ class AStarSolver:  # class AStarSolver:
                 _coconut_case_check_0 = True  #             match Failure(e,trc):
             if _coconut_case_check_0:  #             match Failure(e,trc):
                 raise e  #                 raise e
+    def _research_from_edges(self, edges):  #     def _research_from_edges(self,edges):
+        searched_edges = list(chain(*[self._search_direct((src, dst, False)).edges for src, dst in edges]))  #         searched_edges = list(chain(*[self._search_direct((src,dst,False)).edges for src,dst in edges]))
+#logger.info(f"searched_edges:{searched_edges}")
+        return Conversion(searched_edges)  #         return Conversion(searched_edges)
 
-    def search_direct(self, start, end, silent=False):  #     def search_direct(self,start,end,silent=False):
-        q = (start, end)  #         q = (start,end)
-        if q in self.direct_search_memo:  #         if q in self.direct_search_memo:
-            res = self.direct_search_memo[q]  #             res = self.direct_search_memo[q]
-        else:  #         else:
-            if not silent:  #             if not silent:
-                logger.debug("searching {_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(end)))  #                 logger.debug(f"searching {start} to {end}")
-            res = astar_direct(start=start, end=end, neighbors=self.neighbors, smart_neighbors=self.smart_neighbors, heuristics=self.heuristics, edge_cutter=self.edge_cutter, silent=silent)  #             res = astar_direct(
-            self.direct_search_memo[q] = res  #             self.direct_search_memo[q] = res
-        _coconut_match_to = res  #         case res:
-        _coconut_case_check_1 = False  #         case res:
-        if (_coconut.isinstance(_coconut_match_to, Success)) and (_coconut.len(_coconut_match_to) == 1):  #         case res:
-            res = _coconut_match_to[0]  #         case res:
-            _coconut_case_check_1 = True  #         case res:
-        if _coconut_case_check_1:  #         case res:
+    def _search_direct(self, q):  #     def _search_direct(self,q):
+# you cannot directly save the function.
+# so you need to save the paths and re-search it
+        start, end, silent = q  #         start,end,silent = q
+        if not silent:  #         if not silent:
+            logger.debug("searching {_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(end)))  #             logger.debug(f"searching {start} to {end}")
+        res = astar_direct(start=start, end=end, neighbors=self.neighbors, smart_neighbors=self.smart_neighbors, heuristics=self.heuristics, edge_cutter=self.edge_cutter, silent=silent)  #         res = astar_direct(
+        _coconut_match_to = res  #             start=start,
+        _coconut_case_check_1 = False  #             start=start,
+        if (_coconut.isinstance(_coconut_match_to, Success)) and (_coconut.len(_coconut_match_to) == 1):  #             start=start,
+            res = _coconut_match_to[0]  #             start=start,
+            _coconut_case_check_1 = True  #             start=start,
+        if _coconut_case_check_1:  #             start=start,
             return res  #                 return res
         if not _coconut_case_check_1:  #             match Failure(e,trc):
             if (_coconut.isinstance(_coconut_match_to, Failure)) and (_coconut.len(_coconut_match_to) == 2):  #             match Failure(e,trc):
@@ -306,6 +314,21 @@ class AStarSolver:  # class AStarSolver:
                 _coconut_case_check_1 = True  #             match Failure(e,trc):
             if _coconut_case_check_1:  #             match Failure(e,trc):
                 raise e  #                 raise e
+    def search_direct(self, start, end, silent=False):  #     def search_direct(self,start,end,silent=False):
+        key = (start, end, silent)  #         key = (start,end,silent)
+        if key in self.direct_search_memo:  #         if key in self.direct_search_memo:
+            return self.direct_search_memo[key]  #             return self.direct_search_memo[key]
+        elif key in self.direct_search_cache:  #         elif key in self.direct_search_cache:
+            edges = self.direct_search_cache[key]  #             edges = self.direct_search_cache[key]
+            conversion = self._research_from_edges(edges)  #             conversion = self._research_from_edges(edges)
+            self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
+            logger.info("researched_conversion:\n{_coconut_format_0}".format(_coconut_format_0=(conversion)))  #             logger.info(f"researched_conversion:\n{conversion}")
+            return conversion  #             return conversion
+        else:  #         else:
+            conversion = self._search_direct(key)  #             conversion = self._search_direct(key)
+            self.direct_search_cache[key] = [(e.src, e.dst) for e in conversion.edges]  #             self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
+            self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
+            return conversion  #             return conversion
 
     def search_direct_any(self, start, ends):  #     def search_direct_any(self,start,ends):
         for cand in ends:  #         for cand in ends:
