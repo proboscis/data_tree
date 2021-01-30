@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x6d9f3c11
+# __coconut_hash__ = 0xf5054325
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -34,6 +34,8 @@ from itertools import product  # from itertools import product
 from loguru import logger  # from loguru import logger
 from collections import namedtuple  # from collections import namedtuple
 import numpy as np  # import numpy as np
+# actually, this kind of pattern matches are too hard to write in pure python. what do I do???
+# wait for pep622,pep642, to be implemented in python 3.10
 
 def imagedef2dict(imdef: 'ImageDef'):  # def imagedef2dict(imdef:ImageDef):
     _coconut_match_to = imdef  #     case imdef:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xd59c3d3f
+# __coconut_hash__ = 0x987f2e6f
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -338,6 +338,10 @@ class AStarSolver:  # class AStarSolver:
             conversion = self._search_direct(key)  #             conversion = self._search_direct(key)
             self.direct_search_cache[key] = [(e.src, e.dst) for e in conversion.edges]  #             self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
             self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
+# I can memo every path in conversion actually.
+# however since the states are in a different space than a query, no speedups can be done.
+# if this astar knows about casting, it can first search for a cache though..
+
             return conversion  #             return conversion
 
     def search_direct_any(self, start, ends):  #     def search_direct_any(self,start,ends):
