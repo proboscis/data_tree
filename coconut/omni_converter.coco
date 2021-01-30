@@ -14,7 +14,7 @@ import numpy as np
 
 def imagedef2dict(imdef:ImageDef):
     case imdef:
-        match ImageDef(data_type,tags):
+        match ImageDef(data_type,meta):
             case data_type:
                 match Numpy(dtype,arrange,ch_rpr,v_range):
                     info = dict(type="numpy",dtype=dtype,arrange=arrange,ch_rpr=ch_rpr,v_range=str(v_range))
@@ -28,7 +28,7 @@ def imagedef2dict(imdef:ImageDef):
                 raise RuntimeError(f"cannot convert unknown imagedef:{imdef} to dict.")
             return frozendict(
                 **info,
-                **{t:True for t in tags}
+                meta=meta
             )
     else:
         raise RuntimeError(f"cannot convert unknown imdef:{imdef} to dict.")
@@ -46,7 +46,7 @@ def cast_imdef_str_to_imdef(state):
             pass
 def imdef2imdef_str(imdef):
     case imdef:
-        match ImageDef(data_type,tags):
+        match ImageDef(data_type,meta):
             case data_type:
                 match Numpy(dtype,arrange,ch_rpr,v_range):
                     base = f"numpy,{dtype},{arrange},{ch_rpr},{v_range}"
@@ -58,10 +58,13 @@ def imdef2imdef_str(imdef):
                     base = f"image,{mode},{ch_rpr}"
             else:
                 raise RuntimeError(f"cannot convert unknown imagedef:{imdef} to str.")
-            if tags:
-                return base+f"|{','.join(tags)}"
+            if "shape" in meta:
+                shape_str = ":".join([str(s) for s in meta["shape"]])
+                res =  base+","+shape_str
             else:
-                return base
+                res = base
+            #logger.info(f"imdef_to_str:{res}")
+            return res
     else:
         raise RuntimeError(f"cannot convert unknown imdef:{imdef} to str.")
 def cast_imdef_to_imdef_str(imdef):
@@ -89,10 +92,10 @@ def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
 
 def rule_imgs2tile(state):
     case state:
-        match ImageDef(PILImages(mode,chrpr),tags):
+        match ImageDef(PILImages(mode,chrpr),meta):
             return [(
                 imgs2tile,
-                ImageDef(Numpy("uint8","HWC",chrpr,VR_0_255),tags),
+                ImageDef(Numpy("uint8","HWC",chrpr,VR_0_255),meta),
                 "imgs2tile",
                 10
             )]
@@ -100,7 +103,7 @@ def rule_imgs2tile(state):
 
 def rule_img2widget(state):
     case state:
-        match ImageDef(PILImage(_,_),tags):
+        match ImageDef(PILImage(_,_),meta):
             return [(
                 infer_widget,
                 "widget",
@@ -111,51 +114,51 @@ def rule_img2widget(state):
 def dict2imdef(state):
     if isinstance(state,Mapping):
         case state:
-            match {"type":"numpy","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
-                return [ImageDef(Numpy(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
-            match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,**tags}:
-                return [ImageDef(Torch(_dtype,_arng,_ch_rpr,_v_range),frozenset(tags.keys()))]
-            match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                return [ImageDef(PILImage(_mode,_ch_rpr),frozenset(tags.keys()))]
-            match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,**tags}:
-                return [ImageDef(PILImages(_mode,_ch_rpr),frozenset(tags.keys()))]
+            match {"type":"numpy","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
+                return [ImageDef(Numpy(_dtype,_arng,_ch_rpr,_v_range),meta)]
+            match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
+                return [ImageDef(Torch(_dtype,_arng,_ch_rpr,_v_range),meta)]
+            match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+                return [ImageDef(PILImage(_mode,_ch_rpr),meta)]
+            match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+                return [ImageDef(PILImages(_mode,_ch_rpr),meta)]
 
 def rule_numpy2img(state):
     if isinstance(state,Mapping):
         case state:
-            match {"type":"numpy","dtype":"uint8","ch_rpr":"RGB","arrange":"HWC","v_range":"0_255",**tags}:
+            match {"type":"numpy","dtype":"uint8","ch_rpr":"RGB","arrange":"HWC","v_range":"0_255","meta":meta}:
                 return [(
                     Image.fromarray,
-                    ImageDef(PILImage("RGB","RGB"),frozenset(tags.keys())),
+                    ImageDef(PILImage("RGB","RGB"),meta),
                     "Image.fromarray",
                     1
                 )]
-            match {"type":"numpy","dtype":"uint8","ch_rpr":"L","arrange":"HW","v_range":"0_255",**tags}:
+            match {"type":"numpy","dtype":"uint8","ch_rpr":"L","arrange":"HW","v_range":"0_255","meta":meta}:
                 return [(
                     Image.fromarray,
-                    ImageDef(PILImage("L","L"),frozenset(tags.keys())),
+                    ImageDef(PILImage("L","L"),meta),
                     "Image.fromarray",
                     1
                 )]
 
 def rule_image2gray(state):
     case state:
-        match ImageDef(PILImage(ch_rpr,ch_rpr2),tags):
+        match ImageDef(PILImage(ch_rpr,ch_rpr2),meta):
             return [
-                (.convert("L"),ImageDef(PILImage("L","L"),tags),"image2gray",10),
-                (.convert("LA"),ImageDef(PILImage("LA","LA"),tags),"image2gray-alpha",10),
+                (.convert("L"),ImageDef(PILImage("L","L"),meta),"image2gray",10),
+                (.convert("LA"),ImageDef(PILImage("LA","LA"),meta),"image2gray-alpha",10),
                    ]
 
 def rule_image2lab(state):
     from skimage import color
     case state:
-        match ImageDef(Numpy("float64","HWC","RGB","0_1"),tags):
+        match ImageDef(Numpy("float64","HWC","RGB","0_1"),meta):
             return [
-                (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),tags),"sklearn.color.rgb2lab")
+                (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
             ]
-        match ImageDef(Numpy("float64","HWC","LAB","LAB"),tags):
+        match ImageDef(Numpy("float64","HWC","LAB","LAB"),meta):
             return [
-                (color.lab2rgb,ImageDef(Numpy("float64","HWC","RGB","0_1"),tags),"sklearn.color.lab2rgb")
+                (color.lab2rgb,ImageDef(Numpy("float64","HWC","RGB","0_1"),meta),"sklearn.color.lab2rgb")
             ]
 
 def convert_ignore_channel(ary,f):
@@ -171,26 +174,26 @@ def convert_ignore_channel(ary,f):
 def rule_rgba2laba(state):
     from skimage import color
     case state:
-        match ImageDef(Numpy("float64","HWC","RGBA","0_1"),tags):
+        match ImageDef(Numpy("float64","HWC","RGBA","0_1"),meta):
             return [
-                (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),tags),"rgba2laba (ignores alpha)")
+                (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
             ]
-        match ImageDef(Numpy("float64","HWC","LABA","LABA"),tags):
+        match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
             return [
-                (a->convert_ignore_channel(a,color.lab2rgb),ImageDef(Numpy("float64","HWC","RGBA","0_1"),tags),"laba2rgba (ignores alpha)")
+                (a->convert_ignore_channel(a,color.lab2rgb),ImageDef(Numpy("float64","HWC","RGBA","0_1"),meta),"laba2rgba (ignores alpha)")
             ]
 
 
 def rule_lab_value_conversion(state):
     case state:
-        match ImageDef(Numpy("float64","HWC","LAB","LAB"),tags):
-            return [((_vr_lab_to_0_1,ImageDef(Numpy("float64","HWC","LAB","0_1"),tags),"vr_lab_to_0_1"))]
-        match ImageDef(Numpy("float64","HWC","LABA","LABA"),tags):
-            return [((a->convert_ignore_channel(a,_vr_lab_to_0_1),ImageDef(Numpy("float64","HWC","LABA","0_1"),tags),"vr_laba_to_0_1"))]
-        match ImageDef(Numpy("float64","HWC","LAB","0_1"),tags):
-            return [((_0_1_to_vr_lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),tags),"0_1_to_vr_lab"))]
-        match ImageDef(Numpy("float64","HWC","LABA","0_1"),tags):
-            return [((a->convert_ignore_channel(a,_0_1_to_vr_lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),tags),"vr_0_1_to_laba"))]
+        match ImageDef(Numpy("float64","HWC","LAB","LAB"),meta):
+            return [((_vr_lab_to_0_1,ImageDef(Numpy("float64","HWC","LAB","0_1"),meta),"vr_lab_to_0_1"))]
+        match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
+            return [((a->convert_ignore_channel(a,_vr_lab_to_0_1),ImageDef(Numpy("float64","HWC","LABA","0_1"),meta),"vr_laba_to_0_1"))]
+        match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
+            return [((_0_1_to_vr_lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"0_1_to_vr_lab"))]
+        match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
+            return [((a->convert_ignore_channel(a,_0_1_to_vr_lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"vr_0_1_to_laba"))]
 
 def _vr_lab_to_0_1(ary):
     r = ary.copy()
@@ -361,11 +364,10 @@ def numpys_to_numpy(state):
             ]
 def tensor_to_list(state):
     case state:
-        match {"arrange":arng,**kwargs} if len(arng) > 1:
-
+        match {"arrange":arng,"meta":{"shape":shape,**other_meta},**kwargs} if len(arng) > 1:
             return [
                 (tensor->[t for t in tensor],
-                AutoList(frozendict(arrange=arng[1:],**kwargs)),
+                AutoList(fdict(arrange=arng[1:],meta=fdict({"shape":shape[1:],**other_meta}),**kwargs)),
                 f"tensor to list of tensor",
                 2)
             ]
@@ -670,12 +672,18 @@ def tuple_edge_cutter(x,y,end):
     return False
 
 
-
+def debug(trace):
+    n = trace[-1]
+    case n.dst:
+        match ImageDef(TensorLike(dtype,"WC",_,_),_):
+            pass
+    logger.debug(n)
 
 SOLVER = AutoSolver(
     rules=DEFAULT_RULES.copy(),
     smart_rules=SMART_RULES.copy(),
     heuristics=tuple_widget_heuristics,
     edge_cutter=tuple_edge_cutter,
+    debug_hook=None
     )
 auto_img = format->value->AutoData(value,format,SOLVER)
