@@ -83,6 +83,11 @@ class FileStorageManager(DBProvider):
         :param conditions:
         :return: absolute path matching condition
         """
+        import inspect
+        curframe = inspect.currentframe()
+        calframe = inspect.getouterframes(curframe, 2)
+        logger.debug('caller name:', calframe[1][3])
+        ...
         def find_matching():
             for k, c in self.info_cache.value.items():
                 matched = True

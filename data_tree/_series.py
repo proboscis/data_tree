@@ -11,13 +11,14 @@ from random import randint
 from typing import Iterable, NamedTuple, Union, Mapping, Callable, List
 
 import h5py
+
 import numpy as np
-from IPython.core.display import display
+
 from frozendict import frozendict
-from ipywidgets import interactive
+
 from lazy import lazy as en_lazy
 from loguru import logger
-from lru import LRU
+from pyvis.network import Network
 from sklearn.preprocessing import MinMaxScaler
 from tqdm.autonotebook import tqdm
 
@@ -25,12 +26,8 @@ from data_tree.cache import ConditionedFilePathProvider
 from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2, get_global_holder
-
 from data_tree.resource import Resource
-from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled, shared_npy_array_like
-import ipywidgets as widgets
-from pprintpp import pformat
-from pyvis.network import Network
+from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled
 
 
 def en_numpy(data):
@@ -149,6 +146,7 @@ class Trace(NamedTuple):
         if viz is not None:
             viz = viz(data)
         elif isinstance(data, Trace):
+            from ipywidgets import widgets
             viz = widgets.HTML(value=repr(data).replace("\n", "<br>"))
         else:
             viz = infer_widget(data)
@@ -191,6 +189,7 @@ class Trace(NamedTuple):
         for i, t in enumerate(traces[:depth]):
             if mask[i]:
                 vis = t.visualization()
+                from ipywidgets import widgets
                 assert isinstance(vis,
                                   widgets.Widget), f"visualization must be an instance of widget. viz from {t} is {vis}"
                 hbox = widgets.VBox([
@@ -770,14 +769,16 @@ class Series(metaclass=abc.ABCMeta):
                 show_indices=show_indices
             )
 
+        from ipywidgets import interactive
         return interactive(_l, i=(0, len(self) - 1, 1))
 
     def widget(self):
-
+        from IPython.core.display import display
         max_depth = len(self.trace(0).ancestors()) + 1
 
         def _interactive(**kwargs):
             def wrapper(f):
+                from ipywidgets import interactive
                 return interactive(f, **kwargs)
 
             return wrapper
@@ -786,6 +787,7 @@ class Series(metaclass=abc.ABCMeta):
         def show_tree():
             print(repr(self))
 
+        from ipywidgets import widgets
         @_interactive(depth=widgets.IntSlider(value=1, min=1, max=max_depth))
         def show_trace(depth):
             display(self.interact(depth=depth))
@@ -1351,8 +1353,8 @@ class MappedSeries(IndexedSeries):
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
     def __str__(self):
-        single_name = self.single_mapper.__name__ if hasattr(self.single_mapper,"__name__")  else None
-        slice_name = self.slice_mapper.__name__ if hasattr(self.slice_mapper,"__name__") else None
+        single_name = self.single_mapper.__name__ if hasattr(self.single_mapper, "__name__") else None
+        slice_name = self.slice_mapper.__name__ if hasattr(self.slice_mapper, "__name__") else None
         return f"{self.__class__.__name__} #{id(self)} | {single_name} | {slice_name}"
 
 

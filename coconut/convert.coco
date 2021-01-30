@@ -6,11 +6,13 @@ from loguru import logger
 from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from math import sqrt
 from PIL import Image
+import torch
+import re
 VR_0_1 = "0_1"
 VR_0_255 = "0_255"
 VR_None = "None"
 VR_XYZ_Normalized = "XYZ_Normalized"
-
+ch_splitter = re.compile("[A-Z][a-z]*").findall
 
 data DataType
 #TODO add shape information to tensorlike
@@ -97,13 +99,13 @@ def to_imagedef(f):
 def to_PILImages(imdef:ImageDef)->Edge[]:
     #TODO fix pattern match on data class
     case imdef:
-        match Numpy("uint8","BHWC", c_repr, =VR_0_255) if len(c_repr) == 3 or len(c_repr) == 4:
-            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name="numpy batch to Images")]
-        match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
+        match Numpy("uint8","BHWC", c_repr, =VR_0_255) if len(ch_splitter(c_repr)) in (3,4):
+            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name=f"numpy batch {ch_repr} to Images")]
+        match Numpy("uint8","BHW",c_repr,=VR_0_255):
             return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
+        match Numpy("uint8","HW",c_repr,=VR_0_255):
+            return [Edge(imdef,PILImage("L",c_repr), Image.fromarray ..> .convert("L"),2,name="numpy HW to PIL Image")]
     return []
-
-
 @to_imagedef
 def to_numpy(imdef:ImageDef)->List[Edge]:
     case imdef:
@@ -200,6 +202,8 @@ def change_arrange(imdef:ImageDef):
         return [Edge(imdef,imdef.__class__(dtype,_arng,ch_repr,vr),f,1,name=f"{arng} to {_arng}") for f,_arng in change_arng(imdef)]
     return []
 
+
+
 @to_imagedef
 def select_channel(imdef:ImageDef):
     case imdef:
@@ -209,35 +213,45 @@ def select_channel(imdef:ImageDef):
                          b=imdef.__class__(dtype,"BHWC",c,vr),
                          f=selector(i),
                          cost=10,
-                         name=f"select {c} channel") for i,c in enumerate(ch_repr)]
+                         name=f"select {c} channel") for i,c in enumerate(ch_splitter(ch_repr))]
         match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_repr) >= 1:
             selector = i->a->a[:,[i]]
             return [Edge(a=imdef,
                          b=imdef.__class__(dtype,"BCHW",c,vr),
                          f=selector(i),
                          cost=10,
-                         name=f"select {c} channel") for i,c in enumerate(ch_repr)]
+                         name=f"select {c} channel") for i,c in enumerate(ch_splitter(ch_repr))]
     return []
 @to_imagedef
 def drop_channel(imdef:ImageDef):
     case imdef:
-        match TensorLike(dtype,="BHWC",ch_repr,vr) if len(ch_repr) == 1:
+        match TensorLike(dtype,="BHWC",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
             return [Edge(a=imdef,
                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
                         f=a->a[:,:,:,0],
                         cost = 1,
                         name=f"BHWC to BHW"
                        )]
-        match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_repr) == 1:
+        match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
             return [Edge(a=imdef,
                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
                         f=a->a[:,0],
                         cost = 1,
                         name=f"BCHW to BHW"
                        )]
+        match TensorLike(dtype,"CHW",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
+            return [Edge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
+                         f = a->a[0],cost=1,name="CHW to HW"
+            )]
+        match TensorLike(dtype,"HWC",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
+            return [Edge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
+                         f = a->a[:,:,0], cost=1,name="HWC to HW"
+            )]
+
     return []
 def enforce_mode(img,mode):
     return Image.fromarray(np.array(img),mode)
+"""
 @to_imagedef
 def RGB_to_YCbCr(state):
     case state:
@@ -257,6 +271,108 @@ def RGB_to_YCbCr(state):
             cost=1,
             name="YCbCr to RGB"
             )]
+"""
+def rgb_to_ycbcr(image: torch.Tensor) -> torch.Tensor:
+    r"""Convert an RGB image to YCbCr.
+
+    Args:
+        image (torch.Tensor): RGB Image to be converted to YCbCr with shape :math:`(*, 3, H, W)`.
+
+    Returns:
+        torch.Tensor: YCbCr version of the image with shape :math:`(*, 3, H, W)`.
+
+    Examples:
+        >>> input = torch.rand(2, 3, 4, 5)
+        >>> output = rgb_to_ycbcr(input)  # 2x3x4x5
+    """
+    if not isinstance(image, torch.Tensor):
+        raise TypeError("Input type is not a torch.Tensor. Got {}".format(
+            type(image)))
+
+    if len(image.shape) < 3 or image.shape[-3] != 3:
+        raise ValueError("Input size must have a shape of (*, 3, H, W). Got {}"
+                         .format(image.shape))
+
+    r: torch.Tensor = image[..., 0, :, :]
+    g: torch.Tensor = image[..., 1, :, :]
+    b: torch.Tensor = image[..., 2, :, :]
+
+    delta: float = 0.5
+    y: torch.Tensor = 0.299 * r + 0.587 * g + 0.114 * b
+    cb: torch.Tensor = (b - y) * 0.564 + delta
+    cr: torch.Tensor = (r - y) * 0.713 + delta
+    return torch.stack([y, cb, cr], -3)
+
+
+def ycbcr_to_rgb(image: torch.Tensor) -> torch.Tensor:
+    r"""Convert an YCbCr image to RGB.
+
+    The image data is assumed to be in the range of (0, 1).
+
+    Args:
+        image (torch.Tensor): YCbCr Image to be converted to RGB with shape :math:`(*, 3, H, W)`.
+
+    Returns:
+        torch.Tensor: RGB version of the image with shape :math:`(*, 3, H, W)`.
+
+    Examples:
+        >>> input = torch.rand(2, 3, 4, 5)
+        >>> output = ycbcr_to_rgb(input)  # 2x3x4x5
+    """
+    if not isinstance(image, torch.Tensor):
+        raise TypeError("Input type is not a torch.Tensor. Got {}".format(
+            type(image)))
+
+    if len(image.shape) < 3 or image.shape[-3] != 3:
+        raise ValueError("Input size must have a shape of (*, 3, H, W). Got {}"
+                         .format(image.shape))
+
+    y: torch.Tensor = image[..., 0, :, :]
+    cb: torch.Tensor = image[..., 1, :, :]
+    cr: torch.Tensor = image[..., 2, :, :]
+
+    delta: float = 0.5
+    cb_shifted: torch.Tensor = cb - delta
+    cr_shifted: torch.Tensor = cr - delta
+
+    r: torch.Tensor = y + 1.403 * cr_shifted
+    g: torch.Tensor = y - 0.714 * cr_shifted - 0.344 * cb_shifted
+    b: torch.Tensor = y + 1.773 * cb_shifted
+    return torch.stack([r, g, b], -3)
+
+
+@to_imagedef
+def RGB_to_YCbCr(state):
+    case state:
+        match Torch("float32","BCHW","RGB",=VR_0_1):
+            return [Edge(a=state,
+                         b=Torch("float32","BCHW","RGB",VR_0_1),
+                         f=rgb_to_ycbcr,
+                         cost=1,
+                         name="RGB_to_YCbCr(torch)"
+            )]
+        match Torch("float32","BCHW","YCbCr",=VR_0_1):
+            return [Edge(a=state,
+                         b=Torch("float32","BCHW","RGB",VR_0_1),
+                         f=ycbcr_to_rgb,
+                         cost=1,
+                         name="YCbCr_to_RGB(torch)"
+                        )]
+        match Torch("float32","CHW","RGB",=VR_0_1):
+            return [Edge(a=state,
+                         b=Torch("float32","CHW","YCbCr",VR_0_1),
+                         f=rgb_to_ycbcr,
+                         cost=1,
+                         name="RGB_to_YCbCr(torch)"
+            )]
+        match Torch("float32","CHW","YCbCr",=VR_0_1):
+            return [Edge(a=state,
+                         b=Torch("float32","CHW","RGB",VR_0_1),
+                         f=ycbcr_to_rgb,
+                         cost=1,
+                         name="YCbCr_to_RGB(torch)"
+                        )]
+
 
 
 

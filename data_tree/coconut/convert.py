@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xfbd5ca
+# __coconut_hash__ = 0x36244153
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -29,11 +29,13 @@ from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar 
 from data_tree.coconut.astar import NoRouteException  # from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from math import sqrt  # from math import sqrt
 from PIL import Image  # from PIL import Image
+import torch  # import torch
+import re  # import re
 VR_0_1 = "0_1"  # VR_0_1 = "0_1"
 VR_0_255 = "0_255"  # VR_0_255 = "0_255"
 VR_None = "None"  # VR_None = "None"
 VR_XYZ_Normalized = "XYZ_Normalized"  # VR_XYZ_Normalized = "XYZ_Normalized"
-
+ch_splitter = re.compile("[A-Z][a-z]*").findall  # ch_splitter = re.compile("[A-Z][a-z]*").findall
 
 class DataType(_coconut.collections.namedtuple("DataType", "")):  # data DataType
     __slots__ = ()  # data DataType
@@ -219,21 +221,23 @@ def to_PILImages(imdef: 'ImageDef') -> '_coconut.typing.Sequence[Edge]':  # def 
     if (_coconut.isinstance(_coconut_match_to, Numpy)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "uint8") and (_coconut_match_to[1] == "BHWC") and (_coconut_match_to[3] == VR_0_255):  #     case imdef:
         c_repr = _coconut_match_to[2]  #     case imdef:
         _coconut_case_check_0 = True  #     case imdef:
-    if _coconut_case_check_0 and not (len(c_repr) == 3 or len(c_repr) == 4):  #     case imdef:
+    if _coconut_case_check_0 and not (len(ch_splitter(c_repr)) in (3, 4)):  #     case imdef:
         _coconut_case_check_0 = False  #     case imdef:
     if _coconut_case_check_0:  #     case imdef:
-        return [Edge(imdef, PILImages(c_repr, c_repr), lambda ary: [(Image.fromarray)(img) for img in ary], 2, name="numpy batch to Images")]  #             return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name="numpy batch to Images")]
-    if not _coconut_case_check_0:  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-        if (_coconut.isinstance(_coconut_match_to, Numpy)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "uint8") and (_coconut_match_to[1] == "BHW") and (_coconut_match_to[3] == VR_0_255):  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-            c_repr = _coconut_match_to[2]  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-            _coconut_case_check_0 = True  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-        if _coconut_case_check_0 and not (len(c_repr) == 1):  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-            _coconut_case_check_0 = False  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
-        if _coconut_case_check_0:  #         match Numpy("uint8","BHW",c_repr,=VR_0_255) if len(c_repr) == 1:
+        return [Edge(imdef, PILImages(c_repr, c_repr), lambda ary: [(Image.fromarray)(img) for img in ary], 2, name="numpy batch {_coconut_format_0} to Images".format(_coconut_format_0=(c_repr)))]  #             return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name=f"numpy batch {c_repr} to Images")]
+    if not _coconut_case_check_0:  #         match Numpy("uint8","BHW",c_repr,=VR_0_255):
+        if (_coconut.isinstance(_coconut_match_to, Numpy)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "uint8") and (_coconut_match_to[1] == "BHW") and (_coconut_match_to[3] == VR_0_255):  #         match Numpy("uint8","BHW",c_repr,=VR_0_255):
+            c_repr = _coconut_match_to[2]  #         match Numpy("uint8","BHW",c_repr,=VR_0_255):
+            _coconut_case_check_0 = True  #         match Numpy("uint8","BHW",c_repr,=VR_0_255):
+        if _coconut_case_check_0:  #         match Numpy("uint8","BHW",c_repr,=VR_0_255):
             return [Edge(imdef, PILImages("L", c_repr), lambda ary: [(_coconut_base_compose(Image.fromarray, (_coconut.operator.methodcaller("convert", "L"), 0)))(img) for img in ary], 2, name="numpy batch to images")]  #             return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
+    if not _coconut_case_check_0:  #         match Numpy("uint8","HW",c_repr,=VR_0_255):
+        if (_coconut.isinstance(_coconut_match_to, Numpy)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "uint8") and (_coconut_match_to[1] == "HW") and (_coconut_match_to[3] == VR_0_255):  #         match Numpy("uint8","HW",c_repr,=VR_0_255):
+            c_repr = _coconut_match_to[2]  #         match Numpy("uint8","HW",c_repr,=VR_0_255):
+            _coconut_case_check_0 = True  #         match Numpy("uint8","HW",c_repr,=VR_0_255):
+        if _coconut_case_check_0:  #         match Numpy("uint8","HW",c_repr,=VR_0_255):
+            return [Edge(imdef, PILImage("L", c_repr), _coconut_base_compose(Image.fromarray, (_coconut.operator.methodcaller("convert", "L"), 0)), 2, name="numpy HW to PIL Image")]  #             return [Edge(imdef,PILImage("L",c_repr), Image.fromarray ..> .convert("L"),2,name="numpy HW to PIL Image")]
     return []  #     return []
-
-
 @to_imagedef  # @to_imagedef
 def to_numpy(imdef: 'ImageDef') -> 'List[Edge]':  # def to_numpy(imdef:ImageDef)->List[Edge]:
     _coconut_match_to = imdef  #     case imdef:
@@ -363,6 +367,8 @@ def change_arrange(imdef: 'ImageDef'):  # def change_arrange(imdef:ImageDef):
         return [Edge(imdef, imdef.__class__(dtype, _arng, ch_repr, vr), f, 1, name="{_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(arng), _coconut_format_1=(_arng))) for f, _arng in change_arng(imdef)]  #         return [Edge(imdef,imdef.__class__(dtype,_arng,ch_repr,vr),f,1,name=f"{arng} to {_arng}") for f,_arng in change_arng(imdef)]
     return []  #     return []
 
+
+
 @to_imagedef  # @to_imagedef
 def select_channel(imdef: 'ImageDef'):  # def select_channel(imdef:ImageDef):
     _coconut_match_to = imdef  #     case imdef:
@@ -376,7 +382,7 @@ def select_channel(imdef: 'ImageDef'):  # def select_channel(imdef:ImageDef):
         _coconut_case_check_6 = False  #     case imdef:
     if _coconut_case_check_6:  #     case imdef:
         selector = lambda i: lambda a: a[:, :, :, [i]]  #             selector = i->a->a[:,:,:,[i]]
-        return [Edge(a=imdef, b=imdef.__class__(dtype, "BHWC", c, vr), f=selector(i), cost=10, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_repr)]  #             return [Edge(a=imdef,
+        return [Edge(a=imdef, b=imdef.__class__(dtype, "BHWC", c, vr), f=selector(i), cost=10, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_splitter(ch_repr))]  #             return [Edge(a=imdef,
     if not _coconut_case_check_6:  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
         if (_coconut.isinstance(_coconut_match_to, TensorLike)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[1] == "BCHW"):  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
             dtype = _coconut_match_to[0]  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
@@ -387,7 +393,7 @@ def select_channel(imdef: 'ImageDef'):  # def select_channel(imdef:ImageDef):
             _coconut_case_check_6 = False  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
         if _coconut_case_check_6:  #                          b=imdef.__class__(dtype,"BHWC",c,vr),
             selector = lambda i: lambda a: a[:, [i]]  #             selector = i->a->a[:,[i]]
-            return [Edge(a=imdef, b=imdef.__class__(dtype, "BCHW", c, vr), f=selector(i), cost=10, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_repr)]  #             return [Edge(a=imdef,
+            return [Edge(a=imdef, b=imdef.__class__(dtype, "BCHW", c, vr), f=selector(i), cost=10, name="select {_coconut_format_0} channel".format(_coconut_format_0=(c))) for i, c in enumerate(ch_splitter(ch_repr))]  #             return [Edge(a=imdef,
     return []  #     return []
 @to_imagedef  # @to_imagedef
 def drop_channel(imdef: 'ImageDef'):  # def drop_channel(imdef:ImageDef):
@@ -398,7 +404,7 @@ def drop_channel(imdef: 'ImageDef'):  # def drop_channel(imdef:ImageDef):
         ch_repr = _coconut_match_to[2]  #     case imdef:
         vr = _coconut_match_to[3]  #     case imdef:
         _coconut_case_check_7 = True  #     case imdef:
-    if _coconut_case_check_7 and not (len(ch_repr) == 1):  #     case imdef:
+    if _coconut_case_check_7 and not (len(ch_splitter(ch_repr)) == 1):  #     case imdef:
         _coconut_case_check_7 = False  #     case imdef:
     if _coconut_case_check_7:  #     case imdef:
         return [Edge(a=imdef, b=imdef.__class__(dtype, "BHW", ch_repr, vr), f=lambda a: a[:, :, :, 0], cost=1, name="BHWC to BHW".format())]  #             return [Edge(a=imdef,
@@ -408,26 +414,144 @@ def drop_channel(imdef: 'ImageDef'):  # def drop_channel(imdef:ImageDef):
             ch_repr = _coconut_match_to[2]  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
             vr = _coconut_match_to[3]  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
             _coconut_case_check_7 = True  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
-        if _coconut_case_check_7 and not (len(ch_repr) == 1):  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+        if _coconut_case_check_7 and not (len(ch_splitter(ch_repr)) == 1):  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
             _coconut_case_check_7 = False  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
         if _coconut_case_check_7:  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
             return [Edge(a=imdef, b=imdef.__class__(dtype, "BHW", ch_repr, vr), f=lambda a: a[:, 0], cost=1, name="BCHW to BHW".format())]  #             return [Edge(a=imdef,
+    if not _coconut_case_check_7:  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+        if (_coconut.isinstance(_coconut_match_to, TensorLike)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[1] == "CHW"):  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+            dtype = _coconut_match_to[0]  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+            ch_repr = _coconut_match_to[2]  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+            vr = _coconut_match_to[3]  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+            _coconut_case_check_7 = True  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+        if _coconut_case_check_7 and not (len(ch_splitter(ch_repr)) == 1):  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+            _coconut_case_check_7 = False  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+        if _coconut_case_check_7:  #                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
+            return [Edge(a=imdef, b=imdef.__class__(dtype, "HW", ch_repr, vr), f=lambda a: a[0], cost=1, name="CHW to HW")]  #             return [Edge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
+    if not _coconut_case_check_7:  #                          f = a->a[0],cost=1,name="CHW to HW"
+        if (_coconut.isinstance(_coconut_match_to, TensorLike)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[1] == "HWC"):  #                          f = a->a[0],cost=1,name="CHW to HW"
+            dtype = _coconut_match_to[0]  #                          f = a->a[0],cost=1,name="CHW to HW"
+            ch_repr = _coconut_match_to[2]  #                          f = a->a[0],cost=1,name="CHW to HW"
+            vr = _coconut_match_to[3]  #                          f = a->a[0],cost=1,name="CHW to HW"
+            _coconut_case_check_7 = True  #                          f = a->a[0],cost=1,name="CHW to HW"
+        if _coconut_case_check_7 and not (len(ch_splitter(ch_repr)) == 1):  #                          f = a->a[0],cost=1,name="CHW to HW"
+            _coconut_case_check_7 = False  #                          f = a->a[0],cost=1,name="CHW to HW"
+        if _coconut_case_check_7:  #                          f = a->a[0],cost=1,name="CHW to HW"
+            return [Edge(a=imdef, b=imdef.__class__(dtype, "HW", ch_repr, vr), f=lambda a: a[:, :, 0], cost=1, name="HWC to HW")]  #             return [Edge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
+
     return []  #     return []
 def enforce_mode(img, mode):  # def enforce_mode(img,mode):
     return Image.fromarray(np.array(img), mode)  #     return Image.fromarray(np.array(img),mode)
+"""
+@to_imagedef
+def RGB_to_YCbCr(state):
+    case state:
+        match PILImage("RGB","RGB"):
+            return [Edge(
+            a=state,
+            b=PILImage("YCbCr","YCbCr"),
+            f= enforce_mode$(mode="RGB") ..> .convert("YCbCr"),
+            cost=1,
+            name="RGB to YCbCr"
+            )]
+        match PILImage("YCbCr","YCbCr"):
+            return [Edge(
+            a=state,
+            b=PILImage("RGB","RGB"),
+            f= enforce_mode$(mode="YCbCr") ..> .convert("RGB"),
+            cost=1,
+            name="YCbCr to RGB"
+            )]
+"""  # """
+def rgb_to_ycbcr(image: 'torch.Tensor') -> 'torch.Tensor':  # def rgb_to_ycbcr(image: torch.Tensor) -> torch.Tensor:
+    r"""Convert an RGB image to YCbCr.
+
+    Args:
+        image (torch.Tensor): RGB Image to be converted to YCbCr with shape :math:`(*, 3, H, W)`.
+
+    Returns:
+        torch.Tensor: YCbCr version of the image with shape :math:`(*, 3, H, W)`.
+
+    Examples:
+        >>> input = torch.rand(2, 3, 4, 5)
+        >>> output = rgb_to_ycbcr(input)  # 2x3x4x5
+    """  #     """
+    if not isinstance(image, torch.Tensor):  #     if not isinstance(image, torch.Tensor):
+        raise TypeError("Input type is not a torch.Tensor. Got {}".format(type(image)))  #         raise TypeError("Input type is not a torch.Tensor. Got {}".format(
+
+    if len(image.shape) < 3 or image.shape[-3] != 3:  #     if len(image.shape) < 3 or image.shape[-3] != 3:
+        raise ValueError("Input size must have a shape of (*, 3, H, W). Got {}".format(image.shape))  #         raise ValueError("Input size must have a shape of (*, 3, H, W). Got {}"
+
+    r = image[..., 0, :, :]  # type: torch.Tensor  #     r: torch.Tensor = image[..., 0, :, :]
+    g = image[..., 1, :, :]  # type: torch.Tensor  #     g: torch.Tensor = image[..., 1, :, :]
+    b = image[..., 2, :, :]  # type: torch.Tensor  #     b: torch.Tensor = image[..., 2, :, :]
+
+    delta = 0.5  # type: float  #     delta: float = 0.5
+    y = 0.299 * r + 0.587 * g + 0.114 * b  # type: torch.Tensor  #     y: torch.Tensor = 0.299 * r + 0.587 * g + 0.114 * b
+    cb = (b - y) * 0.564 + delta  # type: torch.Tensor  #     cb: torch.Tensor = (b - y) * 0.564 + delta
+    cr = (r - y) * 0.713 + delta  # type: torch.Tensor  #     cr: torch.Tensor = (r - y) * 0.713 + delta
+    return torch.stack([y, cb, cr], -3)  #     return torch.stack([y, cb, cr], -3)
+
+
+def ycbcr_to_rgb(image: 'torch.Tensor') -> 'torch.Tensor':  # def ycbcr_to_rgb(image: torch.Tensor) -> torch.Tensor:
+    r"""Convert an YCbCr image to RGB.
+
+    The image data is assumed to be in the range of (0, 1).
+
+    Args:
+        image (torch.Tensor): YCbCr Image to be converted to RGB with shape :math:`(*, 3, H, W)`.
+
+    Returns:
+        torch.Tensor: RGB version of the image with shape :math:`(*, 3, H, W)`.
+
+    Examples:
+        >>> input = torch.rand(2, 3, 4, 5)
+        >>> output = ycbcr_to_rgb(input)  # 2x3x4x5
+    """  #     """
+    if not isinstance(image, torch.Tensor):  #     if not isinstance(image, torch.Tensor):
+        raise TypeError("Input type is not a torch.Tensor. Got {}".format(type(image)))  #         raise TypeError("Input type is not a torch.Tensor. Got {}".format(
+
+    if len(image.shape) < 3 or image.shape[-3] != 3:  #     if len(image.shape) < 3 or image.shape[-3] != 3:
+        raise ValueError("Input size must have a shape of (*, 3, H, W). Got {}".format(image.shape))  #         raise ValueError("Input size must have a shape of (*, 3, H, W). Got {}"
+
+    y = image[..., 0, :, :]  # type: torch.Tensor  #     y: torch.Tensor = image[..., 0, :, :]
+    cb = image[..., 1, :, :]  # type: torch.Tensor  #     cb: torch.Tensor = image[..., 1, :, :]
+    cr = image[..., 2, :, :]  # type: torch.Tensor  #     cr: torch.Tensor = image[..., 2, :, :]
+
+    delta = 0.5  # type: float  #     delta: float = 0.5
+    cb_shifted = cb - delta  # type: torch.Tensor  #     cb_shifted: torch.Tensor = cb - delta
+    cr_shifted = cr - delta  # type: torch.Tensor  #     cr_shifted: torch.Tensor = cr - delta
+
+    r = y + 1.403 * cr_shifted  # type: torch.Tensor  #     r: torch.Tensor = y + 1.403 * cr_shifted
+    g = y - 0.714 * cr_shifted - 0.344 * cb_shifted  # type: torch.Tensor  #     g: torch.Tensor = y - 0.714 * cr_shifted - 0.344 * cb_shifted
+    b = y + 1.773 * cb_shifted  # type: torch.Tensor  #     b: torch.Tensor = y + 1.773 * cb_shifted
+    return torch.stack([r, g, b], -3)  #     return torch.stack([r, g, b], -3)
+
+
 @to_imagedef  # @to_imagedef
 def RGB_to_YCbCr(state):  # def RGB_to_YCbCr(state):
     _coconut_match_to = state  #     case state:
     _coconut_case_check_8 = False  #     case state:
-    if (_coconut.isinstance(_coconut_match_to, PILImage)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut_match_to[0] == "RGB") and (_coconut_match_to[1] == "RGB"):  #     case state:
+    if (_coconut.isinstance(_coconut_match_to, Torch)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "float32") and (_coconut_match_to[1] == "BCHW") and (_coconut_match_to[2] == "RGB") and (_coconut_match_to[3] == VR_0_1):  #     case state:
         _coconut_case_check_8 = True  #     case state:
     if _coconut_case_check_8:  #     case state:
-        return [Edge(a=state, b=PILImage("YCbCr", "YCbCr"), f=_coconut_base_compose(_coconut.functools.partial(enforce_mode, mode="RGB"), (_coconut.operator.methodcaller("convert", "YCbCr"), 0)), cost=1, name="RGB to YCbCr")]  #             return [Edge(
-    if not _coconut_case_check_8:  #             a=state,
-        if (_coconut.isinstance(_coconut_match_to, PILImage)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut_match_to[0] == "YCbCr") and (_coconut_match_to[1] == "YCbCr"):  #             a=state,
-            _coconut_case_check_8 = True  #             a=state,
-        if _coconut_case_check_8:  #             a=state,
-            return [Edge(a=state, b=PILImage("RGB", "RGB"), f=_coconut_base_compose(_coconut.functools.partial(enforce_mode, mode="YCbCr"), (_coconut.operator.methodcaller("convert", "RGB"), 0)), cost=1, name="YCbCr to RGB")]  #             return [Edge(
+        return [Edge(a=state, b=Torch("float32", "BCHW", "RGB", VR_0_1), f=rgb_to_ycbcr, cost=1, name="RGB_to_YCbCr(torch)")]  #             return [Edge(a=state,
+    if not _coconut_case_check_8:  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+        if (_coconut.isinstance(_coconut_match_to, Torch)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "float32") and (_coconut_match_to[1] == "BCHW") and (_coconut_match_to[2] == "YCbCr") and (_coconut_match_to[3] == VR_0_1):  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+            _coconut_case_check_8 = True  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+        if _coconut_case_check_8:  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+            return [Edge(a=state, b=Torch("float32", "BCHW", "RGB", VR_0_1), f=ycbcr_to_rgb, cost=1, name="YCbCr_to_RGB(torch)")]  #             return [Edge(a=state,
+    if not _coconut_case_check_8:  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+        if (_coconut.isinstance(_coconut_match_to, Torch)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "float32") and (_coconut_match_to[1] == "CHW") and (_coconut_match_to[2] == "RGB") and (_coconut_match_to[3] == VR_0_1):  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+            _coconut_case_check_8 = True  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+        if _coconut_case_check_8:  #                          b=Torch("float32","BCHW","RGB",VR_0_1),
+            return [Edge(a=state, b=Torch("float32", "CHW", "YCbCr", VR_0_1), f=rgb_to_ycbcr, cost=1, name="RGB_to_YCbCr(torch)")]  #             return [Edge(a=state,
+    if not _coconut_case_check_8:  #                          b=Torch("float32","CHW","YCbCr",VR_0_1),
+        if (_coconut.isinstance(_coconut_match_to, Torch)) and (_coconut.len(_coconut_match_to) == 4) and (_coconut_match_to[0] == "float32") and (_coconut_match_to[1] == "CHW") and (_coconut_match_to[2] == "YCbCr") and (_coconut_match_to[3] == VR_0_1):  #                          b=Torch("float32","CHW","YCbCr",VR_0_1),
+            _coconut_case_check_8 = True  #                          b=Torch("float32","CHW","YCbCr",VR_0_1),
+        if _coconut_case_check_8:  #                          b=Torch("float32","CHW","YCbCr",VR_0_1),
+            return [Edge(a=state, b=Torch("float32", "CHW", "RGB", VR_0_1), f=ycbcr_to_rgb, cost=1, name="YCbCr_to_RGB(torch)")]  #             return [Edge(a=state,
+
 
 
 

@@ -1,8 +1,6 @@
 import abc
-import json
 import os
-import pickle
-import shutil
+from contextlib import contextmanager
 from datetime import datetime
 from hashlib import sha1
 from queue import Queue, Full
@@ -10,16 +8,14 @@ from threading import Thread
 
 import numpy as np
 import pandas as pd
+from easydict import EasyDict as edict
 from filelock import FileLock
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
-from easydict import EasyDict as edict
 from tqdm.autonotebook import tqdm
-from contextlib import contextmanager
 
 WARN_SLOW_PREFETCH = False
-import sys
 import pickle
 
 # logger.remove()
@@ -184,11 +180,10 @@ class ShelvedCache:
     """
 
     def __init__(self, path):
+        import filelock
         self.path = path
+        self.lock = filelock.FileLock(path+".lock")
         self.mem_cache = dict()
-        logger.info(f"using cache at {path}")
-        for k, v in self.items():
-            logger.debug(f"k:{k},v:{v}")
 
     def get_cache(self):
         import shelve
@@ -196,8 +191,6 @@ class ShelvedCache:
 
     def __contains__(self, key):
         key = pickle.dumps(key,0).decode()
-        #logger.info(f"query:{key},type:{type(key)}")
-        #logger.info(list(self.mem_cache.keys()))
         if key in self.mem_cache:
             return True
         else:
@@ -206,10 +199,9 @@ class ShelvedCache:
                 return key in db
 
     def __setitem__(self, key, value):
-        logger.info(f"writing {value} to {key}")
         key = pickle.dumps(key,0).decode()
         self.mem_cache[key] = value
-        with self.get_cache() as db:
+        with self.lock, self.get_cache() as db:
             db[key] = value
             db.sync()
 
@@ -218,7 +210,7 @@ class ShelvedCache:
         if key in self.mem_cache:
             return self.mem_cache[key]
         else:
-            with self.get_cache() as db:
+            with self.lock, self.get_cache() as db:
                 if key in db:
                     res = db[key]
                     self.mem_cache[key] = res
@@ -230,12 +222,13 @@ class ShelvedCache:
         raise KeyError(key)
 
     def items(self):
-        with self.get_cache() as db:
+        with self.lock, self.get_cache() as db:
             for k, v in db.items():
                 yield pickle.loads(k.encode()), v
 
     def clear(self):
-        os.remove(self.path + ".db")
+        with self.lock:
+            os.remove(self.path + ".db")
 
 
 class DefaultDict(dict):
@@ -343,7 +336,7 @@ def scan_images(path):
     EXTS = {"jpg", "png", "gif", "jpeg"}
 
     def gen():
-        for item in tqdm(scantree(path), desc="scanning directory for images..."):
+        for item in tqdm(scantree(path), desc=f"scanning {path} for images..."):
             ext = item.name.split(".")
             if len(ext):
                 ext = ext[-1]

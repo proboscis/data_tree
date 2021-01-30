@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xef1ec0a7
+# __coconut_hash__ = 0xfce0bd37
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -197,11 +197,6 @@ class AutoSolver:  # class AutoSolver:
             print("converted:{_coconut_format_0}".format(_coconut_format_0=(x)))  #             print(f"converted:{x}")
         return x  #         return x
 
-    def new_auto_data(self, value, format):  #     def new_auto_data(self,value,format):
-        return AutoData(value, format, self)  #         return AutoData(value,format,self)
-
-
-
 
 
 class TagMatcher:  # class TagMatcher:
@@ -259,11 +254,26 @@ class AutoData:  # class AutoData:
         """converts internal data to specified format."""  #         """converts internal data to specified format."""
         conversion = self.converter(format, **kwargs)  #         conversion = self.converter(format,**kwargs)
         if conversion.edges:  #         if conversion.edges:
-            return AutoData(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)
+            return self.__class__(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
         else:  #         else:
             return self  #             return self
+    def search_converter(self, f):  #     def search_converter(self,f):
+        return self.solver.solver.search(self.format, f)  #         return self.solver.solver.search(self.format,f)
 
-
+    def search(self, matcher, ignore_error=True) -> 'AutoData':  #     def search(self,matcher,ignore_error=True) -> AutoData:
+        if ignore_error:  #         if ignore_error:
+            def _matcher(state):  #             def _matcher(state):
+                try:  #                 try:
+                    return matcher(state)  #                     return matcher(state)
+                except Exception as e:  #                 except Exception as e:
+                    pass  #                     pass
+            conversion = self.search_converter(_matcher)  #             conversion = self.search_converter(_matcher)
+        else:  #         else:
+            conversion = self.search_converter(matcher)  #             conversion = self.search_converter(matcher)
+        if conversion.edges:  #         if conversion.edges:
+            return self.__class__(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
+        else:  #         else:
+            return self  #             return self
 
     def to(self, format=None, **kwargs):  # I want 'to' to accept format string too  #     def to(self,format=None,**kwargs): # I want 'to' to accept format string too
 # if format is given, use direct matching.
@@ -279,10 +289,10 @@ class AutoData:  # class AutoData:
             format = new_format  #             format = new_format
         else:  #         else:
             format = self.format  #             format = self.format
-        return AutoData(f(self.value), format, self.solver)  #         return AutoData(f(self.value),format,self.solver)
+        return self.__class__(f(self.value), format, self.solver)  #         return self.__class__(f(self.value),format,self.solver)
 
     def map_in(self, start_format, f, new_format=None):  #     def map_in(self,start_format,f,new_format=None):
-        return AutoData(f(self.to(start_format)), (lambda _coconut_none_coalesce_item: self.format if _coconut_none_coalesce_item is None else _coconut_none_coalesce_item)(new_format), self.solver)  #         return AutoData(f(self.to(start_format)),new_format??self.format,self.solver)
+        return self.__class__(f(self.to(start_format)), (lambda _coconut_none_coalesce_item: self.format if _coconut_none_coalesce_item is None else _coconut_none_coalesce_item)(new_format), self.solver)  #         return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver)
 
     def neighbors(self):  #     def neighbors(self):
         return self.solver.solver.neighbors(self.format)  #         return self.solver.solver.neighbors(self.format)
@@ -295,7 +305,7 @@ class AutoData:  # class AutoData:
         (display)(self.to("widget"))  #         self.to("widget") |> display
 
     def __repr__(self):  #     def __repr__(self):
-        return "<AutoData {_coconut_format_0}>".format(_coconut_format_0=(self.format))  #         return f"<AutoData {self.format}>"
+        return "<{_coconut_format_0} {_coconut_format_1}>".format(_coconut_format_0=(self.__class__), _coconut_format_1=(self.format))  #         return f"<{self.__class__} {self.format}>"
 
     def _repr_png_(self):  #     def _repr_png_(self):
         try:  #         try:
@@ -305,7 +315,7 @@ class AutoData:  # class AutoData:
             return None  #             return None
 
     def cast(self, format):  #     def cast(self,format):
-        return AutoData(self.value, format, self.solver)  #         return AutoData(self.value,format,self.solver)
+        return self.__class__(self.value, format, self.solver)  #         return self.__class__(self.value,format,self.solver)
 
     def show(self):  #     def show(self):
         from matplotlib.pyplot import imshow  #         from matplotlib.pyplot import imshow,show

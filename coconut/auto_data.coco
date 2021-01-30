@@ -146,11 +146,6 @@ class AutoSolver:
             print(f"converted:{x}")
         return x
 
-    def new_auto_data(self,value,format):
-        return AutoData(value,format,self)
-
-
-
 
 
 class TagMatcher:
@@ -208,12 +203,27 @@ class AutoData:
         """converts internal data to specified format."""
         conversion = self.converter(format,**kwargs)
         if conversion.edges:
-            return AutoData(conversion(self.value),conversion.edges[-1].dst,self.solver)
+            return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
+        else:
+            return self
+    def search_converter(self,f):
+        return self.solver.solver.search(self.format,f)
+
+    def search(self,matcher,ignore_error=True) -> AutoData:
+        if ignore_error:
+            def _matcher(state):
+                try:
+                    return matcher(state)
+                except Exception as e:
+                    pass
+            conversion = self.search_converter(_matcher)
+        else:
+            conversion = self.search_converter(matcher)
+        if conversion.edges:
+            return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
         else:
             return self
 
-
-            
     def to(self,format=None,**kwargs): # I want 'to' to accept format string too
         # if format is given, use direct matching.
         # else use tag matching
@@ -228,10 +238,10 @@ class AutoData:
             format = new_format
         else:
             format = self.format
-        return AutoData(f(self.value),format,self.solver)
+        return self.__class__(f(self.value),format,self.solver)
 
     def map_in(self,start_format,f,new_format=None):
-        return AutoData(f(self.to(start_format)),new_format??self.format,self.solver)
+        return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver)
 
     def neighbors(self):
         return self.solver.solver.neighbors(self.format)
@@ -244,7 +254,7 @@ class AutoData:
         self.to("widget") |> display
 
     def __repr__(self):
-        return f"<AutoData {self.format}>"
+        return f"<{self.__class__} {self.format}>"
 
     def _repr_png_(self):
         try:
@@ -254,7 +264,7 @@ class AutoData:
             return None
 
     def cast(self,format):
-        return AutoData(self.value,format,self.solver)
+        return self.__class__(self.value,format,self.solver)
 
     def show(self):
         from matplotlib.pyplot import imshow,show
