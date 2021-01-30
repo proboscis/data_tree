@@ -42,7 +42,11 @@ class Conversion:
         return x
 
     def __getitem__(self,item):
-        return Conversion(self.edges[item])
+        if isinstance(item,int):
+            edges = [(self.edges[item])]
+        else:
+            edges = self.edges[item]
+        return Conversion(edges)
 
     def __repr__(self):
         if len(self.edges):
@@ -144,8 +148,11 @@ def _astar_direct(
                    _HeapContainer(scores[start],(start,[])))
     visited = 0
     bar = tqdm(desc="solving with astar_direct")
+    last_bar_update = visited
     while to_visit:
-        bar.update(1)
+        if visited - last_bar_update > 1000:
+            bar.update(visited-last_bar_update)
+            last_bar_update = visited
         hc = heapq.heappop(to_visit)
         score = hc.score
         (pos,trace) = hc.data
@@ -170,7 +177,10 @@ def _astar_direct(
         normal_nodes = list(neighbors(pos))
         smart_nodes = list(smart_neighbors(pos,end))
         #logger.debug(f"{normal_nodes},{smart_nodes}")
-        for mapper,next_node,cost,name in chain(normal_nodes,smart_nodes):
+        if visited % 10000 == 0:
+            msg = str(pos)[:50]
+            bar.set_description(f"""pos:{msg:<50}""")
+        for i,(mapper,next_node,cost,name) in enumerate(chain(normal_nodes,smart_nodes)):
             assert isinstance(cost,int),f"cost is not a number:{pos}"
             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
             try:
@@ -282,7 +292,7 @@ class AStarSolver:
             match Failure(e,trc):
                 raise e
     def _research_from_edges(self,edges):
-        searched_edges = list(chain(*[self._search_direct((src,dst,False)).edges for src,dst in edges]))
+        searched_edges = list(chain(*[self._search_direct((src,dst,True)).edges for src,dst in edges]))
         #logger.info(f"searched_edges:{searched_edges}")
         return Conversion(searched_edges)
 
@@ -320,6 +330,10 @@ class AStarSolver:
             conversion = self._search_direct(key)
             self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
             self.direct_search_memo[key] = conversion
+            # I can memo every path in conversion actually.
+            # however since the states are in a different space than a query, no speedups can be done.
+            # if this astar knows about casting, it can first search for a cache though..
+
             return conversion
 
     def search_direct_any(self,start,ends):

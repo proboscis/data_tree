@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x5e725dec
+# __coconut_hash__ = 0x6d9f3c11
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -20,7 +20,8 @@ _coconut_sys.path.pop(0)
 # Compiled Coconut: -----------------------------------------------------------
 
 from data_tree.coconut.convert import *  # from data_tree.coconut.convert import *
-from data_tree.coconut.auto_data import AutoSolver  # from data_tree.coconut.auto_data import AutoSolver
+from data_tree.coconut.auto_data import AutoSolver  # from data_tree.coconut.auto_data import AutoSolver,AutoData
+from data_tree.coconut.auto_data import AutoData  # from data_tree.coconut.auto_data import AutoSolver,AutoData
 from data_tree.coconut.monad import try_monad  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Try  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Success  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
@@ -33,6 +34,7 @@ from itertools import product  # from itertools import product
 from loguru import logger  # from loguru import logger
 from collections import namedtuple  # from collections import namedtuple
 import numpy as np  # import numpy as np
+
 def imagedef2dict(imdef: 'ImageDef'):  # def imagedef2dict(imdef:ImageDef):
     _coconut_match_to = imdef  #     case imdef:
     _coconut_case_check_1 = False  #     case imdef:
@@ -155,9 +157,11 @@ def imgs2tile(imgs, w=1024, h=1024, max_image=100, padding=1):  # def imgs2tile(
     mode = imgs[0].mode  #     mode = imgs[0].mode
     ch = len(mode)  #     ch = len(mode)
 #nrow = int(sqrt(len(imgs[:max_image]))+0.5)
-    nrow = int(sqrt(len(imgs[:max_image]))) + 1  #     nrow = int(sqrt(len(imgs[:max_image]))) + 1
+    n_imgs = len(imgs[:max_image])  #     n_imgs = len(imgs[:max_image])
+    nrow = int(sqrt(n_imgs))  #     nrow = int(sqrt(n_imgs))
+    if (nrow * nrow < n_imgs):  #     if (nrow*nrow < n_imgs):
+        nrow += 1  #         nrow += 1
     r = int((w - ((nrow + 1) * padding)) / nrow)  #     r = int((w-((nrow+1)*padding))/nrow)
-
 
     imgs = np.array([((np.array)(img.resize((r, r)))) for img in imgs[:max_image]])  #     imgs = np.array([(img.resize((r,r)) |> np.array) for img in imgs[:max_image]])
     if ch == 1:  #     if ch == 1:
@@ -539,14 +543,15 @@ def smart_tuple_conversion(state, end):  # def smart_tuple_conversion(state,end)
             logger.debug("cost:{_coconut_format_0}".format(_coconut_format_0=(cost)))  #             logger.debug(f"cost:{cost}")
             return [(lambda t: widgets.VBox(f(t)), end, "{_coconut_format_0}->{_coconut_format_1}".format(_coconut_format_0=(state), _coconut_format_1=(end)), cost + 1)]  #             return [(
 
-class AutoList(_coconut.collections.namedtuple("AutoList", "state")):  # data AutoList(state)
-    __slots__ = ()  # data AutoList(state)
-    __ne__ = _coconut.object.__ne__  # data AutoList(state)
-    def __eq__(self, other):  # data AutoList(state)
-        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data AutoList(state)
-    def __hash__(self):  # data AutoList(state)
-        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data AutoList(state)
-
+class AutoList(_coconut.collections.namedtuple("AutoList", "state")):  # data AutoList(state):
+    __slots__ = ()  # data AutoList(state):
+    __ne__ = _coconut.object.__ne__  # data AutoList(state):
+    def __eq__(self, other):  # data AutoList(state):
+        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data AutoList(state):
+    def __hash__(self):  # data AutoList(state):
+        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data AutoList(state):
+    def __str__(self):  #     def __str__(self):
+        return "[{_coconut_format_0}]".format(_coconut_format_0=(self.state))  #         return f"[{self.state}]"
 
 
 def unlist(items):  # def unlist(items):
@@ -640,6 +645,7 @@ def rgb_to_rgba(state):  # def rgb_to_rgba(state):
 def pix2pix_normalizer(nc):  # def pix2pix_normalizer(nc):
     from torchvision import transforms  #     import torchvision.transforms as transforms
     return transforms.Normalize((0.5,) * nc, (0.5,) * nc)  #     return transforms.Normalize((0.5,)*nc,(0.5,)*nc)
+
 
 def torch_img_to_pixpix_input(state):  # def torch_img_to_pixpix_input(state):
     import torch  #     import torch
@@ -764,22 +770,37 @@ def torch_img_to_pixpix_input(state):  # def torch_img_to_pixpix_input(state):
 @memoize()  # @memoize()
 def _VGG_NORMALIZER():  # def _VGG_NORMALIZER():
     from torchvision import transforms  #     import torchvision.transforms as transforms
-    return transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  #     return transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
+    nrm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  #     nrm = transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
+    return nrm  #     return nrm
+def inverse_vgg_prep(tensor):  # def inverse_vgg_prep(tensor):
+    return tensor * torch.tensor([0.229, 0.224, 0.225])[:, None, None] + torch.tensor([0.485, 0.456, 0.406])[:, None, None]  #     return tensor * torch.tensor([0.229,0.224,0.225])[:,None,None] + torch.tensor([0.485,0.456,0.406])[:,None,None]
+def inverse_vgg_prep_batch(tensor):  # def inverse_vgg_prep_batch(tensor):
+    return tensor * torch.tensor([0.229, 0.224, 0.225])[None, :, None, None] + torch.tensor([0.485, 0.456, 0.406])[None, :, None, None]  #     return tensor * torch.tensor([0.229,0.224,0.225])[None,:,None,None] + torch.tensor([0.485,0.456,0.406])[None,:,None,None]
 def torch_img_to_vgg_prep(state):  # def torch_img_to_vgg_prep(state):
     VGG_NORMALIZER = _VGG_NORMALIZER()  #     VGG_NORMALIZER = _VGG_NORMALIZER()
     _coconut_match_to = state  #     case state:
     _coconut_case_check_24 = False  #     case state:
-    if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #     case state:
-        _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_2 = _coconut_match_to.get("arrange", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_3 = _coconut_match_to.get("v_range", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_4 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #     case state:
-        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "torch") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "float32") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "CHW") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "0_1") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "RGB"):  #     case state:
-            kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #     case state:
-            _coconut_case_check_24 = True  #     case state:
+    if _coconut_match_to == "vgg_prep":  #     case state:
+        _coconut_case_check_24 = True  #     case state:
     if _coconut_case_check_24:  #     case state:
-        return [(VGG_NORMALIZER, "vgg_prep".format(), "convert to vgg normalized input", 1)]  #             return [(
+        return [(inverse_vgg_prep, "torch,float32,CHW,RGB,0_1", "inverse from vgg_prep", 1)]  #             return [(
+    if not _coconut_case_check_24:  #                 inverse_vgg_prep,
+        if _coconut_match_to == "vgg_prep_batch":  #                 inverse_vgg_prep,
+            _coconut_case_check_24 = True  #                 inverse_vgg_prep,
+        if _coconut_case_check_24:  #                 inverse_vgg_prep,
+            return [(inverse_vgg_prep_batch, "torch,float32,BCHW,RGB,0_1", "inverse from vgg_prep_batch", 1)]  #             return [(
+    if not _coconut_case_check_24:  #                 inverse_vgg_prep_batch,
+        if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 inverse_vgg_prep_batch,
+            _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 inverse_vgg_prep_batch,
+            _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #                 inverse_vgg_prep_batch,
+            _coconut_match_temp_2 = _coconut_match_to.get("arrange", _coconut_sentinel)  #                 inverse_vgg_prep_batch,
+            _coconut_match_temp_3 = _coconut_match_to.get("v_range", _coconut_sentinel)  #                 inverse_vgg_prep_batch,
+            _coconut_match_temp_4 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #                 inverse_vgg_prep_batch,
+            if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "torch") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "float32") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "CHW") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "0_1") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "RGB"):  #                 inverse_vgg_prep_batch,
+                kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #                 inverse_vgg_prep_batch,
+                _coconut_case_check_24 = True  #                 inverse_vgg_prep_batch,
+        if _coconut_case_check_24:  #                 inverse_vgg_prep_batch,
+            return [(VGG_NORMALIZER, "vgg_prep".format(), "convert to vgg normalized input", 1)]  #             return [(
     if not _coconut_case_check_24:  #                 VGG_NORMALIZER,
         if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 VGG_NORMALIZER,
             _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 VGG_NORMALIZER,
@@ -818,7 +839,9 @@ def repeat_ch(state):  # def repeat_ch(state):
     if _coconut_case_check_25 and not (len(ch) == 1):  #     case state:
         _coconut_case_check_25 = False  #     case state:
     if _coconut_case_check_25:  #     case state:
-        return [(lambda a: np.repeat(np.array(a)[:, :, None], 3, axis=2), frozendict(type="numpy", dtype="uint8", arrange="HWC", ch_rpr=ch * 3, v_range="0_255"), "repeat_channel_3", 5)]  #             return [
+        return [(lambda a: np.repeat(np.array(a)[:, :, None], 3, axis=2), frozendict(type="numpy", dtype="uint8", arrange="HWC", ch_rpr=ch * 3, v_range="0_255"), "repeat_channel_3", 50)]  #             return [
+
+
 
 def lll_is_rgb(state):  # def lll_is_rgb(state):
     _coconut_match_to = state  #     case state:
@@ -831,8 +854,27 @@ def lll_is_rgb(state):  # def lll_is_rgb(state):
     if _coconut_case_check_26:  #     case state:
         return [frozendict(ch_rpr="RGB", **kwargs)]  #             return [frozendict(ch_rpr="RGB",**kwargs)]
 
+
+
 DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(to_visdom_function), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image2lab), AutoSolver.create_conversion_rule(rule_rgba2laba), AutoSolver.create_conversion_rule(rule_lab_value_conversion), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
+
 SMART_RULES = [AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),]  # SMART_RULES =[
+
+try:  # try:
+    import wandb  #     import wandb
+    def img_to_wandb_img(state):  #     def img_to_wandb_img(state):
+        _coconut_match_to = state  #         case state:
+        _coconut_case_check_27 = False  #         case state:
+        if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImage)) and (_coconut.len(_coconut_match_to[0]) == 2):  #         case state:
+            _coconut_case_check_27 = True  #         case state:
+        if _coconut_case_check_27:  #         case state:
+            return [(lambda img: wandb.Image(img), "wandb.Image", "image to wandb image", 1)]  #                 return [(
+    DEFAULT_RULES.append(AutoSolver.create_conversion_rule(img_to_wandb_img))  #     DEFAULT_RULES.append(AutoSolver.create_conversion_rule(img_to_wandb_img))
+    logger.warning("added wandb related conversions".format())  #     logger.warning(f"added wandb related conversions")
+except Exception as e:  # except Exception as e:
+    logger.warning("could not add wandb related conversions since wandb could not be imported".format())  #     logger.warning(f"could not add wandb related conversions since wandb could not be imported")
+
+
 def tuple_distance(x, y):  # def tuple_distance(x,y):
     assert len(x) == len(y), "cannot compare two tuples with different length"  #     assert len(x) == len(y),"cannot compare two tuples with different length"
     return len(x) - sum(tuple([i == j for i, j in zip(x, y)]))  #     return len(x) - sum(tuple([i==j for i,j in zip(x,y)]))
@@ -892,4 +934,4 @@ def tuple_edge_cutter(x, y, end):  # def tuple_edge_cutter(x,y,end):
 
 
 SOLVER = AutoSolver(rules=DEFAULT_RULES.copy(), smart_rules=SMART_RULES.copy(), heuristics=tuple_widget_heuristics, edge_cutter=tuple_edge_cutter)  # SOLVER = AutoSolver(
-auto_img = lambda format: lambda value: SOLVER.new_auto_data(value, format)  # auto_img = format->value->SOLVER.new_auto_data(value,format)
+auto_img = lambda format: lambda value: AutoData(value, format, SOLVER)  # auto_img = format->value->AutoData(value,format,SOLVER)

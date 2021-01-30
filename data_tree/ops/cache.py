@@ -1,38 +1,33 @@
-import ctypes
 import multiprocessing
+import multiprocessing
+import numbers
 import os
 import pickle
 import queue
 import shelve
 import threading
 from contextlib import contextmanager
-from typing import Union
+# from threading import RLock
+from multiprocessing import RLock
 
 import h5py
 import numpy as np
 from PIL import Image
-from lru import LRU
-
-from data_tree.coconut.astar import Conversion
+from filelock import FileLock
 from lazy import lazy as en_lazy
-# from loguru import logger
 from loguru import logger
-from tqdm._tqdm_notebook import tqdm_notebook
-
-from data_tree import Series, IdentityIndexer, Indexer
-from data_tree.resource import ContextResource
-from data_tree._series import SourcedSeries, IndexedSeries, NumpySeries, MappedSeries
-from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_generator
-from data_tree import series
+from lru import LRU
 from tqdm.autonotebook import tqdm
 
-from filelock import Timeout, FileLock
-# from threading import RLock
-from multiprocessing import RLock
 from data_tree import auto
-from loguru import logger
-import numpy as np
-import numbers
+from data_tree._series import SourcedSeries, NumpySeries, MappedSeries, Series
+from data_tree.coconut.astar import Conversion
+from data_tree.indexer import IdentityIndexer, Indexer
+from data_tree.resource import ContextResource
+from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_generator
+
+
+# from loguru import logger
 
 
 class CachedSeries(SourcedSeries):
@@ -268,7 +263,8 @@ class Hdf5CachedSeries(CachedSeries):
         self._indexer = IdentityIndexer(self.total)
         self.src_hash = "None" if src_hash is None else src_hash
         self.dataset_opts = dataset_opts
-        self.lock = RLock()  # FileLock(self.cache_path + ".lock")
+        # self.lock = RLock()  # FileLock(self.cache_path + ".lock")
+        self.lock = FileLock(self.cache_path + ".lock")
 
     def prepared(self):
         ensure_path_exists(self.cache_path)
@@ -723,12 +719,18 @@ class Hdf5ClosedFileAccessor(Series):
     def parents(self):
         return self._parents
 
+    @contextmanager
+    def opener(self):
+        with self.lock, h5py.File(name=self.file_path, mode="r") as f:
+            yield f
+
     def __init__(self, file_path, key, parents=None):
         from functools import partial
         self._parents = [] if parents is None else parents
         self.key = key
         self.file_path = file_path
-        self.opener = partial(h5py.File, name=self.file_path, mode="r")
+        self.lock = FileLock(self.file_path + ".lock")
+
         with self.opener() as hdf5:
             self.shape = hdf5[self.key].shape[1:]
             self.dtype = hdf5[self.key].dtype
@@ -760,7 +762,6 @@ class Hdf5ClosedFileAccessor(Series):
 
 
 int2bytes = lambda a: a.to_bytes(4, "big")
-from functools import partial
 
 
 def putter(item_queue, result_queue, termination_event, db_path, exception_event):

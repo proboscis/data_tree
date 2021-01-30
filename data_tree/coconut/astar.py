@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x846b2f57
+# __coconut_hash__ = 0xd59c3d3f
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -71,7 +71,11 @@ class Conversion:  # class Conversion:
         return x  #         return x
 
     def __getitem__(self, item):  #     def __getitem__(self,item):
-        return Conversion(self.edges[item])  #         return Conversion(self.edges[item])
+        if isinstance(item, int):  #         if isinstance(item,int):
+            edges = [(self.edges[item])]  #             edges = [(self.edges[item])]
+        else:  #         else:
+            edges = self.edges[item]  #             edges = self.edges[item]
+        return Conversion(edges)  #         return Conversion(edges)
 
     def __repr__(self):  #     def __repr__(self):
         if len(self.edges):  #         if len(self.edges):
@@ -152,8 +156,11 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
     heapq.heappush(to_visit, _HeapContainer(scores[start], (start, [])))  #     heapq.heappush(to_visit,
     visited = 0  #     visited = 0
     bar = tqdm(desc="solving with astar_direct")  #     bar = tqdm(desc="solving with astar_direct")
+    last_bar_update = visited  #     last_bar_update = visited
     while to_visit:  #     while to_visit:
-        bar.update(1)  #         bar.update(1)
+        if visited - last_bar_update > 1000:  #         if visited - last_bar_update > 1000:
+            bar.update(visited - last_bar_update)  #             bar.update(visited-last_bar_update)
+            last_bar_update = visited  #             last_bar_update = visited
         hc = heapq.heappop(to_visit)  #         hc = heapq.heappop(to_visit)
         score = hc.score  #         score = hc.score
         (pos, trace) = hc.data  #         (pos,trace) = hc.data
@@ -178,7 +185,10 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
         normal_nodes = list(neighbors(pos))  #         normal_nodes = list(neighbors(pos))
         smart_nodes = list(smart_neighbors(pos, end))  #         smart_nodes = list(smart_neighbors(pos,end))
 #logger.debug(f"{normal_nodes},{smart_nodes}")
-        for mapper, next_node, cost, name in chain(normal_nodes, smart_nodes):  #         for mapper,next_node,cost,name in chain(normal_nodes,smart_nodes):
+        if visited % 10000 == 0:  #         if visited % 10000 == 0:
+            msg = str(pos)[:50]  #             msg = str(pos)[:50]
+            bar.set_description("""pos:{_coconut_format_0:<50}""".format(_coconut_format_0=(msg)))  #             bar.set_description(f"""pos:{msg:<50}""")
+        for i, (mapper, next_node, cost, name) in enumerate(chain(normal_nodes, smart_nodes)):  #         for i,(mapper,next_node,cost,name) in enumerate(chain(normal_nodes,smart_nodes)):
             assert isinstance(cost, int), "cost is not a number:{_coconut_format_0}".format(_coconut_format_0=(pos))  #             assert isinstance(cost,int),f"cost is not a number:{pos}"
             new_trace = trace + [Edge(pos, next_node, mapper, cost, name)]  #             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
             try:  #             try:
@@ -289,7 +299,7 @@ class AStarSolver:  # class AStarSolver:
             if _coconut_case_check_0:  #             match Failure(e,trc):
                 raise e  #                 raise e
     def _research_from_edges(self, edges):  #     def _research_from_edges(self,edges):
-        searched_edges = list(chain(*[self._search_direct((src, dst, False)).edges for src, dst in edges]))  #         searched_edges = list(chain(*[self._search_direct((src,dst,False)).edges for src,dst in edges]))
+        searched_edges = list(chain(*[self._search_direct((src, dst, True)).edges for src, dst in edges]))  #         searched_edges = list(chain(*[self._search_direct((src,dst,True)).edges for src,dst in edges]))
 #logger.info(f"searched_edges:{searched_edges}")
         return Conversion(searched_edges)  #         return Conversion(searched_edges)
 
@@ -322,7 +332,7 @@ class AStarSolver:  # class AStarSolver:
             edges = self.direct_search_cache[key]  #             edges = self.direct_search_cache[key]
             conversion = self._research_from_edges(edges)  #             conversion = self._research_from_edges(edges)
             self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
-            logger.info("researched_conversion:\n{_coconut_format_0}".format(_coconut_format_0=(conversion)))  #             logger.info(f"researched_conversion:\n{conversion}")
+            logger.debug("researched_conversion:\n{_coconut_format_0}".format(_coconut_format_0=(conversion)))  #             logger.debug(f"researched_conversion:\n{conversion}")
             return conversion  #             return conversion
         else:  #         else:
             conversion = self._search_direct(key)  #             conversion = self._search_direct(key)

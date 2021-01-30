@@ -1,5 +1,5 @@
 from data_tree.coconut.convert import *
-from data_tree.coconut.auto_data import AutoSolver
+from data_tree.coconut.auto_data import AutoSolver,AutoData
 from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from frozendict import frozendict
 from typing import Mapping
@@ -9,6 +9,9 @@ from itertools import product
 from loguru import logger
 from collections import namedtuple
 import numpy as np
+# actually, this kind of pattern matches are too hard to write in pure python. what do I do???
+# wait for pep622,pep642, to be implemented in python 3.10
+
 def imagedef2dict(imdef:ImageDef):
     case imdef:
         match ImageDef(data_type,tags):
@@ -73,9 +76,11 @@ def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
     mode = imgs[0].mode
     ch = len(mode)
     #nrow = int(sqrt(len(imgs[:max_image]))+0.5)
-    nrow = int(sqrt(len(imgs[:max_image]))) + 1
+    n_imgs = len(imgs[:max_image])
+    nrow = int(sqrt(n_imgs))
+    if (nrow*nrow < n_imgs):
+        nrow += 1
     r = int((w-((nrow+1)*padding))/nrow)
-
 
     imgs = np.array([(img.resize((r,r)) |> np.array) for img in imgs[:max_image]])
     if ch == 1:
@@ -314,7 +319,9 @@ def smart_tuple_conversion(state,end):
                 cost+1
             )]
 
-data AutoList(state)
+data AutoList(state):
+    def __str__(self):
+        return f"[{self.state}]"
 
 
 def unlist(items):
@@ -394,6 +401,7 @@ def rgb_to_rgba(state):
 def pix2pix_normalizer(nc):
     import torchvision.transforms as transforms
     return transforms.Normalize((0.5,)*nc,(0.5,)*nc)
+
 
 def torch_img_to_pixpix_input(state):
     import torch
@@ -486,10 +494,29 @@ def torch_img_to_pixpix_input(state):
 @memoize()
 def _VGG_NORMALIZER():
     import torchvision.transforms as transforms
-    return transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
+    nrm = transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
+    return nrm
+def inverse_vgg_prep(tensor):
+    return tensor * torch.tensor([0.229,0.224,0.225])[:,None,None] + torch.tensor([0.485,0.456,0.406])[:,None,None]
+def inverse_vgg_prep_batch(tensor):
+    return tensor * torch.tensor([0.229,0.224,0.225])[None,:,None,None] + torch.tensor([0.485,0.456,0.406])[None,:,None,None]
 def torch_img_to_vgg_prep(state):
     VGG_NORMALIZER = _VGG_NORMALIZER()
     case state:
+        match "vgg_prep":
+            return [(
+                inverse_vgg_prep,
+                "torch,float32,CHW,RGB,0_1",
+                "inverse from vgg_prep",
+                1)
+            ]
+        match "vgg_prep_batch":
+            return [(
+                inverse_vgg_prep_batch,
+                "torch,float32,BCHW,RGB,0_1",
+                "inverse from vgg_prep_batch",
+                1)
+            ]
         match {"type":"torch","dtype":"float32","arrange":"CHW","v_range":"0_1","ch_rpr":"RGB",**kwargs}:
             return [(
                 VGG_NORMALIZER,
@@ -520,13 +547,17 @@ def repeat_ch(state):
                 (a->np.repeat(np.array(a)[:,:,None],3,axis=2),
                  frozendict(type="numpy",dtype="uint8",arrange="HWC",ch_rpr=ch*3,v_range="0_255"),
                 "repeat_channel_3",
-                5)
+                50)
             ]
+
+
 
 def lll_is_rgb(state):
     case state:
         match {"ch_rpr":"LLL",**kwargs}:
             return [frozendict(ch_rpr="RGB",**kwargs)]
+
+
 
 DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_cast_rule(cast_imdef_to_dict,"cast_imdef_to_dict"),
@@ -561,9 +592,28 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
     AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255"),
 ]
+
 SMART_RULES =[
     AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),
 ]
+
+try:
+    import wandb
+    def img_to_wandb_img(state):
+        case state:
+            match ImageDef(PILImage(_,_),_):
+                return [(
+                    img->wandb.Image(img),
+                    "wandb.Image",
+                    "image to wandb image",
+                    1
+                )]
+    DEFAULT_RULES.append(AutoSolver.create_conversion_rule(img_to_wandb_img))
+    logger.warning(f"added wandb related conversions")
+except Exception as e:
+    logger.warning(f"could not add wandb related conversions since wandb could not be imported")
+
+
 def tuple_distance(x,y):
     assert len(x) == len(y),"cannot compare two tuples with different length"
     return len(x) - sum(tuple([i==j for i,j in zip(x,y)]))
@@ -628,4 +678,4 @@ SOLVER = AutoSolver(
     heuristics=tuple_widget_heuristics,
     edge_cutter=tuple_edge_cutter,
     )
-auto_img = format->value->SOLVER.new_auto_data(value,format)
+auto_img = format->value->AutoData(value,format,SOLVER)
