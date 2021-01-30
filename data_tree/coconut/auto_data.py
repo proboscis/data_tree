@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xfce0bd37
+# __coconut_hash__ = 0x8f308a7c
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -136,10 +136,10 @@ class AutoSolver:  # class AutoSolver:
     TODO stop using local lambda in order to make this class picklable
     Factory for an AutoData class
     """  #     """
-    def __init__(self, rules, smart_rules, heuristics=lambda x, y: 0, edge_cutter=lambda x, y, end: False):  #     def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False):
+    def __init__(self, rules, smart_rules, heuristics=lambda x, y: 0, edge_cutter=lambda x, y, end: False, debug_hook=None):  #     def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False,debug_hook=None):
         self.initial_rules = rules  #         self.initial_rules = rules
         self.smart_rules = smart_rules  #         self.smart_rules = smart_rules
-        self.solver = AStarSolver(rules=self.initial_rules.copy(), smart_rules=self.smart_rules.copy(), heuristics=heuristics, edge_cutter=edge_cutter)  #         self.solver = AStarSolver(
+        self.solver = AStarSolver(rules=self.initial_rules.copy(), smart_rules=self.smart_rules.copy(), heuristics=heuristics, edge_cutter=edge_cutter, debug_hook=debug_hook)  #         self.solver = AStarSolver(
 
     @staticmethod  #     @staticmethod
     def create_cast_rule(rule, name=None, _swap=False, cost=1):  #     def create_cast_rule(rule,name=None,_swap=False,cost=1):

@@ -136,7 +136,8 @@ def _astar_direct(
           heuristics,
           edge_cutter,
           max_depth = 100,
-          silent=False
+          silent=False,
+          debug_hook=None
           ):
     """
     neighbors: node->[(mapper,next_node,cost,name)]
@@ -183,6 +184,8 @@ def _astar_direct(
         for i,(mapper,next_node,cost,name) in enumerate(chain(normal_nodes,smart_nodes)):
             assert isinstance(cost,int),f"cost is not a number:{pos}"
             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
+            if debug_hook is not None:
+                debug_hook(new_trace)
             try:
                 new_score = scores[pos] + cost + heuristics(next_node,end)
             except Exception as e:
@@ -222,7 +225,8 @@ class AStarSolver:
         smart_rules=None,
         heuristics = _zero_heuristics,
         edge_cutter=_no_cutter,
-        cache_path=os.path.join(expanduser("~"),".cache/autodata.shelve")
+        cache_path=os.path.join(expanduser("~"),".cache/autodata.shelve"),
+        debug_hook=None
         ):
         """
         rules: List[Rule]
@@ -238,6 +242,7 @@ class AStarSolver:
         self.smart_neighbors_memo = LRU(MAX_MEMO)
         self.direct_search_cache = DefaultShelveCache(self._search_direct,cache_path)
         self.direct_search_memo = LRU(MAX_MEMO)
+        self.debug_hook = debug_hook
 
     def neighbors(self,node):
         if node in self.neighbors_memo:
@@ -309,7 +314,8 @@ class AStarSolver:
             smart_neighbors=self.smart_neighbors,
             heuristics=self.heuristics,
             edge_cutter=self.edge_cutter,
-            silent=silent
+            silent=silent,
+            debug_hook = self.debug_hook
         )
         case res:
             match Success(res):

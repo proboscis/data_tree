@@ -75,14 +75,15 @@ class AutoSolver:
     TODO stop using local lambda in order to make this class picklable
     Factory for an AutoData class
     """
-    def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False):
+    def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False,debug_hook=None):
         self.initial_rules = rules
         self.smart_rules = smart_rules
         self.solver = AStarSolver(
             rules = self.initial_rules.copy(),
             smart_rules = self.smart_rules.copy(),
             heuristics = heuristics,
-            edge_cutter =edge_cutter
+            edge_cutter =edge_cutter,
+            debug_hook = debug_hook
         )
 
     @staticmethod

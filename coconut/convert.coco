@@ -8,6 +8,8 @@ from math import sqrt
 from PIL import Image
 import torch
 import re
+from frozendict import frozendict as fdict
+from frozendict import frozendict
 VR_0_1 = "0_1"
 VR_0_255 = "0_255"
 VR_None = "None"
@@ -17,7 +19,8 @@ ch_splitter = re.compile("[A-Z][a-z]*").findall
 data DataType
 #TODO add shape information to tensorlike
 #TODO add shape information to PILImage
-
+#TODO make rules be able to handle other metadata.
+#so let's assume the input state based on dict.
 data TensorLike(
     dtype is str,
     arrange is str,
@@ -51,13 +54,31 @@ data PILImage(mode,channel_repr) from DataType:
     def __repr__(self):
         return f"PILImage({self.mode},{self.channel_repr})"
 
-data ImageDef(data_type is DataType,tags is frozenset):
+data ImageDef(data_type is DataType,meta is frozendict):
     def __repr__(self):
-        return f"ImageDef({self.data_type}|{list(self.tags)})"
+        return f"ImageDef({self.data_type}|{self.meta})"
+
+
 
 
 DTYPES={"float32","float64","int32","int64","uint8","bool"}
-data Edge(a:ImageDef,b:ImageDef,f,cost:int,name="undefined"):
+data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
+    def to_edge(self,src:ImageDef):
+        try:
+            new_meta = self.meta_shifter(src.meta)
+            if "shape" in new_meta:
+                if len(self.b.arrange) != len(new_meta["shape"]):
+                    raise RuntimeError("wtf")
+            if src.meta != new_meta:
+                if "shape" in src.meta and "shape" in new_meta:
+                    if len(src.meta["shape"]) > len(new_meta["shape"]):
+                        logger.info(f"{self.name}:\n{src.meta['shape']}->{new_meta['shape']}")
+            return Edge(src,ImageDef(self.b,new_meta),self.f,self.cost,self.name)
+        except Exception as e:
+            from IPython import embed
+            embed()
+            raise e
+data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
     def __repr__(self):
         return f"{self.a} \t-> {self.name}\t-> {self.b}"
 from typing import List
@@ -67,7 +88,7 @@ from typing import List
 # 各imdefのNodeベースでエッジを定義するのか。それとも。エッジのルールを網羅するのか。
 # オペレーターのほうが数が少ないので、オペレーターだけ定義したい。
 # List up operators.
-# operator definition: ImageDef->List[Edge]
+# operator definition: ImageDef->List[DataEdge]
 # 1. change data_type
 # 2. change dtype
 # 3. change arrange
@@ -81,7 +102,7 @@ def to_imagedef(f):
             #if imdef `isinstance` ImageDef:
                 edges = f(imdef.data_type)
                 if edges is not None:
-                    return [Edge(imdef,ImageDef(e.b,imdef.tags),e.f,e.cost,e.name) for e in edges]
+                    return [e.to_edge(imdef) for e in edges]
                 else:
                     return []
             else:
@@ -93,42 +114,51 @@ def to_imagedef(f):
             raise e
     return _inner
 
+# there are kinds of rules
+# 1. doesnt care about shape, and no shape change
+# 2. doesnt care shape, but shape changes
+# 3. depends on input shape but shape doesn't change
+# 4. depends on input and output shape changes
+# well ,just give function a shape and return nop for shape?
+# what if some other metadata is added?
+# where should I store shape?
+# If I change the signature, I have modify them all... for match syntax
+# I just
 
 
-@to_imagedef
+@to_imagedef # doesn't change shape, so no touch
 def to_PILImages(imdef:ImageDef)->Edge[]:
-    #TODO fix pattern match on data class
     case imdef:
         match Numpy("uint8","BHWC", c_repr, =VR_0_255) if len(ch_splitter(c_repr)) in (3,4):
-            return [Edge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name=f"numpy batch {ch_repr} to Images")]
+            return [DataEdge(imdef,PILImages(c_repr,c_repr),ary -> [(Image.fromarray)(img) for img in ary],2,name=f"numpy batch {c_repr} to Images")]
         match Numpy("uint8","BHW",c_repr,=VR_0_255):
-            return [Edge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
+            return [DataEdge(imdef,PILImages("L",c_repr),ary -> [(Image.fromarray ..> .convert("L"))(img) for img in ary],2,name="numpy batch to images")]
         match Numpy("uint8","HW",c_repr,=VR_0_255):
-            return [Edge(imdef,PILImage("L",c_repr), Image.fromarray ..> .convert("L"),2,name="numpy HW to PIL Image")]
+            return [DataEdge(imdef,PILImage("L",c_repr), Image.fromarray ..> .convert("L"),2,name="numpy HW to PIL Image")]
     return []
 @to_imagedef
-def to_numpy(imdef:ImageDef)->List[Edge]:
+def to_numpy(imdef:ImageDef)->List[DataEdge]:
     case imdef:
         match Torch(dtype,arng,ch_repr,vr): # torch tensor can always become numpy
-            return [Edge(imdef,
+            return [DataEdge(imdef,
                          Numpy(dtype  ,arng ,ch_repr,vr),
                          (.detach() ..> .cpu() ..> .numpy()),
                          1,
                          name="torch_to_numpy")]
         match PILImage("RGB",ch_repr):
-                    return [Edge(imdef,
+                    return [DataEdge(imdef,
                                 Numpy("uint8","HWC",ch_repr,VR_0_255),
                                 np.array,
                                 1,
                                 name="image_to_numpy")]
         match PILImage("L",ch_repr):
-                    return [Edge(imdef,
+                    return [DataEdge(imdef,
                                 Numpy("uint8","HW",ch_repr,VR_0_255),
                                 np.array,
                                 1,
                                 name="image_to_numpy")]
         match PILImage("YCbCr",ch_repr):
-                    return [Edge(imdef,
+                    return [DataEdge(imdef,
                                  Numpy("uint8","HWC",ch_repr,VR_0_255),
                                  np.array,
                                  1,
@@ -136,30 +166,30 @@ def to_numpy(imdef:ImageDef)->List[Edge]:
                     )]
 
         match PILImages("L",ch_repr): # A grayscale Image becomes a numpy array
-            return [Edge(imdef,
+            return [DataEdge(imdef,
                          Numpy("uint8","BHW",ch_repr,VR_0_255),
                          (fmap$(np.array) ..> np.array),
                          1,
                          name="image_to_numpy")]
         match PILImages(mode,ch_repr):# A multi-channel Image becomes a numpy array
-            return [Edge(imdef,
+            return [DataEdge(imdef,
                          Numpy("uint8","BHWC",ch_repr,VR_0_255),
                          (fmap$(np.array) ..> np.array),
                          1,
                          name="image_to_numpy")]
     return []
 @to_imagedef
-def to_torch(imdef:ImageDef):
+def to_torch(imdef):
     import torch
     case imdef:
         match Numpy(dtype,arng,ch_repr,vr): # only numpy can directly become a torch tensor
-            return [Edge(imdef,Torch(dtype,arng,ch_repr,vr),torch.from_numpy,2,name="to_torch")]
+            return [DataEdge(imdef,Torch(dtype,arng,ch_repr,vr),torch.from_numpy,2,name="to_torch")]
     return []
 @to_imagedef
 def change_dtype(imdef:ImageDef):# TODO match value range to dtype with bool type
     case imdef:
         match Numpy(dtype,arng,ch_repr,vr):
-            return [Edge(
+            return [DataEdge(
                 imdef,
                 imdef.__class__(_dtype,arng,ch_repr,vr),
                 .astype(_dtype),
@@ -168,84 +198,121 @@ def change_dtype(imdef:ImageDef):# TODO match value range to dtype with bool typ
             ) for _dtype in DTYPES if _dtype != dtype]
     return []
 
+# SHAPE SHIFTING RULES
+
+
+def ss_to_ms(ss,meta):
+    if "shape" in meta:
+        shape=meta["shape"]
+        new_shape = ss(shape)
+        return fdict({**meta,"shape":new_shape})
+    return meta
+
+ms_0231 = (s->(s[0],s[2],s[3],s[1])) |> ss_to_ms$
+ms_0312 = (s->(s[0],s[3],s[1],s[2])) |> ss_to_ms$
 
 def change_arng(imdef):
     case imdef:
         match Numpy(_,"BCHW",_,_):
-            return [(.transpose(0,2,3,1),"BHWC")]
+            return [(.transpose(0,2,3,1),"BHWC",ms_0231)]
         match Numpy(_,"BHWC",_,_):
-            return [(.transpose(0,3,1,2),"BCHW")]
+            return [(.transpose(0,3,1,2),"BCHW",ms_0312)]
         match Torch(_,"BCHW",_,_):
-            return [(.transpose(1,2) ..> .transpose(2,3),"BHWC")]
+            return [(.transpose(1,2) ..> .transpose(2,3),"BHWC",ms_0231)]
         match Torch(_,"BHWC",_,_):
-            return [(.transpose(2,3) ..> .transpose(1,2),"BCHW")]
+            return [(.transpose(2,3) ..> .transpose(1,2),"BCHW",ms_0312)]
     return []
-
+@to_imagedef
+def change_arrange(imdef:ImageDef):
+    match TensorLike(dtype,arng,ch_repr,vr) in imdef:
+        return [DataEdge(imdef,
+                         imdef.__class__(dtype,_arng,ch_repr,vr),
+                         f,
+                         1,
+                         name=f"{arng} to {_arng}",
+                         meta_shifter=meta_shifter) for f,_arng,meta_shifter in change_arng(imdef)]
+    return []
+ms_drop_bhwc_alpha = (s->(s[0],s[1],s[2],3)) |> ss_to_ms$
+ms_drop_bchw_alpha = (s->(s[0],3,s[2],s[3])) |> ss_to_ms$
 @to_imagedef
 def drop_alpha(imdef):
     case imdef:
         match TensorLike(dtype,"BHWC","RGBA",vr):
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(dtype,"BHWC","RGB",vr),
                          f=a->a[:,:,:,:3],
                          cost=1,
-                         name=f"select rgb channel")]
+                         name=f"select rgb channel",
+                         meta_shifter=ms_drop_bhwc_alpha
+                         )]
         match TensorLike(dtype,"BCHW","RGBA",vr):
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(dtype,"BCHW","RGB",vr),
                          f=a->a[:,:3],
                          cost=1,
-                         name=f"select rgb channel")]
-@to_imagedef
-def change_arrange(imdef:ImageDef):
-    match TensorLike(dtype,arng,ch_repr,vr) in imdef:
-        return [Edge(imdef,imdef.__class__(dtype,_arng,ch_repr,vr),f,1,name=f"{arng} to {_arng}") for f,_arng in change_arng(imdef)]
-    return []
+                         name=f"select rgb channel",
+                         meta_shifter=ms_drop_bchw_alpha
+                         )]
 
-
+ms_select_bhwc_channel = (s->(s[0],s[1],s[2],1)) |> ss_to_ms$
+ms_select_bchw_channel = (s->(s[0],1,s[2],s[3])) |> ss_to_ms$
 
 @to_imagedef
 def select_channel(imdef:ImageDef):
     case imdef:
         match TensorLike(dtype,"BHWC",ch_repr,vr) if len(ch_repr) >= 1:
             selector = i->a->a[:,:,:,[i]]
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(dtype,"BHWC",c,vr),
                          f=selector(i),
                          cost=10,
-                         name=f"select {c} channel") for i,c in enumerate(ch_splitter(ch_repr))]
+                         name=f"select {c} channel",
+                         meta_shifter=ms_select_bhwc_channel
+                         ) for i,c in enumerate(ch_splitter(ch_repr))]
         match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_repr) >= 1:
             selector = i->a->a[:,[i]]
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(dtype,"BCHW",c,vr),
                          f=selector(i),
                          cost=10,
-                         name=f"select {c} channel") for i,c in enumerate(ch_splitter(ch_repr))]
+                         name=f"select {c} channel",
+                         meta_shifter=ms_select_bchw_channel
+                         ) for i,c in enumerate(ch_splitter(ch_repr))]
     return []
+ms_drop_bhwc_channel = (s->(s[0],s[1],s[2])) |> ss_to_ms$
+ms_drop_bchw_channel = (s->(s[0],s[2],s[3])) |> ss_to_ms$
+ms_drop_chw_channel = (s->(s[1],s[2])) |> ss_to_ms$
+ms_drop_hwc_channel = (s->(s[0],s[1])) |> ss_to_ms$
+
+
 @to_imagedef
 def drop_channel(imdef:ImageDef):
     case imdef:
         match TensorLike(dtype,="BHWC",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
                         f=a->a[:,:,:,0],
                         cost = 1,
-                        name=f"BHWC to BHW"
+                        name=f"BHWC to BHW",
+                        meta_shifter=ms_drop_bhwc_channel
                        )]
         match TensorLike(dtype,"BCHW",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                         b=imdef.__class__(dtype,"BHW",ch_repr,vr),
                         f=a->a[:,0],
                         cost = 1,
-                        name=f"BCHW to BHW"
+                        name=f"BCHW to BHW",
+                        meta_shifter=ms_drop_bchw_channel
                        )]
         match TensorLike(dtype,"CHW",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
-            return [Edge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
-                         f = a->a[0],cost=1,name="CHW to HW"
+            return [DataEdge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
+                         f = a->a[0],cost=1,name="CHW to HW",
+                         meta_shifter=ms_drop_chw_channel
             )]
         match TensorLike(dtype,"HWC",ch_repr,vr) if len(ch_splitter(ch_repr)) == 1:
-            return [Edge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
-                         f = a->a[:,:,0], cost=1,name="HWC to HW"
+            return [DataEdge(a = imdef,b=imdef.__class__(dtype,"HW",ch_repr,vr),
+                         f = a->a[:,:,0], cost=1,name="HWC to HW",
+                         meta_shifter=ms_drop_hwc_channel
             )]
 
     return []
@@ -256,7 +323,7 @@ def enforce_mode(img,mode):
 def RGB_to_YCbCr(state):
     case state:
         match PILImage("RGB","RGB"):
-            return [Edge(
+            return [DataEdge(
             a=state,
             b=PILImage("YCbCr","YCbCr"),
             f= enforce_mode$(mode="RGB") ..> .convert("YCbCr"),
@@ -264,7 +331,7 @@ def RGB_to_YCbCr(state):
             name="RGB to YCbCr"
             )]
         match PILImage("YCbCr","YCbCr"):
-            return [Edge(
+            return [DataEdge(
             a=state,
             b=PILImage("RGB","RGB"),
             f= enforce_mode$(mode="YCbCr") ..> .convert("RGB"),
@@ -345,28 +412,28 @@ def ycbcr_to_rgb(image: torch.Tensor) -> torch.Tensor:
 def RGB_to_YCbCr(state):
     case state:
         match Torch("float32","BCHW","RGB",=VR_0_1):
-            return [Edge(a=state,
+            return [DataEdge(a=state,
                          b=Torch("float32","BCHW","RGB",VR_0_1),
                          f=rgb_to_ycbcr,
                          cost=1,
                          name="RGB_to_YCbCr(torch)"
             )]
         match Torch("float32","BCHW","YCbCr",=VR_0_1):
-            return [Edge(a=state,
+            return [DataEdge(a=state,
                          b=Torch("float32","BCHW","RGB",VR_0_1),
                          f=ycbcr_to_rgb,
                          cost=1,
                          name="YCbCr_to_RGB(torch)"
                         )]
         match Torch("float32","CHW","RGB",=VR_0_1):
-            return [Edge(a=state,
+            return [DataEdge(a=state,
                          b=Torch("float32","CHW","YCbCr",VR_0_1),
                          f=rgb_to_ycbcr,
                          cost=1,
                          name="RGB_to_YCbCr(torch)"
             )]
         match Torch("float32","CHW","YCbCr",=VR_0_1):
-            return [Edge(a=state,
+            return [DataEdge(a=state,
                          b=Torch("float32","CHW","RGB",VR_0_1),
                          f=ycbcr_to_rgb,
                          cost=1,
@@ -375,66 +442,72 @@ def RGB_to_YCbCr(state):
 
 
 
+#shape change!
+ms_add_b_ch = (s->(1,*s)) |> ss_to_ms$
+ms_del_b_ch = (s->s[1:])  |> ss_to_ms$
+# TODO what to do with non-batched states?
 
 def en_batch(imdef:ImageDef):
     case imdef:
-        match ImageDef(TensorLike(dtype,"HWC" or "CHW" or "HW",ch_repr,vr),tags):
+        match ImageDef(TensorLike(dtype,"HWC" or "CHW" or "HW",ch_repr,vr),meta):
             new_arng = "B"+imdef.data_type.arrange
             return [Edge(a=imdef,
-                         b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),tags|frozenset(("en_batched",))),
+                         b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),ms_add_b_ch(meta)),
                          f=a->a[None],
                          cost=10,
-                         name=f"{imdef.data_type.arrange} to {new_arng} (en_batch)"
+                         name=f"tensor_like en_batch:{meta} to {ms_add_b_ch(meta)}"
                         )]
-        match ImageDef(PILImage(mode,channel_repr),tags):
+        match ImageDef(PILImage(mode,channel_repr),meta):
             return [Edge(a=imdef,
-                         b=ImageDef(PILImages(mode,channel_repr),tags|frozenset(("en_batched",))),
+                         b=ImageDef(PILImages(mode,channel_repr),ms_add_b_ch(meta)),
                          f=a->[a],
                          cost=10,
-                         name=f"wrap image with list (en_batch)"
+                         name=f"pil image en_batch:{meta} to {ms_add_b_ch(meta)}"
                         )]
     return []
 def de_batch(imdef:ImageDef):
     case imdef:
-        match ImageDef(TensorLike(dtype,arng,ch,vr),tags) if "en_batched" in tags and "B" in arng:
+        match ImageDef(TensorLike(dtype,arng,ch,vr),{"shape":shape} as meta) if "B" in arng and shape[0] == 1:
             return [Edge(
                 a=imdef,
-                b=ImageDef(imdef.data_type.__class__(dtype,arng[1:],ch,vr),tags-frozenset(["en_batched"])),
+                b=ImageDef(imdef.data_type.__class__(dtype,arng[1:],ch,vr),ms_del_b_ch(meta)),
                 f=a->a[0],
                 cost=1,
                 name=f"de_batch en_batched image"
             )]
-        match ImageDef(PILImages(mode,ch),tags) if "en_batched" in tags:
+        match ImageDef(PILImages(mode,ch),{"shape":shape} as meta) if "en_batched" in meta:
             return [Edge(
                 a=imdef,
-                b=ImageDef(PILImage(mode,ch),tags-frozenset(["en_batched"])),
+                b=ImageDef(PILImage(mode,ch),ms_del_b_ch(meta)),
                 f=a->a[0],
                 cost=1,
                 name=f"de_batch en_batched image"
             )]
 
-def drop_batch_tag(imdef:ImageDef):
+def drop_meta(imdef:ImageDef):
     case imdef:
-        match ImageDef(data_type,tags) if "en_batched" in tags:
-            return [Edge(imdef,
-                         ImageDef(data_type,tags-frozenset(("en_batched",))),
-                         f=a->a,
-                         cost=1,
-                         name="drop en_batched tag"
-                        )]
+        match ImageDef(data_type,meta):
+            return [Edge(
+                a=imdef,
+                b=ImageDef(data_type,fdict()),
+                f=a->a,
+                cost=1,
+                name="drop all metadata"
+            )]
+
 
 @to_imagedef
 def to_rgba(imdef:ImageDef):
     case imdef:
-        match TensorLike(dtype,arng,ch_repr,"0_1") if len(ch_repr) == 4:
-            return [Edge(a=imdef,
+        match TensorLike(dtype,arng,ch_repr,"0_1") if len(ch_splitter(ch_repr)) == 4:
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(dtype,arng,"RGBA","0_1"),
                          f=a->a,
                          cost=10,
                          name=f"view {ch_repr} as RGBA "
                         )]
-        match TensorLike(dtype,arng,ch_repr,"0_1") if len(ch_repr) == 3:
-            return [Edge(a=imdef,
+        match TensorLike(dtype,arng,ch_repr,"0_1") if len(ch_splitter(ch_repr)) == 3:
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(dtype,arng,"RGB","0_1"),
                          f=a->a,
                          cost=10,
@@ -444,14 +517,14 @@ def to_rgba(imdef:ImageDef):
 def change_value_range(imdef:ImageDef):
     case imdef:
         match TensorLike("float32" or "float64",arng,ch_repr,=VR_0_255):
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(imdef.dtype,arng,ch_repr,VR_0_1),
                          f=a->a/255.0,
                          cost=len(ch_repr),
                          name="0-255 to 0-1"
                         )]
         match TensorLike("float32" or "float64",arng,ch_repr,=VR_0_1):
-            return [Edge(a=imdef,
+            return [DataEdge(a=imdef,
                          b=imdef.__class__(imdef.dtype,arng,ch_repr,VR_0_255),
                          f=a->a*255.0,
                          cost=len(ch_repr),
@@ -476,21 +549,21 @@ def rgba_to_xyza(rgba):
 
 def rule_xyz_to_rgb(imdef):
     case imdef:
-        match ImageDef(Numpy(dtype,"CHW","XYZA","-1_1"),tags):
+        match ImageDef(Numpy(dtype,"CHW","XYZA","-1_1"),meta):
             return [
-                (xyza_to_rgba,ImageDef(Numpy(dtype,"CHW","RGBA",VR_0_1),tags),2,"xyza_to_rgba")
+                (xyza_to_rgba,ImageDef(Numpy(dtype,"CHW","RGBA",VR_0_1),meta),2,"xyza_to_rgba")
             ]
-        match ImageDef(Numpy(dtype,"CHW","XYZ","-1_1"),tags):
+        match ImageDef(Numpy(dtype,"CHW","XYZ","-1_1"),meta):
             return [
-                (xyz_to_rgb,ImageDef(Numpy(dtype,"CHW","RGB",VR_0_1),tags),2,"xyz_to_rgb")
+                (xyz_to_rgb,ImageDef(Numpy(dtype,"CHW","RGB",VR_0_1),meta),2,"xyz_to_rgb")
             ]
-        match ImageDef(Numpy(dtype,"CHW","RGBA",=VR_0_1),tags):
+        match ImageDef(Numpy(dtype,"CHW","RGBA",=VR_0_1),meta):
             return [
-                (rgba_to_xyza,ImageDef(Numpy(dtype,"CHW","XYZA","-1_1"),tags),2,"rgba_to_xyza")
+                (rgba_to_xyza,ImageDef(Numpy(dtype,"CHW","XYZA","-1_1"),meta),2,"rgba_to_xyza")
             ]
-        match ImageDef(Numpy(dtype,"CHW","RGB",=VR_0_1),tags):
+        match ImageDef(Numpy(dtype,"CHW","RGB",=VR_0_1),meta):
             return [
-                (rgb_to_xyz,ImageDef(Numpy(dtype,"CHW","XYZ","-1_1"),tags),2,"rgb_to_xyz")
+                (rgb_to_xyz,ImageDef(Numpy(dtype,"CHW","XYZ","-1_1"),meta),2,"rgb_to_xyz")
             ]
 
 def b_xyza_to_rgba(xyza):
@@ -510,21 +583,21 @@ def b_rgba_to_xyza(rgba):
 
 def rule_batch_xyz_to_rgb(imdef):
     case imdef:
-        match ImageDef(Numpy(dtype,"BCHW","XYZA","-1_1"),tags):
+        match ImageDef(Numpy(dtype,"BCHW","XYZA","-1_1"),meta):
             return [
-                (b_xyza_to_rgba,ImageDef(Numpy(dtype,"BCHW","RGBA",VR_0_1),tags),2,"xyza_to_rgba(batch)")
+                (b_xyza_to_rgba,ImageDef(Numpy(dtype,"BCHW","RGBA",VR_0_1),meta),2,"xyza_to_rgba(batch)")
             ]
-        match ImageDef(Numpy(dtype,"BCHW","XYZ","-1_1"),tags):
+        match ImageDef(Numpy(dtype,"BCHW","XYZ","-1_1"),meta):
             return [
-                (b_xyz_to_rgb,ImageDef(Numpy(dtype,"BCHW","RGB",VR_0_1),tags),2,"xyz_to_rgb(batch)")
+                (b_xyz_to_rgb,ImageDef(Numpy(dtype,"BCHW","RGB",VR_0_1),meta),2,"xyz_to_rgb(batch)")
             ]
-        match ImageDef(Numpy(dtype,"BCHW","RGBA",=VR_0_1),tags):
+        match ImageDef(Numpy(dtype,"BCHW","RGBA",=VR_0_1),meta):
             return [
-                (b_rgba_to_xyza,ImageDef(Numpy(dtype,"BCHW","XYZA","-1_1"),tags),2,"rgba_to_xyza(batch)")
+                (b_rgba_to_xyza,ImageDef(Numpy(dtype,"BCHW","XYZA","-1_1"),meta),2,"rgba_to_xyza(batch)")
             ]
-        match ImageDef(Numpy(dtype,"BCHW","RGB",=VR_0_1),tags):
+        match ImageDef(Numpy(dtype,"BCHW","RGB",=VR_0_1),meta):
             return [
-                (b_rgb_to_xyz,ImageDef(Numpy(dtype,"BCHW","XYZ","-1_1"),tags),2,"rgb_to_xyz(batch)")
+                (b_rgb_to_xyz,ImageDef(Numpy(dtype,"BCHW","XYZ","-1_1"),meta),2,"rgb_to_xyz(batch)")
             ]
 
 
@@ -541,7 +614,7 @@ _conversions =[
     change_value_range,
     drop_alpha,
     to_rgba,
-    drop_batch_tag,
+    drop_meta,
     de_batch,
     RGB_to_YCbCr,
 ]
@@ -565,7 +638,8 @@ def str_to_img_def(query):
     ex1: 'numpy,float32,BCHW,RGB,0_255 | hello,world'
     ex2: 'torch,float32,BCHW,RGBA,0_1'
     ex3: 'image,RGBA,RGBA'
-    ex4: 'images,RGB,RGB|tag1,tag2...'
+    ex4: 'images,RGB,RGB' => ImageDef(PILImage("RGB","RGB"),{shape:(None,None,3)})
+    ex5: 'image,RGBA,RGBA,128:128:3' => ImageDef(PILImage("RGB","RGB"),{shape:(128,128,3)})
     """
     vrs = {
         "0_255":VR_0_255,
@@ -573,21 +647,40 @@ def str_to_img_def(query):
         "None":VR_None
     }
     query = query.replace(" ","")
+    def arng_to_shape(arng,ch_repr):
+        ch = len(ch_splitter(ch_repr))
+        c_idx = arng.find("C")
+        shape = [None]*len(arng)
+        if c_idx != -1:
+            shape[c_idx] = ch
+        #logger.info(f"{arng},{ch_repr}->{tuple(shape)}")
+        return tuple(shape)
+
+    def shape_str_to_shape(ss):
+        tokens = ss.split(":")
+        return tuple([int(t) if t!="None" else None for t in tokens])
+
     def query_to_data_type(query):
         case query.split(","):
             match ["numpy",dtype,arng,ch,vr]:
-                return Numpy(dtype,arng,ch,vrs[vr] if vr in vrs else vr)
+                return Numpy(dtype,arng,ch,vrs[vr] if vr in vrs else vr),arng_to_shape(arng,ch)
+            match ["numpy",dtype,arng,ch,vr,shape]:
+                return Numpy(dtype,arng,ch,vrs[vr] if vr in vrs else vr),shape_str_to_shape(shape)
             match ["torch",dtype,arng,ch,vr]:
-                return Torch(dtype,arng,ch,vrs[vr] if vr in vrs else vr)
+                return Torch(dtype,arng,ch,vrs[vr] if vr in vrs else vr),arng_to_shape(arng,ch)
+            match ["torch",dtype,arng,ch,vr,shape]:
+                return Torch(dtype,arng,ch,vrs[vr] if vr in vrs else vr),shape_str_to_shape(shape)
             match ["image",mode,ch]:
-                return PILImage(mode,ch)
+                return PILImage(mode,ch),(None,None,len(ch_splitter(ch)))
+            match ["image",mode,ch,shape]:
+                return PILImage(mode,ch),shape_str_to_shape(shape)
             match ["images",mode,ch]:
-                return PILImages(mode,ch)
-    case query.split("|"):
-        match [data_type]:
-            return ImageDef(query_to_data_type(data_type),frozenset())
-        match [data_type,tags]:
-            return ImageDef(query_to_data_type(data_type),frozenset(tags.split(",")))
+                return PILImages(mode,ch),(None,None,None,len(ch_splitter(ch)))
+            match ["images",mode,ch]:
+                return PILImages(mode,ch),shape_str_to_shape(shape)
+    case query_to_data_type(query):
+        match (data_type,shape):
+            return ImageDef(data_type,fdict(shape=shape))
     else:
         raise RuntimeError(f"could not parse image def string!:{query}")
 
@@ -613,59 +706,60 @@ def normalize_numpy_img(ary):
 
 def rule_VR_None_to_normalized(imdef):
     case imdef:
-        match ImageDef(Numpy(dtype,("CHW" or "HW") as arng,ch,=VR_None),tags):
+        match ImageDef(Numpy(dtype,("CHW" or "HW") as arng,ch,=VR_None),meta):
             return [(
                 normalize_numpy_img,
-                ImageDef(Numpy(dtype,arng,ch,VR_0_1),tags),
+                ImageDef(Numpy(dtype,arng,ch,VR_0_1),meta),
                 1,
                 "minmax_0_1_numpy_img"
             )]
-        match ImageDef(Numpy(dtype,"BCHW",ch,=VR_None),tags):
+        match ImageDef(Numpy(dtype,"BCHW",ch,=VR_None),meta):
             return [(
                 batch->np.array([normalize_numpy_img(img) for img in batch]),
-                ImageDef(Numpy(dtype,"BCHW",ch,VR_0_1),tags),
+                ImageDef(Numpy(dtype,"BCHW",ch,VR_0_1),meta),
                 1,
                 "batch_minmax_0_1_numpy_img"
             )]
+
 def rule_add_channel(imdef):
     case imdef:
-        match ImageDef(Numpy(dtype,"HW",ch,vr),tags):
+        match ImageDef(Numpy(dtype,"HW",ch,vr),meta):
             return [(
                 a->a[None],
-                ImageDef(Numpy(dtype,"CHW",ch,vr),tags),
+                ImageDef(Numpy(dtype,"CHW",ch,vr),meta),
                 1,
                 "add_channel_dim"
             )]
-        match ImageDef(Numpy(dtype,"BHW",ch,vr),tags):
+        match ImageDef(Numpy(dtype,"BHW",ch,vr),meta):
             return [(
                 a->a[:,None],
-                ImageDef(Numpy(dtype,"BCHW",ch,vr),tags),
+                ImageDef(Numpy(dtype,"BCHW",ch,vr),meta),
                 1,
                 "add_channel_dim"
             )]
 def rule_swap_RGB_BGR(imdef):
     case imdef:
-        match ImageDef(TensorLike(dtype,"BHWC",("RGB" or "BGR") as rgb_order,vr) as tl,tags):
+        match ImageDef(TensorLike(dtype,"BHWC",("RGB" or "BGR") as rgb_order,vr) as tl,meta):
             return [(
                 a->a[:,:,:,[2,1,0]],
-                ImageDef(tl.__class__(dtype,"BHWC","RGB" if rgb_order.startswith("B") else "BGR",vr),tags),
+                ImageDef(tl.__class__(dtype,"BHWC","RGB" if rgb_order.startswith("B") else "BGR",vr),meta),
                 1,
                 "swap rgb or bgr"
             )]
 def rule_BGR_to_LAB(imdef):
     from skimage import color
     case imdef:
-        match ImageDef(Numpy("float32","HWC","BGR",=VR_0_1),tags):
+        match ImageDef(Numpy("float32","HWC","BGR",=VR_0_1),meta):
             return[(
                 color.rgb2lab,
-                ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),tags),
+                ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),meta),
                 1,
                 "bgr_0_1 to lab"
             )]
-        match ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),tags):
+        match ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),meta):
             return [(
                 color.lab2rgb,
-                ImageDef(Numpy("float32","HWC","BGR",VR_0_1),tags),
+                ImageDef(Numpy("float32","HWC","BGR",VR_0_1),meta),
                 1,
                 "lab to bgr_0_1"
             )]
@@ -760,24 +854,24 @@ class AutoImage:
         tag_opt=frozenset()
         img_cls = PILImages
         case self.img_def:
-            match ImageDef(TensorLike(_,arng,_,_),tags) if "B" not in arng:
+            match ImageDef(TensorLike(_,arng,_,_),meta) if "B" not in arng:
                 tag_opt = frozenset(("en_batched",))
-            match ImageDef(PILImage(mode,ch),tags):
+            match ImageDef(PILImage(mode,ch),meta):
                 tag_opt = frozenset(("en_batched",))
 
         case self.img_def.data_type:
             match PILImage(mode,chrepr):
-                return ImageDef(PILImages(mode,chrepr),self.img_def.tags | tag_opt)
+                return ImageDef(PILImages(mode,chrepr),self.img_def.meta | tag_opt)
             match PILImages(mode,chrepr):
                 return self.img_def
             match TensorLike(dtype,arng,c,vr) if len(c) == 1:
-                return ImageDef(img_cls("L",c),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("L",c),self.img_def.meta | tag_opt)
             match TensorLike(dtype,arng,"RGBA",vr):
-                return ImageDef(img_cls("RGBA","RGBA"),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("RGBA","RGBA"),self.img_def.meta | tag_opt)
             match TensorLike(dtype,arng,"RGB",vr):
-                return ImageDef(img_cls("RGB","RGB"),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("RGB","RGB"),self.img_def.meta | tag_opt)
             match TensorLike(dtype,arng,ch,vr) if "A" in ch and ch != "LAB":
-                return ImageDef(img_cls("RGBA","RGBA"),self.img_def.tags | tag_opt)
+                return ImageDef(img_cls("RGBA","RGBA"),self.img_def.meta | tag_opt)
         else:
             attempts=[
                 "image,RGBA,RGBA",

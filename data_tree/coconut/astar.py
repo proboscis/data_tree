@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xd59c3d3f
+# __coconut_hash__ = 0x990e4695
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -146,7 +146,7 @@ def _astar(start, matcher, neighbors, max_depth=100):  # def _astar(
 
 
 
-def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutter, max_depth=100, silent=False):  # def _astar_direct(
+def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutter, max_depth=100, silent=False, debug_hook=None):  # def _astar_direct(
     """
     neighbors: node->[(mapper,next_node,cost,name)]
     """  #     """
@@ -191,6 +191,8 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
         for i, (mapper, next_node, cost, name) in enumerate(chain(normal_nodes, smart_nodes)):  #         for i,(mapper,next_node,cost,name) in enumerate(chain(normal_nodes,smart_nodes)):
             assert isinstance(cost, int), "cost is not a number:{_coconut_format_0}".format(_coconut_format_0=(pos))  #             assert isinstance(cost,int),f"cost is not a number:{pos}"
             new_trace = trace + [Edge(pos, next_node, mapper, cost, name)]  #             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
+            if debug_hook is not None:  #             if debug_hook is not None:
+                debug_hook(new_trace)  #                 debug_hook(new_trace)
             try:  #             try:
                 new_score = scores[pos] + cost + heuristics(next_node, end)  #                 new_score = scores[pos] + cost + heuristics(next_node,end)
             except Exception as e:  #             except Exception as e:
@@ -225,7 +227,7 @@ class AStarSolver:  # class AStarSolver:
     so, lets have auto_data to hold solver in global variable and never pickle AStarSolver!.
     so forget about lru_cache pickling issues.
     """  #     """
-    def __init__(self, rules=None, smart_rules=None, heuristics=_zero_heuristics, edge_cutter=_no_cutter, cache_path=os.path.join(expanduser("~"), ".cache/autodata.shelve")):  #     def __init__(self,
+    def __init__(self, rules=None, smart_rules=None, heuristics=_zero_heuristics, edge_cutter=_no_cutter, cache_path=os.path.join(expanduser("~"), ".cache/autodata.shelve"), debug_hook=None):  #     def __init__(self,
         """
         rules: List[Rule]
         Rule: (state)->List[(converter:(data)->data,new_state,cost,conversion_name)]
@@ -240,6 +242,7 @@ class AStarSolver:  # class AStarSolver:
         self.smart_neighbors_memo = LRU(MAX_MEMO)  #         self.smart_neighbors_memo = LRU(MAX_MEMO)
         self.direct_search_cache = DefaultShelveCache(self._search_direct, cache_path)  #         self.direct_search_cache = DefaultShelveCache(self._search_direct,cache_path)
         self.direct_search_memo = LRU(MAX_MEMO)  #         self.direct_search_memo = LRU(MAX_MEMO)
+        self.debug_hook = debug_hook  #         self.debug_hook = debug_hook
 
     def neighbors(self, node):  #     def neighbors(self,node):
         if node in self.neighbors_memo:  #         if node in self.neighbors_memo:
@@ -309,7 +312,7 @@ class AStarSolver:  # class AStarSolver:
         start, end, silent = q  #         start,end,silent = q
         if not silent:  #         if not silent:
             logger.debug("searching {_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(end)))  #             logger.debug(f"searching {start} to {end}")
-        res = astar_direct(start=start, end=end, neighbors=self.neighbors, smart_neighbors=self.smart_neighbors, heuristics=self.heuristics, edge_cutter=self.edge_cutter, silent=silent)  #         res = astar_direct(
+        res = astar_direct(start=start, end=end, neighbors=self.neighbors, smart_neighbors=self.smart_neighbors, heuristics=self.heuristics, edge_cutter=self.edge_cutter, silent=silent, debug_hook=self.debug_hook)  #         res = astar_direct(
         _coconut_match_to = res  #             start=start,
         _coconut_case_check_1 = False  #             start=start,
         if (_coconut.isinstance(_coconut_match_to, Success)) and (_coconut.len(_coconut_match_to) == 1):  #             start=start,
@@ -338,6 +341,10 @@ class AStarSolver:  # class AStarSolver:
             conversion = self._search_direct(key)  #             conversion = self._search_direct(key)
             self.direct_search_cache[key] = [(e.src, e.dst) for e in conversion.edges]  #             self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
             self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
+# I can memo every path in conversion actually.
+# however since the states are in a different space than a query, no speedups can be done.
+# if this astar knows about casting, it can first search for a cache though..
+
             return conversion  #             return conversion
 
     def search_direct_any(self, start, ends):  #     def search_direct_any(self,start,ends):
