@@ -9,6 +9,7 @@ from itertools import product
 from loguru import logger
 from collections import namedtuple
 import numpy as np
+
 # actually, this kind of pattern matches are too hard to write in pure python. what do I do???
 # wait for pep622,pep642, to be implemented in python 3.10
 
@@ -75,6 +76,26 @@ def cast_imdef_to_imdef_str(imdef):
     else:
         return None
 
+def imgs2tile_shape(shape,w=1024,h=1024,max_image=100,padding=1):
+    case shape:
+        match (B,H,W):
+            ch = 1
+        match (B,H,W,ch):
+            pass
+    #nrow = int(sqrt(len(imgs[:max_image]))+0.5)
+    if shape[0] is None:
+        # we cannot estimate actual shape.
+        return (None,None,ch)
+    n_imgs = min(shape[0],max_image)
+    nrow = int(sqrt(n_imgs))
+    if (nrow*nrow < n_imgs):
+        nrow += 1
+    r = int((w-((nrow+1)*padding))/nrow) # width/height of each tile
+    new_shape = (r*nrow,r*nrow,ch)
+    return new_shape
+
+ms_imgs2tile = imgs2tile_shape |> ss_to_ms$
+
 def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
     mode = imgs[0].mode
     ch = len(mode)
@@ -95,7 +116,7 @@ def rule_imgs2tile(state):
         match ImageDef(PILImages(mode,chrpr),meta):
             return [(
                 imgs2tile,
-                ImageDef(Numpy("uint8","HWC",chrpr,VR_0_255),meta),
+                ImageDef(Numpy("uint8","HWC",chrpr,VR_0_255),meta |> ms_imgs2tile),
                 "imgs2tile",
                 10
             )]
@@ -141,12 +162,14 @@ def rule_numpy2img(state):
                     1
                 )]
 
+ms_img2L = (s->(s[0],s[1])) |> ss_to_ms$
+ms_img2LA = (s->(s[0],s[1],2)) |> ss_to_ms$
 def rule_image2gray(state):
     case state:
         match ImageDef(PILImage(ch_rpr,ch_rpr2),meta):
             return [
-                (.convert("L"),ImageDef(PILImage("L","L"),meta),"image2gray",10),
-                (.convert("LA"),ImageDef(PILImage("LA","LA"),meta),"image2gray-alpha",10),
+                (.convert("L"),ImageDef(PILImage("L","L"),meta|>ms_img2L),"image2gray",10),
+                (.convert("LA"),ImageDef(PILImage("LA","LA"),meta|>ms_img2LA),"image2gray-alpha",10),
                    ]
 
 def rule_image2lab(state):
@@ -209,25 +232,6 @@ def _0_1_to_vr_lab(ary):
     r[:,:,2] = (ary[:,:,2] * 255) - 128.0
     return r
 
-"""
-def dict2visdomable(state):
-    case state:
-        match {"type":"numpy","dtype":"float32","arrange":"CHW" or "BCHW","ch_rpr":"RGB" or "L",**others} if "visdomable" not in state:
-            return [frozendict(
-                **state,
-                visdomable=True
-            )]
-"""
-def to_visdom_function(state):
-    case state:
-        match {"type":"numpy","dtype":"float32","arrange":"CHW","ch_rpr":"RGB" or "L","v_range":"0_255",**others}:
-            return [
-                (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            ]
-        match {"type":"numpy","dtype":"float32","arrange":"BCHW","ch_rpr":"RGB" or "L","v_range":"0_255",**others}:
-            return [
-                (ary->visdom->visdom.images$(ary),"visdom_function","to_visdom_function")
-            ]
 def any2widget(state):
     return [(ary->Text(str(ary)),"widget","anything_to_text_widget",1000)]
 data AutoTuple(formats is tuple)
@@ -323,7 +327,7 @@ def smart_tuple_conversion(state,end):
             )]
 
 data AutoList(state):
-    def __str__(self):
+    def __repr__(self):
         return f"[{self.state}]"
 
 
@@ -347,28 +351,43 @@ def intra_list_conversions(state):
                 cost+1
             ))(f,new_state,cost,name) for f,new_state,cost,name in SOLVER.solver.neighbors(es)]
 
+#shape change!
+ms_add_None_b_ch = (s->(None,*s)) |> ss_to_ms$
+"adds 1 as batch shape"
+ms_del_b_ch = (s->s[1:])  |> ss_to_ms$
+# TODO preserve length in AutoList
 def img_list_is_imgs(state):
     case state:
-        match AutoList("image,"+formats):
-            return [f"images,{formats}"]
-        match "images,"+formats:
-            return [AutoList("image,"+formats)]
+        match AutoList(ImageDef(PILImage(m1,m2),meta)):
+            return [ImageDef(PILImages(m1,m2),meta |> ms_add_None_b_ch)]
+        match ImageDef(PILImages(m1,m2),meta):
+            return [AutoList(ImageDef(PILImage(m1,m2),meta |> ms_del_b_ch))]
 def numpys_to_numpy(state):
     case state:
-        match AutoList({"type":"numpy","arrange":arng,**kwargs}) if "B" not in arng:
+        match AutoList({"type":"numpy","arrange":arng,"meta":{"shape":shape,**other_meta},**kwargs}) if "B" not in arng:
             return [
                 (numpys->np.array(numpys),
-                frozendict({"type":"numpy","arrange":"B"+arng,**kwargs}),
+                frozendict({"type":"numpy","arrange":"B"+arng,"meta":fdict({"shape":(None,)+shape,**other_meta}),**kwargs}),
                 f"merge arrays to array",
                 10)
             ]
 def tensor_to_list(state):
     case state:
-        match {"arrange":arng,"meta":{"shape":shape,**other_meta},**kwargs} if len(arng) > 1:
+        match {"arrange":"B"+arng,"meta":{"shape":shape,**other_meta},**kwargs} if len(arng) > 1:
             return [
                 (tensor->[t for t in tensor],
-                AutoList(fdict(arrange=arng[1:],meta=fdict({"shape":shape[1:],**other_meta}),**kwargs)),
+                AutoList(fdict(arrange=arng,meta=fdict({"shape":shape[1:],**other_meta}),**kwargs)),
                 f"tensor to list of tensor",
+                2)
+            ]
+        match {"arrange":"C"+arng,"meta":{"shape":shape,**other_meta},"ch_rpr":cr,**kwargs} if len(arng) > 1:
+            return [
+                (tensor->[t for t in tensor],
+                AutoList(fdict(
+                    arrange=arng,
+                    meta=fdict({"shape":shape[1:],**other_meta}),
+                    ch_rpr="L",**kwargs)),
+                f"split CHW to [HW]",
                 2)
             ]
 
@@ -412,14 +431,14 @@ def torch_img_to_pixpix_input(state):
             return [(
                 pix2pix_normalizer(len(rpr)),
                 f"pix2pix,nc={len(rpr)}",
-                "convert to pixpix normalized input",
+                "to pixpix normalized",
                 1
             )]
         match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":("RGB" or "RGBA" or "L") as rpr,**kwargs}:
             return [(
                 t->torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t],dim=0),
                 f"pix2pix_batch,nc={len(rpr)}",
-                "convert to pixpix normalized input",
+                "to pixpix normalized",
                 1
             )]
         match "pix2pix_laba":
@@ -523,14 +542,14 @@ def torch_img_to_vgg_prep(state):
             return [(
                 VGG_NORMALIZER,
                 f"vgg_prep",
-                "convert to vgg normalized input",
+                "to vgg normalized",
                 1
             )]
         match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":"RGB",**kwargs}:
             return [(
                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
                 f"vgg_prep_batch",
-                "convert to vgg normalized input batch",
+                "to vgg normalized batch",
                 1
             )]
         match {"type":"torch","dtype":"float32","arrange":"BCHW","v_range":"0_1","ch_rpr":"RGBA",**kwargs}:
@@ -539,7 +558,7 @@ def torch_img_to_vgg_prep(state):
                     torch.cat((VGG_NORMALIZER(i[:3])[None],i[[3]][None]),dim=1) for i in t
                 ],dim=0),
                 f"vgg_prep_batch_masked",
-                "convert to vgg normalized input batch",
+                "to vgg normalized batch",
                 1
             )]
 def repeat_ch(state):
@@ -572,7 +591,6 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_cast_rule(cast_tuple2auto_tuple,"tuple <--> auto_tuple"),
     #AutoSolver.create_cast_rule(dict2visdomable),
     AutoSolver.create_conversion_rule(any2widget),
-    AutoSolver.create_conversion_rule(to_visdom_function),
     AutoSolver.create_conversion_rule(rule_imgs2tile),
     AutoSolver.create_conversion_rule(rule_img2widget),
     AutoSolver.create_conversion_rule(rule_numpy2img),
@@ -672,18 +690,28 @@ def tuple_edge_cutter(x,y,end):
     return False
 
 
-def debug(trace):
-    n = trace[-1]
-    case n.dst:
-        match ImageDef(TensorLike(dtype,"WC",_,_),_):
-            pass
-    logger.debug(n)
+def debug(conv):
+    n = conv.edges[-1]
+    case (n.src,n.dst):
+        match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+            if len(arng) != len(s):
+                from IPython import embed
+                logger.warning(f"debug console for omni_converter")
+                embed()
+                raise RuntimeError("exit")
+        match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            if (len(arng2) != len(s2)) or (len(arng1) != len(s1)):
+                from IPython import embed
+                logger.warning(f"debug console for omni_converter")
+                embed()
+                raise RuntimeError("exit")
+
 
 SOLVER = AutoSolver(
     rules=DEFAULT_RULES.copy(),
     smart_rules=SMART_RULES.copy(),
     heuristics=tuple_widget_heuristics,
     edge_cutter=tuple_edge_cutter,
-    debug_hook=None
+    debug_hook=debug
     )
 auto_img = format->value->AutoData(value,format,SOLVER)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x990e4695
+# __coconut_hash__ = 0x49a69d67
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -21,7 +21,8 @@ _coconut_sys.path.pop(0)
 
 import heapq  # import heapq
 from loguru import logger  # from loguru import logger
-from pprint import pformat  # from pprint import pformat
+from pprintpp import pformat  # from pprintpp import pformat
+from collections import OrderedDict  # from collections import OrderedDict
 from data_tree.coconut.monad import try_monad  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Try  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Success  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
@@ -34,17 +35,20 @@ from os.path import expanduser  # from os.path import expanduser
 from data_tree.util import DefaultShelveCache  # from data_tree.util import DefaultShelveCache
 import shelve  # import shelve
 import os  # import os
+from frozendict import frozendict  # from frozendict import frozendict
 from itertools import chain  # from itertools import chain
-class Edge(_coconut.collections.namedtuple("Edge", "src dst f cost name")):  # data Edge(src,dst,f,cost,name="unnamed")
-    __slots__ = ()  # data Edge(src,dst,f,cost,name="unnamed")
-    __ne__ = _coconut.object.__ne__  # data Edge(src,dst,f,cost,name="unnamed")
-    def __eq__(self, other):  # data Edge(src,dst,f,cost,name="unnamed")
-        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data Edge(src,dst,f,cost,name="unnamed")
-    def __hash__(self):  # data Edge(src,dst,f,cost,name="unnamed")
-        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data Edge(src,dst,f,cost,name="unnamed")
-    def __new__(_cls, src, dst, f, cost, name="unnamed"):  # data Edge(src,dst,f,cost,name="unnamed")
-        return _coconut.tuple.__new__(_cls, (src, dst, f, cost, name))  # data Edge(src,dst,f,cost,name="unnamed")
-
+from tabulate import tabulate  # from tabulate import tabulate
+class Edge(_coconut.collections.namedtuple("Edge", "src dst f cost name")):  # data Edge(src,dst,f,cost,name="unnamed"):
+    __slots__ = ()  # data Edge(src,dst,f,cost,name="unnamed"):
+    __ne__ = _coconut.object.__ne__  # data Edge(src,dst,f,cost,name="unnamed"):
+    def __eq__(self, other):  # data Edge(src,dst,f,cost,name="unnamed"):
+        return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data Edge(src,dst,f,cost,name="unnamed"):
+    def __hash__(self):  # data Edge(src,dst,f,cost,name="unnamed"):
+        return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data Edge(src,dst,f,cost,name="unnamed"):
+    def __new__(_cls, src, dst, f, cost, name="unnamed"):  # data Edge(src,dst,f,cost,name="unnamed"):
+        return _coconut.tuple.__new__(_cls, (src, dst, f, cost, name))  # data Edge(src,dst,f,cost,name="unnamed"):
+    def __repr__(self):  #     def __repr__(self):
+        return "Edge(<{_coconut_format_0}> -> <{_coconut_format_1}> : {_coconut_format_2})".format(_coconut_format_0=(self.src), _coconut_format_1=(self.dst), _coconut_format_2=(self.name))  #         return f"Edge(<{self.src}> -> <{self.dst}> : {self.name})"
 class NoRouteException(Exception): pass  # class NoRouteException(Exception)
 class ConversionError(Exception): pass  # class ConversionError(Exception)
 class Conversion:  # class Conversion:
@@ -78,14 +82,31 @@ class Conversion:  # class Conversion:
         return Conversion(edges)  #         return Conversion(edges)
 
     def __repr__(self):  #     def __repr__(self):
+        replace_pairs = [(" ", ""), ("<frozendict", "<fd"), ("'", ""), ("type:", "t:"), ("dtype", "dt"), ("arrange", "ar"), ("ch_rpr", "ch"), ("v_range", "vr"), ("ImageDef", "ImDf")]  #         replace_pairs =[
+        def replaces(tgt):  #         def replaces(tgt):
+            tgt = repr(tgt)  #             tgt = repr(tgt)
+            for a, b in replace_pairs:  #             for a,b in replace_pairs:
+                tgt = tgt.replace(a, b)  #                 tgt = tgt.replace(a,b)
+            return tgt  #             return tgt
         if len(self.edges):  #         if len(self.edges):
             start = self.edges[0].src  #             start = self.edges[0].src
             end = self.edges[-1].dst  #             end = self.edges[-1].dst
         else:  #         else:
             start = "None"  #             start = "None"
             end = "None"  #             end = "None"
-        info = dict(name="Conversion", start=start, end=end, path=[e.name for e in self.edges], cost=sum([e.cost for e in self.edges]))  #         info = dict(
-        return pformat(info)  #         return pformat(info)
+        path_data = [(e.name, ((replaces)(e.src)), ((replaces)(e.dst))) for e in self.edges]  #         path_data = [(e.name,(e.src |> replaces),(e.dst |> replaces)) for e in self.edges]
+        """
+        info = OrderedDict(
+            name="Conversion",
+            start = start,
+            end = end,
+            path = path_data,
+            cost = sum([e.cost for e in self.edges])
+        )
+        """  #         """
+#print(tabulate(path_data))
+#return pformat(info)
+        return tabulate(path_data)  #         return tabulate(path_data)
     def trace(self, tgt):  #     def trace(self,tgt):
         x = tgt  #         x = tgt
         for e in self.edges:  #         for e in self.edges:
@@ -192,7 +213,7 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
             assert isinstance(cost, int), "cost is not a number:{_coconut_format_0}".format(_coconut_format_0=(pos))  #             assert isinstance(cost,int),f"cost is not a number:{pos}"
             new_trace = trace + [Edge(pos, next_node, mapper, cost, name)]  #             new_trace = trace + [Edge(pos,next_node,mapper,cost,name)]
             if debug_hook is not None:  #             if debug_hook is not None:
-                debug_hook(new_trace)  #                 debug_hook(new_trace)
+                debug_hook(Conversion(new_trace))  #                 debug_hook(Conversion(new_trace))
             try:  #             try:
                 new_score = scores[pos] + cost + heuristics(next_node, end)  #                 new_score = scores[pos] + cost + heuristics(next_node,end)
             except Exception as e:  #             except Exception as e:

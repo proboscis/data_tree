@@ -56,24 +56,25 @@ data PILImage(mode,channel_repr) from DataType:
 
 data ImageDef(data_type is DataType,meta is frozendict):
     def __repr__(self):
-        return f"ImageDef({self.data_type}|{self.meta})"
-
-
-
+        if self.meta:
+            return f"ImageDef({self.data_type}|{self.meta})"
+        else:
+            return f"ImageDef({self.data_type})"
 
 DTYPES={"float32","float64","int32","int64","uint8","bool"}
 data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
     def to_edge(self,src:ImageDef):
         try:
             new_meta = self.meta_shifter(src.meta)
-            if "shape" in new_meta:
-                if len(self.b.arrange) != len(new_meta["shape"]):
-                    raise RuntimeError("wtf")
+            return Edge(src,ImageDef(self.b,new_meta),self.f,self.cost,self.name)
+            case (self.a,src.meta,self.b,new_meta):
+                match (TensorLike(_,arng1,*_),{"shape":s1},TensorLike(_,arng2,*_),{"shape":s2}):
+                    assert len(arng2) == len(s2)
+                    assert len(arng1) == len(s1)
             if src.meta != new_meta:
                 if "shape" in src.meta and "shape" in new_meta:
                     if len(src.meta["shape"]) > len(new_meta["shape"]):
                         logger.info(f"{self.name}:\n{src.meta['shape']}->{new_meta['shape']}")
-            return Edge(src,ImageDef(self.b,new_meta),self.f,self.cost,self.name)
         except Exception as e:
             from IPython import embed
             embed()
@@ -444,6 +445,7 @@ def RGB_to_YCbCr(state):
 
 #shape change!
 ms_add_b_ch = (s->(1,*s)) |> ss_to_ms$
+"adds 1 as batch shape"
 ms_del_b_ch = (s->s[1:])  |> ss_to_ms$
 # TODO what to do with non-batched states?
 
@@ -455,16 +457,17 @@ def en_batch(imdef:ImageDef):
                          b=ImageDef(imdef.data_type.__class__(dtype,new_arng,ch_repr,vr),ms_add_b_ch(meta)),
                          f=a->a[None],
                          cost=10,
-                         name=f"tensor_like en_batch:{meta} to {ms_add_b_ch(meta)}"
+                         name=f"tensor_like en_batch"
                         )]
         match ImageDef(PILImage(mode,channel_repr),meta):
             return [Edge(a=imdef,
                          b=ImageDef(PILImages(mode,channel_repr),ms_add_b_ch(meta)),
                          f=a->[a],
                          cost=10,
-                         name=f"pil image en_batch:{meta} to {ms_add_b_ch(meta)}"
+                         name=f"pil image en_batch"
                         )]
     return []
+
 def de_batch(imdef:ImageDef):
     case imdef:
         match ImageDef(TensorLike(dtype,arng,ch,vr),{"shape":shape} as meta) if "B" in arng and shape[0] == 1:
@@ -670,13 +673,17 @@ def str_to_img_def(query):
                 return Torch(dtype,arng,ch,vrs[vr] if vr in vrs else vr),arng_to_shape(arng,ch)
             match ["torch",dtype,arng,ch,vr,shape]:
                 return Torch(dtype,arng,ch,vrs[vr] if vr in vrs else vr),shape_str_to_shape(shape)
-            match ["image",mode,ch]:
+            match ["image",mode,ch] if len(ch_splitter(ch)) > 1:
                 return PILImage(mode,ch),(None,None,len(ch_splitter(ch)))
+            match ["image",mode,ch] if len(ch_splitter(ch)) ==1:
+                return PILImage(mode,ch),(None,None)
             match ["image",mode,ch,shape]:
                 return PILImage(mode,ch),shape_str_to_shape(shape)
-            match ["images",mode,ch]:
+            match ["images",mode,ch] if len(ch_splitter(ch)) > 1:
                 return PILImages(mode,ch),(None,None,None,len(ch_splitter(ch)))
-            match ["images",mode,ch]:
+            match ["images",mode,ch] if len(ch_splitter(ch)) == 1:
+                return PILImages(mode,ch),(None,None,None)
+            match ["images",mode,ch,shape]:
                 return PILImages(mode,ch),shape_str_to_shape(shape)
     case query_to_data_type(query):
         match (data_type,shape):
@@ -720,20 +727,21 @@ def rule_VR_None_to_normalized(imdef):
                 1,
                 "batch_minmax_0_1_numpy_img"
             )]
-
+ms_add_ch_to_hw = (s->(1,s[0],s[1])) |> ss_to_ms$
+ms_add_ch_to_bhw = (s->(s[0],1,s[1],s[2])) |> ss_to_ms$
 def rule_add_channel(imdef):
     case imdef:
         match ImageDef(Numpy(dtype,"HW",ch,vr),meta):
             return [(
                 a->a[None],
-                ImageDef(Numpy(dtype,"CHW",ch,vr),meta),
+                ImageDef(Numpy(dtype,"CHW",ch,vr),meta|>ms_add_ch_to_hw),
                 1,
                 "add_channel_dim"
             )]
         match ImageDef(Numpy(dtype,"BHW",ch,vr),meta):
             return [(
                 a->a[:,None],
-                ImageDef(Numpy(dtype,"BCHW",ch,vr),meta),
+                ImageDef(Numpy(dtype,"BCHW",ch,vr),meta|>ms_add_ch_to_bhw),
                 1,
                 "add_channel_dim"
             )]

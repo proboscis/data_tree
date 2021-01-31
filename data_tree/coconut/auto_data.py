@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x8f308a7c
+# __coconut_hash__ = 0x9316f485
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -305,7 +305,7 @@ class AutoData:  # class AutoData:
         (display)(self.to("widget"))  #         self.to("widget") |> display
 
     def __repr__(self):  #     def __repr__(self):
-        return "<{_coconut_format_0} {_coconut_format_1}>".format(_coconut_format_0=(self.__class__), _coconut_format_1=(self.format))  #         return f"<{self.__class__} {self.format}>"
+        return "{_coconut_format_0}({_coconut_format_1})".format(_coconut_format_0=(self.__class__.__name__), _coconut_format_1=(self.format))  #         return f"{self.__class__.__name__}({self.format})"
 
     def _repr_png_(self):  #     def _repr_png_(self):
         try:  #         try:
