@@ -147,10 +147,10 @@ def dict2imdef(state):
 def rule_numpy2img(state):
     if isinstance(state,Mapping):
         case state:
-            match {"type":"numpy","dtype":"uint8","ch_rpr":"RGB","arrange":"HWC","v_range":"0_255","meta":meta}:
+            match {"type":"numpy","dtype":"uint8","ch_rpr":("RGB" or "RGBA" or "YCbCr") as cr,"arrange":"HWC","v_range":"0_255","meta":meta}:
                 return [(
                     Image.fromarray,
-                    ImageDef(PILImage("RGB","RGB"),meta),
+                    ImageDef(PILImage(cr,cr),meta),
                     "Image.fromarray",
                     1
                 )]

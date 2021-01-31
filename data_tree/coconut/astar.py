@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x49a69d67
+# __coconut_hash__ = 0xb18c5f12
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -106,7 +106,8 @@ class Conversion:  # class Conversion:
         """  #         """
 #print(tabulate(path_data))
 #return pformat(info)
-        return tabulate(path_data)  #         return tabulate(path_data)
+        res = """Conversion:(cost={_coconut_format_0})\n""".format(_coconut_format_0=(sum([e.cost for e in self.edges])))  #         res = f"""Conversion:(cost={sum([e.cost for e in self.edges])})\n"""
+        return res + tabulate(path_data)  #         return res+tabulate(path_data)
     def trace(self, tgt):  #     def trace(self,tgt):
         x = tgt  #         x = tgt
         for e in self.edges:  #         for e in self.edges:
@@ -142,6 +143,7 @@ def _astar(start, matcher, neighbors, max_depth=100):  # def _astar(
 #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
 #print(f"visit:{trace[-1] if trace else 'no trace'}")
         if len(trace) >= max_depth:  # terminate search on max_depth  #         if len(trace) >= max_depth: # terminate search on max_depth
+            logger.error("search terminated due to max_depth".format())  #             logger.error(f"search terminated due to max_depth")
             continue  #             continue
         if matcher(pos):  # reached a goal  #         if matcher(pos): # reached a goal
             logger.debug("found after {_coconut_format_0} visits.".format(_coconut_format_0=(visited)))  #             logger.debug(f"found after {visited} visits.")
