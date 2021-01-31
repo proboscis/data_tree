@@ -255,7 +255,7 @@ class AutoData:
         self.to("widget") |> display
 
     def __repr__(self):
-        return f"<{self.__class__} {self.format}>"
+        return f"{self.__class__.__name__}({self.format})"
 
     def _repr_png_(self):
         try:

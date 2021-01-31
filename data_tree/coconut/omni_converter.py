@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x1b9b9dce
+# __coconut_hash__ = 0x839fb9fa
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -34,6 +34,7 @@ from itertools import product  # from itertools import product
 from loguru import logger  # from loguru import logger
 from collections import namedtuple  # from collections import namedtuple
 import numpy as np  # import numpy as np
+
 # actually, this kind of pattern matches are too hard to write in pure python. what do I do???
 # wait for pep622,pep642, to be implemented in python 3.10
 
@@ -158,6 +159,39 @@ def cast_imdef_to_imdef_str(imdef):  # def cast_imdef_to_imdef_str(imdef):
     if not _coconut_case_check_4:  #     else:
         return None  #         return None
 
+def imgs2tile_shape(shape, w=1024, h=1024, max_image=100, padding=1):  # def imgs2tile_shape(shape,w=1024,h=1024,max_image=100,padding=1):
+    _coconut_match_to = shape  #     case shape:
+    _coconut_case_check_5 = False  #     case shape:
+    if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 3):  #     case shape:
+        B = _coconut_match_to[0]  #     case shape:
+        H = _coconut_match_to[1]  #     case shape:
+        W = _coconut_match_to[2]  #     case shape:
+        _coconut_case_check_5 = True  #     case shape:
+    if _coconut_case_check_5:  #     case shape:
+        ch = 1  #             ch = 1
+    if not _coconut_case_check_5:  #         match (B,H,W,ch):
+        if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 4):  #         match (B,H,W,ch):
+            B = _coconut_match_to[0]  #         match (B,H,W,ch):
+            H = _coconut_match_to[1]  #         match (B,H,W,ch):
+            W = _coconut_match_to[2]  #         match (B,H,W,ch):
+            ch = _coconut_match_to[3]  #         match (B,H,W,ch):
+            _coconut_case_check_5 = True  #         match (B,H,W,ch):
+        if _coconut_case_check_5:  #         match (B,H,W,ch):
+            pass  #             pass
+#nrow = int(sqrt(len(imgs[:max_image]))+0.5)
+    if shape[0] is None:  #     if shape[0] is None:
+# we cannot estimate actual shape.
+        return (None, None, ch)  #         return (None,None,ch)
+    n_imgs = min(shape[0], max_image)  #     n_imgs = min(shape[0],max_image)
+    nrow = int(sqrt(n_imgs))  #     nrow = int(sqrt(n_imgs))
+    if (nrow * nrow < n_imgs):  #     if (nrow*nrow < n_imgs):
+        nrow += 1  #         nrow += 1
+    r = int((w - ((nrow + 1) * padding)) / nrow)  # width/height of each tile  #     r = int((w-((nrow+1)*padding))/nrow) # width/height of each tile
+    new_shape = (r * nrow, r * nrow, ch)  #     new_shape = (r*nrow,r*nrow,ch)
+    return new_shape  #     return new_shape
+
+ms_imgs2tile = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))(imgs2tile_shape)  # ms_imgs2tile = imgs2tile_shape |> ss_to_ms$
+
 def imgs2tile(imgs, w=1024, h=1024, max_image=100, padding=1):  # def imgs2tile(imgs,w=1024,h=1024,max_image=100,padding=1):
     mode = imgs[0].mode  #     mode = imgs[0].mode
     ch = len(mode)  #     ch = len(mode)
@@ -175,29 +209,29 @@ def imgs2tile(imgs, w=1024, h=1024, max_image=100, padding=1):  # def imgs2tile(
 
 def rule_imgs2tile(state):  # def rule_imgs2tile(state):
     _coconut_match_to = state  #     case state:
-    _coconut_case_check_5 = False  #     case state:
+    _coconut_case_check_6 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImages)) and (_coconut.len(_coconut_match_to[0]) == 2):  #     case state:
         mode = _coconut_match_to[0][0]  #     case state:
         chrpr = _coconut_match_to[0][1]  #     case state:
         meta = _coconut_match_to[1]  #     case state:
-        _coconut_case_check_5 = True  #     case state:
-    if _coconut_case_check_5:  #     case state:
-        return [(imgs2tile, ImageDef(Numpy("uint8", "HWC", chrpr, VR_0_255), meta), "imgs2tile", 10)]  #             return [(
+        _coconut_case_check_6 = True  #     case state:
+    if _coconut_case_check_6:  #     case state:
+        return [(imgs2tile, ImageDef(Numpy("uint8", "HWC", chrpr, VR_0_255), (ms_imgs2tile)(meta)), "imgs2tile", 10)]  #             return [(
 
 
 def rule_img2widget(state):  # def rule_img2widget(state):
     _coconut_match_to = state  #     case state:
-    _coconut_case_check_6 = False  #     case state:
+    _coconut_case_check_7 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImage)) and (_coconut.len(_coconut_match_to[0]) == 2):  #     case state:
         meta = _coconut_match_to[1]  #     case state:
-        _coconut_case_check_6 = True  #     case state:
-    if _coconut_case_check_6:  #     case state:
+        _coconut_case_check_7 = True  #     case state:
+    if _coconut_case_check_7:  #     case state:
         return [(infer_widget, "widget", "infer_widget", 1)]  #             return [(
 
 def dict2imdef(state):  # def dict2imdef(state):
     if isinstance(state, Mapping):  #     if isinstance(state,Mapping):
         _coconut_match_to = state  #         case state:
-        _coconut_case_check_7 = False  #         case state:
+        _coconut_case_check_8 = False  #         case state:
         if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #         case state:
             _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #         case state:
             _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #         case state:
@@ -211,10 +245,10 @@ def dict2imdef(state):  # def dict2imdef(state):
                 _ch_rpr = _coconut_match_temp_3  #         case state:
                 _v_range = _coconut_match_temp_4  #         case state:
                 meta = _coconut_match_temp_5  #         case state:
-                _coconut_case_check_7 = True  #         case state:
-        if _coconut_case_check_7:  #         case state:
+                _coconut_case_check_8 = True  #         case state:
+        if _coconut_case_check_8:  #         case state:
             return [ImageDef(Numpy(_dtype, _arng, _ch_rpr, _v_range), meta)]  #                 return [ImageDef(Numpy(_dtype,_arng,_ch_rpr,_v_range),meta)]
-        if not _coconut_case_check_7:  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
+        if not _coconut_case_check_8:  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
             if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
                 _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
                 _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
@@ -228,10 +262,10 @@ def dict2imdef(state):  # def dict2imdef(state):
                     _ch_rpr = _coconut_match_temp_3  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
                     _v_range = _coconut_match_temp_4  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
                     meta = _coconut_match_temp_5  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
-                    _coconut_case_check_7 = True  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
-            if _coconut_case_check_7:  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
+                    _coconut_case_check_8 = True  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
+            if _coconut_case_check_8:  #             match {"type":"torch","dtype":_dtype,"arrange":_arng,"ch_rpr":_ch_rpr,"v_range":_v_range,"meta":meta}:
                 return [ImageDef(Torch(_dtype, _arng, _ch_rpr, _v_range), meta)]  #                 return [ImageDef(Torch(_dtype,_arng,_ch_rpr,_v_range),meta)]
-        if not _coconut_case_check_7:  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+        if not _coconut_case_check_8:  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
             if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 4):  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                 _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                 _coconut_match_temp_1 = _coconut_match_to.get("mode", _coconut_sentinel)  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
@@ -241,10 +275,10 @@ def dict2imdef(state):  # def dict2imdef(state):
                     _mode = _coconut_match_temp_1  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                     _ch_rpr = _coconut_match_temp_2  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                     meta = _coconut_match_temp_3  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
-                    _coconut_case_check_7 = True  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
-            if _coconut_case_check_7:  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+                    _coconut_case_check_8 = True  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+            if _coconut_case_check_8:  #             match {"type":"image","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                 return [ImageDef(PILImage(_mode, _ch_rpr), meta)]  #                 return [ImageDef(PILImage(_mode,_ch_rpr),meta)]
-        if not _coconut_case_check_7:  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+        if not _coconut_case_check_8:  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
             if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 4):  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                 _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                 _coconut_match_temp_1 = _coconut_match_to.get("mode", _coconut_sentinel)  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
@@ -254,14 +288,14 @@ def dict2imdef(state):  # def dict2imdef(state):
                     _mode = _coconut_match_temp_1  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                     _ch_rpr = _coconut_match_temp_2  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                     meta = _coconut_match_temp_3  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
-                    _coconut_case_check_7 = True  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
-            if _coconut_case_check_7:  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+                    _coconut_case_check_8 = True  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
+            if _coconut_case_check_8:  #             match {"type":"images","mode":_mode,"ch_rpr":_ch_rpr,"meta":meta}:
                 return [ImageDef(PILImages(_mode, _ch_rpr), meta)]  #                 return [ImageDef(PILImages(_mode,_ch_rpr),meta)]
 
 def rule_numpy2img(state):  # def rule_numpy2img(state):
     if isinstance(state, Mapping):  #     if isinstance(state,Mapping):
         _coconut_match_to = state  #         case state:
-        _coconut_case_check_8 = False  #         case state:
+        _coconut_case_check_9 = False  #         case state:
         if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #         case state:
             _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #         case state:
             _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #         case state:
@@ -271,10 +305,10 @@ def rule_numpy2img(state):  # def rule_numpy2img(state):
             _coconut_match_temp_5 = _coconut_match_to.get("meta", _coconut_sentinel)  #         case state:
             if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "RGB") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HWC") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255") and (_coconut_match_temp_5 is not _coconut_sentinel):  #         case state:
                 meta = _coconut_match_temp_5  #         case state:
-                _coconut_case_check_8 = True  #         case state:
-        if _coconut_case_check_8:  #         case state:
+                _coconut_case_check_9 = True  #         case state:
+        if _coconut_case_check_9:  #         case state:
             return [(Image.fromarray, ImageDef(PILImage("RGB", "RGB"), meta), "Image.fromarray", 1)]  #                 return [(
-        if not _coconut_case_check_8:  #                     Image.fromarray,
+        if not _coconut_case_check_9:  #                     Image.fromarray,
             if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #                     Image.fromarray,
                 _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                     Image.fromarray,
                 _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #                     Image.fromarray,
@@ -284,35 +318,37 @@ def rule_numpy2img(state):  # def rule_numpy2img(state):
                 _coconut_match_temp_5 = _coconut_match_to.get("meta", _coconut_sentinel)  #                     Image.fromarray,
                 if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "L") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HW") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255") and (_coconut_match_temp_5 is not _coconut_sentinel):  #                     Image.fromarray,
                     meta = _coconut_match_temp_5  #                     Image.fromarray,
-                    _coconut_case_check_8 = True  #                     Image.fromarray,
-            if _coconut_case_check_8:  #                     Image.fromarray,
+                    _coconut_case_check_9 = True  #                     Image.fromarray,
+            if _coconut_case_check_9:  #                     Image.fromarray,
                 return [(Image.fromarray, ImageDef(PILImage("L", "L"), meta), "Image.fromarray", 1)]  #                 return [(
 
+ms_img2L = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: (s[0], s[1])))  # ms_img2L = (s->(s[0],s[1])) |> ss_to_ms$
+ms_img2LA = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: (s[0], s[1], 2)))  # ms_img2LA = (s->(s[0],s[1],2)) |> ss_to_ms$
 def rule_image2gray(state):  # def rule_image2gray(state):
     _coconut_match_to = state  #     case state:
-    _coconut_case_check_9 = False  #     case state:
+    _coconut_case_check_10 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImage)) and (_coconut.len(_coconut_match_to[0]) == 2):  #     case state:
         ch_rpr = _coconut_match_to[0][0]  #     case state:
         ch_rpr2 = _coconut_match_to[0][1]  #     case state:
         meta = _coconut_match_to[1]  #     case state:
-        _coconut_case_check_9 = True  #     case state:
-    if _coconut_case_check_9:  #     case state:
-        return [(_coconut.operator.methodcaller("convert", "L"), ImageDef(PILImage("L", "L"), meta), "image2gray", 10), (_coconut.operator.methodcaller("convert", "LA"), ImageDef(PILImage("LA", "LA"), meta), "image2gray-alpha", 10),]  #             return [
+        _coconut_case_check_10 = True  #     case state:
+    if _coconut_case_check_10:  #     case state:
+        return [(_coconut.operator.methodcaller("convert", "L"), ImageDef(PILImage("L", "L"), (ms_img2L)(meta)), "image2gray", 10), (_coconut.operator.methodcaller("convert", "LA"), ImageDef(PILImage("LA", "LA"), (ms_img2LA)(meta)), "image2gray-alpha", 10),]  #             return [
 
 def rule_image2lab(state):  # def rule_image2lab(state):
     from skimage import color  #     from skimage import color
     _coconut_match_to = state  #     case state:
-    _coconut_case_check_10 = False  #     case state:
+    _coconut_case_check_11 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "RGB") and (_coconut_match_to[0][3] == "0_1"):  #     case state:
         meta = _coconut_match_to[1]  #     case state:
-        _coconut_case_check_10 = True  #     case state:
-    if _coconut_case_check_10:  #     case state:
+        _coconut_case_check_11 = True  #     case state:
+    if _coconut_case_check_11:  #     case state:
         return [(color.rgb2lab, ImageDef(Numpy("float64", "HWC", "LAB", "LAB"), meta), "sklearn.color.rgb2lab")]  #             return [
-    if not _coconut_case_check_10:  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
+    if not _coconut_case_check_11:  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LAB") and (_coconut_match_to[0][3] == "LAB"):  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
             meta = _coconut_match_to[1]  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
-            _coconut_case_check_10 = True  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
-        if _coconut_case_check_10:  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
+            _coconut_case_check_11 = True  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
+        if _coconut_case_check_11:  #                 (color.rgb2lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"sklearn.color.rgb2lab")
             return [(color.lab2rgb, ImageDef(Numpy("float64", "HWC", "RGB", "0_1"), meta), "sklearn.color.lab2rgb")]  #             return [
 
 def convert_ignore_channel(ary, f):  # def convert_ignore_channel(ary,f):
@@ -328,45 +364,45 @@ def convert_ignore_channel(ary, f):  # def convert_ignore_channel(ary,f):
 def rule_rgba2laba(state):  # def rule_rgba2laba(state):
     from skimage import color  #     from skimage import color
     _coconut_match_to = state  #     case state:
-    _coconut_case_check_11 = False  #     case state:
+    _coconut_case_check_12 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "RGBA") and (_coconut_match_to[0][3] == "0_1"):  #     case state:
         meta = _coconut_match_to[1]  #     case state:
-        _coconut_case_check_11 = True  #     case state:
-    if _coconut_case_check_11:  #     case state:
+        _coconut_case_check_12 = True  #     case state:
+    if _coconut_case_check_12:  #     case state:
         return [(lambda a: convert_ignore_channel(a, color.rgb2lab), ImageDef(Numpy("float64", "HWC", "LABA", "LABA"), meta), "rgba2laba (ignores alpha)")]  #             return [
-    if not _coconut_case_check_11:  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
+    if not _coconut_case_check_12:  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LABA") and (_coconut_match_to[0][3] == "LABA"):  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
             meta = _coconut_match_to[1]  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
-            _coconut_case_check_11 = True  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
-        if _coconut_case_check_11:  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
+            _coconut_case_check_12 = True  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
+        if _coconut_case_check_12:  #                 (a->convert_ignore_channel(a,color.rgb2lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"rgba2laba (ignores alpha)")
             return [(lambda a: convert_ignore_channel(a, color.lab2rgb), ImageDef(Numpy("float64", "HWC", "RGBA", "0_1"), meta), "laba2rgba (ignores alpha)")]  #             return [
 
 
 def rule_lab_value_conversion(state):  # def rule_lab_value_conversion(state):
     _coconut_match_to = state  #     case state:
-    _coconut_case_check_12 = False  #     case state:
+    _coconut_case_check_13 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LAB") and (_coconut_match_to[0][3] == "LAB"):  #     case state:
         meta = _coconut_match_to[1]  #     case state:
-        _coconut_case_check_12 = True  #     case state:
-    if _coconut_case_check_12:  #     case state:
+        _coconut_case_check_13 = True  #     case state:
+    if _coconut_case_check_13:  #     case state:
         return [((_vr_lab_to_0_1, ImageDef(Numpy("float64", "HWC", "LAB", "0_1"), meta), "vr_lab_to_0_1"))]  #             return [((_vr_lab_to_0_1,ImageDef(Numpy("float64","HWC","LAB","0_1"),meta),"vr_lab_to_0_1"))]
-    if not _coconut_case_check_12:  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
+    if not _coconut_case_check_13:  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LABA") and (_coconut_match_to[0][3] == "LABA"):  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
             meta = _coconut_match_to[1]  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
-            _coconut_case_check_12 = True  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
-        if _coconut_case_check_12:  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
+            _coconut_case_check_13 = True  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
+        if _coconut_case_check_13:  #         match ImageDef(Numpy("float64","HWC","LABA","LABA"),meta):
             return [((lambda a: convert_ignore_channel(a, _vr_lab_to_0_1), ImageDef(Numpy("float64", "HWC", "LABA", "0_1"), meta), "vr_laba_to_0_1"))]  #             return [((a->convert_ignore_channel(a,_vr_lab_to_0_1),ImageDef(Numpy("float64","HWC","LABA","0_1"),meta),"vr_laba_to_0_1"))]
-    if not _coconut_case_check_12:  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
+    if not _coconut_case_check_13:  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LAB") and (_coconut_match_to[0][3] == "0_1"):  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
             meta = _coconut_match_to[1]  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
-            _coconut_case_check_12 = True  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
-        if _coconut_case_check_12:  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
+            _coconut_case_check_13 = True  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
+        if _coconut_case_check_13:  #         match ImageDef(Numpy("float64","HWC","LAB","0_1"),meta):
             return [((_0_1_to_vr_lab, ImageDef(Numpy("float64", "HWC", "LAB", "LAB"), meta), "0_1_to_vr_lab"))]  #             return [((_0_1_to_vr_lab,ImageDef(Numpy("float64","HWC","LAB","LAB"),meta),"0_1_to_vr_lab"))]
-    if not _coconut_case_check_12:  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
+    if not _coconut_case_check_13:  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
         if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float64") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LABA") and (_coconut_match_to[0][3] == "0_1"):  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
             meta = _coconut_match_to[1]  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
-            _coconut_case_check_12 = True  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
-        if _coconut_case_check_12:  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
+            _coconut_case_check_13 = True  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
+        if _coconut_case_check_13:  #         match ImageDef(Numpy("float64","HWC","LABA","0_1"),meta):
             return [((lambda a: convert_ignore_channel(a, _0_1_to_vr_lab), ImageDef(Numpy("float64", "HWC", "LABA", "LABA"), meta), "vr_0_1_to_laba"))]  #             return [((a->convert_ignore_channel(a,_0_1_to_vr_lab),ImageDef(Numpy("float64","HWC","LABA","LABA"),meta),"vr_0_1_to_laba"))]
 
 def _vr_lab_to_0_1(ary):  # def _vr_lab_to_0_1(ary):
@@ -383,59 +419,6 @@ def _0_1_to_vr_lab(ary):  # def _0_1_to_vr_lab(ary):
     r[:, :, 2] = (ary[:, :, 2] * 255) - 128.0  #     r[:,:,2] = (ary[:,:,2] * 255) - 128.0
     return r  #     return r
 
-"""
-def dict2visdomable(state):
-    case state:
-        match {"type":"numpy","dtype":"float32","arrange":"CHW" or "BCHW","ch_rpr":"RGB" or "L",**others} if "visdomable" not in state:
-            return [frozendict(
-                **state,
-                visdomable=True
-            )]
-"""  # """
-def to_visdom_function(state):  # def to_visdom_function(state):
-    _coconut_match_to = state  #     case state:
-    _coconut_case_check_13 = False  #     case state:
-    if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #     case state:
-        _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_2 = _coconut_match_to.get("arrange", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_3 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #     case state:
-        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "float32") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "CHW") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "RGB") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #     case state:
-            others = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "ch_rpr", "v_range")))  #     case state:
-            _coconut_case_check_13 = True  #     case state:
-    if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #     case state:
-        _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_2 = _coconut_match_to.get("arrange", _coconut_sentinel)  #     case state:
-        _coconut_match_temp_3 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #     case state:
-        if (not _coconut_case_check_13) and (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "float32") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "CHW") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "L") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #     case state:
-            _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #     case state:
-            others = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "ch_rpr", "v_range")))  #     case state:
-            _coconut_case_check_13 = True  #     case state:
-    if _coconut_case_check_13:  #     case state:
-        return [(lambda ary: lambda visdom: _coconut.functools.partial(visdom.image, ary), "visdom_function", "to_visdom_function")]  #             return [
-    if not _coconut_case_check_13:  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-        if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_2 = _coconut_match_to.get("arrange", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_3 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "float32") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "BCHW") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "RGB") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-                others = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "ch_rpr", "v_range")))  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-                _coconut_case_check_13 = True  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-        if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_2 = _coconut_match_to.get("arrange", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            _coconut_match_temp_3 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            if (not _coconut_case_check_13) and (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "float32") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "BCHW") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "L") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255"):  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-                _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-                others = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "ch_rpr", "v_range")))  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-                _coconut_case_check_13 = True  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-        if _coconut_case_check_13:  #                 (ary->visdom->visdom.image$(ary),"visdom_function","to_visdom_function")
-            return [(lambda ary: lambda visdom: _coconut.functools.partial(visdom.images, ary), "visdom_function", "to_visdom_function")]  #             return [
 def any2widget(state):  # def any2widget(state):
     return [(lambda ary: Text(str(ary)), "widget", "anything_to_text_widget", 1000)]  #     return [(ary->Text(str(ary)),"widget","anything_to_text_widget",1000)]
 class AutoTuple(_coconut.collections.namedtuple("AutoTuple", "formats")):  # data AutoTuple(formats is tuple)
@@ -561,7 +544,7 @@ class AutoList(_coconut.collections.namedtuple("AutoList", "state")):  # data Au
         return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data AutoList(state):
     def __hash__(self):  # data AutoList(state):
         return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data AutoList(state):
-    def __str__(self):  #     def __str__(self):
+    def __repr__(self):  #     def __repr__(self):
         return "[{_coconut_format_0}]".format(_coconut_format_0=(self.state))  #         return f"[{self.state}]"
 
 
@@ -592,42 +575,56 @@ def intra_list_conversions(state):  # def intra_list_conversions(state):
     if _coconut_case_check_18:  #     case state:
         return [(lambda f, new_state, cost, name: (lambda items: [f(i) for i in items], AutoList(new_state), "[{_coconut_format_0}]".format(_coconut_format_0=(name)), cost + 1))(f, new_state, cost, name) for f, new_state, cost, name in SOLVER.solver.neighbors(es)]  #             return [((f,new_state,cost,name)->(
 
+#shape change!
+ms_add_None_b_ch = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: (None, *s)))  # ms_add_None_b_ch = (s->(None,*s)) |> ss_to_ms$
+"adds 1 as batch shape"  # "adds 1 as batch shape"
+ms_del_b_ch = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: s[1:]))  # ms_del_b_ch = (s->s[1:])  |> ss_to_ms$
+# TODO preserve length in AutoList
 def img_list_is_imgs(state):  # def img_list_is_imgs(state):
     _coconut_match_to = state  #     case state:
     _coconut_case_check_19 = False  #     case state:
-    if (_coconut.isinstance(_coconut_match_to, AutoList)) and (_coconut.len(_coconut_match_to) == 1) and (_coconut.isinstance(_coconut_match_to[0], _coconut.str)) and (_coconut_match_to[0].startswith("image,")):  #     case state:
-        formats = _coconut_match_to[0][_coconut.len("image,"):]  #     case state:
+    if (_coconut.isinstance(_coconut_match_to, AutoList)) and (_coconut.len(_coconut_match_to) == 1) and (_coconut.isinstance(_coconut_match_to[0], ImageDef)) and (_coconut.len(_coconut_match_to[0]) == 2) and (_coconut.isinstance(_coconut_match_to[0][0], PILImage)) and (_coconut.len(_coconut_match_to[0][0]) == 2):  #     case state:
+        m1 = _coconut_match_to[0][0][0]  #     case state:
+        m2 = _coconut_match_to[0][0][1]  #     case state:
+        meta = _coconut_match_to[0][1]  #     case state:
         _coconut_case_check_19 = True  #     case state:
     if _coconut_case_check_19:  #     case state:
-        return ["images,{_coconut_format_0}".format(_coconut_format_0=(formats))]  #             return [f"images,{formats}"]
-    if not _coconut_case_check_19:  #         match "images,"+formats:
-        if (_coconut.isinstance(_coconut_match_to, _coconut.str)) and (_coconut_match_to.startswith("images,")):  #         match "images,"+formats:
-            formats = _coconut_match_to[_coconut.len("images,"):]  #         match "images,"+formats:
-            _coconut_case_check_19 = True  #         match "images,"+formats:
-        if _coconut_case_check_19:  #         match "images,"+formats:
-            return [AutoList("image," + formats)]  #             return [AutoList("image,"+formats)]
+        return [ImageDef(PILImages(m1, m2), (ms_add_None_b_ch)(meta))]  #             return [ImageDef(PILImages(m1,m2),meta |> ms_add_None_b_ch)]
+    if not _coconut_case_check_19:  #         match ImageDef(PILImages(m1,m2),meta):
+        if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], PILImages)) and (_coconut.len(_coconut_match_to[0]) == 2):  #         match ImageDef(PILImages(m1,m2),meta):
+            m1 = _coconut_match_to[0][0]  #         match ImageDef(PILImages(m1,m2),meta):
+            m2 = _coconut_match_to[0][1]  #         match ImageDef(PILImages(m1,m2),meta):
+            meta = _coconut_match_to[1]  #         match ImageDef(PILImages(m1,m2),meta):
+            _coconut_case_check_19 = True  #         match ImageDef(PILImages(m1,m2),meta):
+        if _coconut_case_check_19:  #         match ImageDef(PILImages(m1,m2),meta):
+            return [AutoList(ImageDef(PILImage(m1, m2), (ms_del_b_ch)(meta)))]  #             return [AutoList(ImageDef(PILImage(m1,m2),meta |> ms_del_b_ch))]
 def numpys_to_numpy(state):  # def numpys_to_numpy(state):
     _coconut_match_to = state  #     case state:
     _coconut_case_check_20 = False  #     case state:
     if (_coconut.isinstance(_coconut_match_to, AutoList)) and (_coconut.len(_coconut_match_to) == 1) and (_coconut.isinstance(_coconut_match_to[0], _coconut.abc.Mapping)):  #     case state:
         _coconut_match_temp_0 = _coconut_match_to[0].get("type", _coconut_sentinel)  #     case state:
         _coconut_match_temp_1 = _coconut_match_to[0].get("arrange", _coconut_sentinel)  #     case state:
-        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel):  #     case state:
+        _coconut_match_temp_2 = _coconut_match_to[0].get("meta", _coconut_sentinel)  #     case state:
+        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_2, _coconut.abc.Mapping)):  #     case state:
             arng = _coconut_match_temp_1  #     case state:
-            kwargs = dict((k, v) for k, v in _coconut_match_to[0].items() if k not in set(("type", "arrange")))  #     case state:
-            _coconut_case_check_20 = True  #     case state:
+            _coconut_match_temp_3 = _coconut_match_temp_2.get("shape", _coconut_sentinel)  #     case state:
+            kwargs = dict((k, v) for k, v in _coconut_match_to[0].items() if k not in set(("type", "arrange", "meta")))  #     case state:
+            if _coconut_match_temp_3 is not _coconut_sentinel:  #     case state:
+                shape = _coconut_match_temp_3  #     case state:
+                other_meta = dict((k, v) for k, v in _coconut_match_temp_2.items() if k not in set(("shape",)))  #     case state:
+                _coconut_case_check_20 = True  #     case state:
     if _coconut_case_check_20 and not ("B" not in arng):  #     case state:
         _coconut_case_check_20 = False  #     case state:
     if _coconut_case_check_20:  #     case state:
-        return [(lambda numpys: np.array(numpys), frozendict({"type": "numpy", "arrange": "B" + arng, **kwargs}), "merge arrays to array".format(), 10)]  #             return [
+        return [(lambda numpys: np.array(numpys), frozendict({"type": "numpy", "arrange": "B" + arng, "meta": fdict({"shape": (None,) + shape, **other_meta}), **kwargs}), "merge arrays to array".format(), 10)]  #             return [
 def tensor_to_list(state):  # def tensor_to_list(state):
     _coconut_match_to = state  #     case state:
     _coconut_case_check_21 = False  #     case state:
     if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #     case state:
         _coconut_match_temp_0 = _coconut_match_to.get("arrange", _coconut_sentinel)  #     case state:
         _coconut_match_temp_1 = _coconut_match_to.get("meta", _coconut_sentinel)  #     case state:
-        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_1, _coconut.abc.Mapping)):  #     case state:
-            arng = _coconut_match_temp_0  #     case state:
+        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_0, _coconut.str)) and (_coconut_match_temp_0.startswith("B")) and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_1, _coconut.abc.Mapping)):  #     case state:
+            arng = _coconut_match_temp_0[_coconut.len("B"):]  #     case state:
             _coconut_match_temp_2 = _coconut_match_temp_1.get("shape", _coconut_sentinel)  #     case state:
             kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("arrange", "meta")))  #     case state:
             if _coconut_match_temp_2 is not _coconut_sentinel:  #     case state:
@@ -637,7 +634,25 @@ def tensor_to_list(state):  # def tensor_to_list(state):
     if _coconut_case_check_21 and not (len(arng) > 1):  #     case state:
         _coconut_case_check_21 = False  #     case state:
     if _coconut_case_check_21:  #     case state:
-        return [(lambda tensor: [t for t in tensor], AutoList(fdict(arrange=arng[1:], meta=fdict({"shape": shape[1:], **other_meta}), **kwargs)), "tensor to list of tensor".format(), 2)]  #             return [
+        return [(lambda tensor: [t for t in tensor], AutoList(fdict(arrange=arng, meta=fdict({"shape": shape[1:], **other_meta}), **kwargs)), "tensor to list of tensor".format(), 2)]  #             return [
+    if not _coconut_case_check_21:  #                 (tensor->[t for t in tensor],
+        if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 (tensor->[t for t in tensor],
+            _coconut_match_temp_0 = _coconut_match_to.get("arrange", _coconut_sentinel)  #                 (tensor->[t for t in tensor],
+            _coconut_match_temp_1 = _coconut_match_to.get("meta", _coconut_sentinel)  #                 (tensor->[t for t in tensor],
+            _coconut_match_temp_3 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #                 (tensor->[t for t in tensor],
+            if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_0, _coconut.str)) and (_coconut_match_temp_0.startswith("C")) and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_1, _coconut.abc.Mapping)) and (_coconut_match_temp_3 is not _coconut_sentinel):  #                 (tensor->[t for t in tensor],
+                arng = _coconut_match_temp_0[_coconut.len("C"):]  #                 (tensor->[t for t in tensor],
+                _coconut_match_temp_2 = _coconut_match_temp_1.get("shape", _coconut_sentinel)  #                 (tensor->[t for t in tensor],
+                cr = _coconut_match_temp_3  #                 (tensor->[t for t in tensor],
+                kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("arrange", "meta", "ch_rpr")))  #                 (tensor->[t for t in tensor],
+                if _coconut_match_temp_2 is not _coconut_sentinel:  #                 (tensor->[t for t in tensor],
+                    shape = _coconut_match_temp_2  #                 (tensor->[t for t in tensor],
+                    other_meta = dict((k, v) for k, v in _coconut_match_temp_1.items() if k not in set(("shape",)))  #                 (tensor->[t for t in tensor],
+                    _coconut_case_check_21 = True  #                 (tensor->[t for t in tensor],
+        if _coconut_case_check_21 and not (len(arng) > 1):  #                 (tensor->[t for t in tensor],
+            _coconut_case_check_21 = False  #                 (tensor->[t for t in tensor],
+        if _coconut_case_check_21:  #                 (tensor->[t for t in tensor],
+            return [(lambda tensor: [t for t in tensor], AutoList(fdict(arrange=arng, meta=fdict({"shape": shape[1:], **other_meta}), ch_rpr="L", **kwargs)), "split CHW to [HW]".format(), 2)]  #             return [
 
 def pil_convert(state):  # def pil_convert(state):
     _coconut_match_to = state  #     case state:
@@ -698,7 +713,7 @@ def torch_img_to_pixpix_input(state):  # def torch_img_to_pixpix_input(state):
             kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #     case state:
             _coconut_case_check_23 = True  #     case state:
     if _coconut_case_check_23:  #     case state:
-        return [(pix2pix_normalizer(len(rpr)), "pix2pix,nc={_coconut_format_0}".format(_coconut_format_0=(len(rpr))), "convert to pixpix normalized input", 1)]  #             return [(
+        return [(pix2pix_normalizer(len(rpr)), "pix2pix,nc={_coconut_format_0}".format(_coconut_format_0=(len(rpr))), "to pixpix normalized", 1)]  #             return [(
     if not _coconut_case_check_23:  #                 pix2pix_normalizer(len(rpr)),
         if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 pix2pix_normalizer(len(rpr)),
             _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 pix2pix_normalizer(len(rpr)),
@@ -731,7 +746,7 @@ def torch_img_to_pixpix_input(state):  # def torch_img_to_pixpix_input(state):
                 kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #                 pix2pix_normalizer(len(rpr)),
                 _coconut_case_check_23 = True  #                 pix2pix_normalizer(len(rpr)),
         if _coconut_case_check_23:  #                 pix2pix_normalizer(len(rpr)),
-            return [(lambda t: torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t], dim=0), "pix2pix_batch,nc={_coconut_format_0}".format(_coconut_format_0=(len(rpr))), "convert to pixpix normalized input", 1)]  #             return [(
+            return [(lambda t: torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t], dim=0), "pix2pix_batch,nc={_coconut_format_0}".format(_coconut_format_0=(len(rpr))), "to pixpix normalized", 1)]  #             return [(
     if not _coconut_case_check_23:  #                 t->torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t],dim=0),
         if _coconut_match_to == "pix2pix_laba":  #                 t->torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t],dim=0),
             _coconut_case_check_23 = True  #                 t->torch.cat([pix2pix_normalizer(len(rpr))(i)[None] for i in t],dim=0),
@@ -816,7 +831,7 @@ def torch_img_to_vgg_prep(state):  # def torch_img_to_vgg_prep(state):
                 kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #                 inverse_vgg_prep_batch,
                 _coconut_case_check_24 = True  #                 inverse_vgg_prep_batch,
         if _coconut_case_check_24:  #                 inverse_vgg_prep_batch,
-            return [(VGG_NORMALIZER, "vgg_prep".format(), "convert to vgg normalized input", 1)]  #             return [(
+            return [(VGG_NORMALIZER, "vgg_prep".format(), "to vgg normalized", 1)]  #             return [(
     if not _coconut_case_check_24:  #                 VGG_NORMALIZER,
         if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 VGG_NORMALIZER,
             _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 VGG_NORMALIZER,
@@ -828,7 +843,7 @@ def torch_img_to_vgg_prep(state):  # def torch_img_to_vgg_prep(state):
                 kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #                 VGG_NORMALIZER,
                 _coconut_case_check_24 = True  #                 VGG_NORMALIZER,
         if _coconut_case_check_24:  #                 VGG_NORMALIZER,
-            return [(lambda t: torch.cat([VGG_NORMALIZER(i)[None] for i in t], dim=0), "vgg_prep_batch".format(), "convert to vgg normalized input batch", 1)]  #             return [(
+            return [(lambda t: torch.cat([VGG_NORMALIZER(i)[None] for i in t], dim=0), "vgg_prep_batch".format(), "to vgg normalized batch", 1)]  #             return [(
     if not _coconut_case_check_24:  #                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
         if _coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping):  #                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
             _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
@@ -840,7 +855,7 @@ def torch_img_to_vgg_prep(state):  # def torch_img_to_vgg_prep(state):
                 kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "dtype", "arrange", "v_range", "ch_rpr")))  #                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
                 _coconut_case_check_24 = True  #                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
         if _coconut_case_check_24:  #                 t->torch.cat([VGG_NORMALIZER(i)[None] for i in t],dim=0),
-            return [(lambda t: torch.cat([torch.cat((VGG_NORMALIZER(i[:3])[None], i[[3]][None]), dim=1) for i in t], dim=0), "vgg_prep_batch_masked".format(), "convert to vgg normalized input batch", 1)]  #             return [(
+            return [(lambda t: torch.cat([torch.cat((VGG_NORMALIZER(i[:3])[None], i[[3]][None]), dim=1) for i in t], dim=0), "vgg_prep_batch_masked".format(), "to vgg normalized batch", 1)]  #             return [(
 def repeat_ch(state):  # def repeat_ch(state):
     _coconut_match_to = state  #     case state:
     _coconut_case_check_25 = False  #     case state:
@@ -872,7 +887,7 @@ def lll_is_rgb(state):  # def lll_is_rgb(state):
 
 
 
-DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(to_visdom_function), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image2lab), AutoSolver.create_conversion_rule(rule_rgba2laba), AutoSolver.create_conversion_rule(rule_lab_value_conversion), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
+DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image2lab), AutoSolver.create_conversion_rule(rule_rgba2laba), AutoSolver.create_conversion_rule(rule_lab_value_conversion), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
 
 SMART_RULES = [AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),]  # SMART_RULES =[
 
@@ -947,16 +962,39 @@ def tuple_edge_cutter(x, y, end):  # def tuple_edge_cutter(x,y,end):
     return False  #     return False
 
 
-def debug(trace):  # def debug(trace):
-    n = trace[-1]  #     n = trace[-1]
-    _coconut_match_to = n.dst  #     case n.dst:
-    _coconut_case_check_28 = False  #     case n.dst:
-    if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], TensorLike)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][1] == "WC"):  #     case n.dst:
-        dtype = _coconut_match_to[0][0]  #     case n.dst:
-        _coconut_case_check_28 = True  #     case n.dst:
-    if _coconut_case_check_28:  #     case n.dst:
-        pass  #             pass
-    logger.debug(n)  #     logger.debug(n)
+def debug(conv):  # def debug(conv):
+    n = conv.edges[-1]  #     n = conv.edges[-1]
+    _coconut_match_to = (n.src, n.dst)  #     case (n.src,n.dst):
+    _coconut_case_check_28 = False  #     case (n.src,n.dst):
+    if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[1], ImageDef)) and (_coconut.len(_coconut_match_to[1]) == 2) and (_coconut.isinstance(_coconut_match_to[1][0], TensorLike)) and (_coconut.len(_coconut_match_to[1][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[1][1], _coconut.abc.Mapping)):  #     case (n.src,n.dst):
+        arng = _coconut_match_to[1][0][1]  #     case (n.src,n.dst):
+        _coconut_match_temp_0 = _coconut_match_to[1][1].get("shape", _coconut_sentinel)  #     case (n.src,n.dst):
+        if _coconut_match_temp_0 is not _coconut_sentinel:  #     case (n.src,n.dst):
+            s = _coconut_match_temp_0  #     case (n.src,n.dst):
+            _coconut_case_check_28 = True  #     case (n.src,n.dst):
+    if _coconut_case_check_28:  #     case (n.src,n.dst):
+        if len(arng) != len(s):  #             if len(arng) != len(s):
+            from IPython import embed  #                 from IPython import embed
+            logger.warning("debug console for omni_converter".format())  #                 logger.warning(f"debug console for omni_converter")
+            embed()  #                 embed()
+            raise RuntimeError("exit")  #                 raise RuntimeError("exit")
+    if not _coconut_case_check_28:  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+        if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], ImageDef)) and (_coconut.len(_coconut_match_to[0]) == 2) and (_coconut.isinstance(_coconut_match_to[0][0], TensorLike)) and (_coconut.len(_coconut_match_to[0][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[0][1], _coconut.abc.Mapping)) and (_coconut.isinstance(_coconut_match_to[1], ImageDef)) and (_coconut.len(_coconut_match_to[1]) == 2) and (_coconut.isinstance(_coconut_match_to[1][0], TensorLike)) and (_coconut.len(_coconut_match_to[1][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[1][1], _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to[1][1]) == 1):  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            arng1 = _coconut_match_to[0][0][1]  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            _coconut_match_temp_0 = _coconut_match_to[0][1].get("shape", _coconut_sentinel)  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            arng2 = _coconut_match_to[1][0][1]  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            _coconut_match_temp_1 = _coconut_match_to[1][1].get("shape", _coconut_sentinel)  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_1 is not _coconut_sentinel):  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+                s1 = _coconut_match_temp_0  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+                s2 = _coconut_match_temp_1  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+                _coconut_case_check_28 = True  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+        if _coconut_case_check_28:  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
+            if (len(arng2) != len(s2)) or (len(arng1) != len(s1)):  #             if (len(arng2) != len(s2)) or (len(arng1) != len(s1)):
+                from IPython import embed  #                 from IPython import embed
+                logger.warning("debug console for omni_converter".format())  #                 logger.warning(f"debug console for omni_converter")
+                embed()  #                 embed()
+                raise RuntimeError("exit")  #                 raise RuntimeError("exit")
 
-SOLVER = AutoSolver(rules=DEFAULT_RULES.copy(), smart_rules=SMART_RULES.copy(), heuristics=tuple_widget_heuristics, edge_cutter=tuple_edge_cutter, debug_hook=None)  # SOLVER = AutoSolver(
+
+SOLVER = AutoSolver(rules=DEFAULT_RULES.copy(), smart_rules=SMART_RULES.copy(), heuristics=tuple_widget_heuristics, edge_cutter=tuple_edge_cutter, debug_hook=debug)  # SOLVER = AutoSolver(
 auto_img = lambda format: lambda value: AutoData(value, format, SOLVER)  # auto_img = format->value->AutoData(value,format,SOLVER)
