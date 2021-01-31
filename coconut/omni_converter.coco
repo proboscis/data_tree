@@ -343,6 +343,8 @@ def cast_ary_str_to_ary_type(state):
 
 def intra_list_conversions(state):
     case state:
+        match AutoList(AutoList(_)):
+            return [] # dont dive into nested list too much
         match AutoList(es):
             return [((f,new_state,cost,name)->(
                 items -> [f(i) for i in items],
@@ -563,12 +565,18 @@ def torch_img_to_vgg_prep(state):
             )]
 def repeat_ch(state):
     case state:
-        match {"type":"image","mode":"L","ch_rpr":ch,**kwargs} if len(ch) == 1:
+        match {"type":"image","mode":"L","ch_rpr":ch,"meta":{"shape":shape,**other},**kwargs} if len(ch_splitter(ch)) == 1:
             return [
                 (a->np.repeat(np.array(a)[:,:,None],3,axis=2),
-                 frozendict(type="numpy",dtype="uint8",arrange="HWC",ch_rpr=ch*3,v_range="0_255"),
+                 fdict(type="numpy",
+                       dtype="uint8",
+                       arrange="HWC",
+                       ch_rpr=ch*3,
+                       v_range="0_255",
+                       meta=fdict({"shape":(shape[0],shape[1],3),**other})
+                       ),
                 "repeat_channel_3",
-                50)
+                10)
             ]
 
 
@@ -691,20 +699,24 @@ def tuple_edge_cutter(x,y,end):
 
 
 def debug(conv):
+    from IPython import embed
     n = conv.edges[-1]
+    matched = False
     case (n.src,n.dst):
+        match (_,AutoList(AutoList(AutoList(_)))):
+            logger.warning(f"debugging nested autolist")
+            matched = True
         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
             if len(arng) != len(s):
-                from IPython import embed
                 logger.warning(f"debug console for omni_converter")
-                embed()
-                raise RuntimeError("exit")
+                matched =True
         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
             if (len(arng2) != len(s2)) or (len(arng1) != len(s1)):
-                from IPython import embed
                 logger.warning(f"debug console for omni_converter")
-                embed()
-                raise RuntimeError("exit")
+                matched = True
+    if matched:
+        embed()
+        raise RuntimeError("exit")
 
 
 SOLVER = AutoSolver(

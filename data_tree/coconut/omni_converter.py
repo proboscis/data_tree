@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x839fb9fa
+# __coconut_hash__ = 0xe3fbad3b
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -569,11 +569,16 @@ def cast_ary_str_to_ary_type(state):  # def cast_ary_str_to_ary_type(state):
 def intra_list_conversions(state):  # def intra_list_conversions(state):
     _coconut_match_to = state  #     case state:
     _coconut_case_check_18 = False  #     case state:
-    if (_coconut.isinstance(_coconut_match_to, AutoList)) and (_coconut.len(_coconut_match_to) == 1):  #     case state:
-        es = _coconut_match_to[0]  #     case state:
+    if (_coconut.isinstance(_coconut_match_to, AutoList)) and (_coconut.len(_coconut_match_to) == 1) and (_coconut.isinstance(_coconut_match_to[0], AutoList)) and (_coconut.len(_coconut_match_to[0]) == 1):  #     case state:
         _coconut_case_check_18 = True  #     case state:
     if _coconut_case_check_18:  #     case state:
-        return [(lambda f, new_state, cost, name: (lambda items: [f(i) for i in items], AutoList(new_state), "[{_coconut_format_0}]".format(_coconut_format_0=(name)), cost + 1))(f, new_state, cost, name) for f, new_state, cost, name in SOLVER.solver.neighbors(es)]  #             return [((f,new_state,cost,name)->(
+        return []  # dont dive into nested list too much  #             return [] # dont dive into nested list too much
+    if not _coconut_case_check_18:  #         match AutoList(es):
+        if (_coconut.isinstance(_coconut_match_to, AutoList)) and (_coconut.len(_coconut_match_to) == 1):  #         match AutoList(es):
+            es = _coconut_match_to[0]  #         match AutoList(es):
+            _coconut_case_check_18 = True  #         match AutoList(es):
+        if _coconut_case_check_18:  #         match AutoList(es):
+            return [(lambda f, new_state, cost, name: (lambda items: [f(i) for i in items], AutoList(new_state), "[{_coconut_format_0}]".format(_coconut_format_0=(name)), cost + 1))(f, new_state, cost, name) for f, new_state, cost, name in SOLVER.solver.neighbors(es)]  #             return [((f,new_state,cost,name)->(
 
 #shape change!
 ms_add_None_b_ch = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: (None, *s)))  # ms_add_None_b_ch = (s->(None,*s)) |> ss_to_ms$
@@ -863,14 +868,19 @@ def repeat_ch(state):  # def repeat_ch(state):
         _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #     case state:
         _coconut_match_temp_1 = _coconut_match_to.get("mode", _coconut_sentinel)  #     case state:
         _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #     case state:
-        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "image") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "L") and (_coconut_match_temp_2 is not _coconut_sentinel):  #     case state:
+        _coconut_match_temp_3 = _coconut_match_to.get("meta", _coconut_sentinel)  #     case state:
+        if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "image") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "L") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut.isinstance(_coconut_match_temp_3, _coconut.abc.Mapping)):  #     case state:
             ch = _coconut_match_temp_2  #     case state:
-            kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "mode", "ch_rpr")))  #     case state:
-            _coconut_case_check_25 = True  #     case state:
-    if _coconut_case_check_25 and not (len(ch) == 1):  #     case state:
+            _coconut_match_temp_4 = _coconut_match_temp_3.get("shape", _coconut_sentinel)  #     case state:
+            kwargs = dict((k, v) for k, v in _coconut_match_to.items() if k not in set(("type", "mode", "ch_rpr", "meta")))  #     case state:
+            if _coconut_match_temp_4 is not _coconut_sentinel:  #     case state:
+                shape = _coconut_match_temp_4  #     case state:
+                other = dict((k, v) for k, v in _coconut_match_temp_3.items() if k not in set(("shape",)))  #     case state:
+                _coconut_case_check_25 = True  #     case state:
+    if _coconut_case_check_25 and not (len(ch_splitter(ch)) == 1):  #     case state:
         _coconut_case_check_25 = False  #     case state:
     if _coconut_case_check_25:  #     case state:
-        return [(lambda a: np.repeat(np.array(a)[:, :, None], 3, axis=2), frozendict(type="numpy", dtype="uint8", arrange="HWC", ch_rpr=ch * 3, v_range="0_255"), "repeat_channel_3", 50)]  #             return [
+        return [(lambda a: np.repeat(np.array(a)[:, :, None], 3, axis=2), frozendict(type="numpy", dtype="uint8", arrange="HWC", ch_rpr=ch * 3, v_range="0_255", meta=fdict({"shape": (shape[0], shape[1], 3), **other})), "repeat_channel_3", 10)]  #             return [
 
 
 
@@ -963,21 +973,27 @@ def tuple_edge_cutter(x, y, end):  # def tuple_edge_cutter(x,y,end):
 
 
 def debug(conv):  # def debug(conv):
+    from IPython import embed  #     from IPython import embed
     n = conv.edges[-1]  #     n = conv.edges[-1]
+    matched = False  #     matched = False
     _coconut_match_to = (n.src, n.dst)  #     case (n.src,n.dst):
     _coconut_case_check_28 = False  #     case (n.src,n.dst):
-    if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[1], ImageDef)) and (_coconut.len(_coconut_match_to[1]) == 2) and (_coconut.isinstance(_coconut_match_to[1][0], TensorLike)) and (_coconut.len(_coconut_match_to[1][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[1][1], _coconut.abc.Mapping)):  #     case (n.src,n.dst):
-        arng = _coconut_match_to[1][0][1]  #     case (n.src,n.dst):
-        _coconut_match_temp_0 = _coconut_match_to[1][1].get("shape", _coconut_sentinel)  #     case (n.src,n.dst):
-        if _coconut_match_temp_0 is not _coconut_sentinel:  #     case (n.src,n.dst):
-            s = _coconut_match_temp_0  #     case (n.src,n.dst):
-            _coconut_case_check_28 = True  #     case (n.src,n.dst):
+    if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[1], AutoList)) and (_coconut.len(_coconut_match_to[1]) == 1) and (_coconut.isinstance(_coconut_match_to[1][0], AutoList)) and (_coconut.len(_coconut_match_to[1][0]) == 1) and (_coconut.isinstance(_coconut_match_to[1][0][0], AutoList)) and (_coconut.len(_coconut_match_to[1][0][0]) == 1):  #     case (n.src,n.dst):
+        _coconut_case_check_28 = True  #     case (n.src,n.dst):
     if _coconut_case_check_28:  #     case (n.src,n.dst):
-        if len(arng) != len(s):  #             if len(arng) != len(s):
-            from IPython import embed  #                 from IPython import embed
-            logger.warning("debug console for omni_converter".format())  #                 logger.warning(f"debug console for omni_converter")
-            embed()  #                 embed()
-            raise RuntimeError("exit")  #                 raise RuntimeError("exit")
+        logger.warning("debugging nested autolist".format())  #             logger.warning(f"debugging nested autolist")
+        matched = True  #             matched = True
+    if not _coconut_case_check_28:  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+        if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[1], ImageDef)) and (_coconut.len(_coconut_match_to[1]) == 2) and (_coconut.isinstance(_coconut_match_to[1][0], TensorLike)) and (_coconut.len(_coconut_match_to[1][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[1][1], _coconut.abc.Mapping)):  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+            arng = _coconut_match_to[1][0][1]  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+            _coconut_match_temp_0 = _coconut_match_to[1][1].get("shape", _coconut_sentinel)  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+            if _coconut_match_temp_0 is not _coconut_sentinel:  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+                s = _coconut_match_temp_0  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+                _coconut_case_check_28 = True  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+        if _coconut_case_check_28:  #         match (_,ImageDef(TensorLike(_,arng,*_),{"shape":s,**_})):
+            if len(arng) != len(s):  #             if len(arng) != len(s):
+                logger.warning("debug console for omni_converter".format())  #                 logger.warning(f"debug console for omni_converter")
+                matched = True  #                 matched =True
     if not _coconut_case_check_28:  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
         if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Sequence)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], ImageDef)) and (_coconut.len(_coconut_match_to[0]) == 2) and (_coconut.isinstance(_coconut_match_to[0][0], TensorLike)) and (_coconut.len(_coconut_match_to[0][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[0][1], _coconut.abc.Mapping)) and (_coconut.isinstance(_coconut_match_to[1], ImageDef)) and (_coconut.len(_coconut_match_to[1]) == 2) and (_coconut.isinstance(_coconut_match_to[1][0], TensorLike)) and (_coconut.len(_coconut_match_to[1][0]) >= 2) and (_coconut.isinstance(_coconut_match_to[1][1], _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to[1][1]) == 1):  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
             arng1 = _coconut_match_to[0][0][1]  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
@@ -990,10 +1006,11 @@ def debug(conv):  # def debug(conv):
                 _coconut_case_check_28 = True  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
         if _coconut_case_check_28:  #         match (ImageDef(TensorLike(_,arng1,*_),{"shape":s1,**_}),ImageDef(TensorLike(_,arng2,*_),{"shape":s2})):
             if (len(arng2) != len(s2)) or (len(arng1) != len(s1)):  #             if (len(arng2) != len(s2)) or (len(arng1) != len(s1)):
-                from IPython import embed  #                 from IPython import embed
                 logger.warning("debug console for omni_converter".format())  #                 logger.warning(f"debug console for omni_converter")
-                embed()  #                 embed()
-                raise RuntimeError("exit")  #                 raise RuntimeError("exit")
+                matched = True  #                 matched = True
+    if matched:  #     if matched:
+        embed()  #         embed()
+        raise RuntimeError("exit")  #         raise RuntimeError("exit")
 
 
 SOLVER = AutoSolver(rules=DEFAULT_RULES.copy(), smart_rules=SMART_RULES.copy(), heuristics=tuple_widget_heuristics, edge_cutter=tuple_edge_cutter, debug_hook=debug)  # SOLVER = AutoSolver(

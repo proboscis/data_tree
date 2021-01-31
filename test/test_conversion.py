@@ -46,6 +46,10 @@ def test_list_vgg_prep_to_vgg_prep_batch():
     #assert np.abs(inverted.value - start.value).max() < 1
     converted = vgg_prep.convert("vgg_prep_batch").convert("numpy_rgb")
     converted.to("image,RGB,RGB,None:None:3")
+    targets = [("image,L,L","numpy,float32,HWC,LLL,0_1")]
+    embed()
+    for src,dst in targets:
+        logger.info(auto(src)(None).converter(dst))
     # now, can we embed numbers into a state?
     logger.warning(f"check outputs!")
     #embed()
