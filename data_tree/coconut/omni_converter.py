@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xe3fbad3b
+# __coconut_hash__ = 0x1f571898
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -304,10 +304,33 @@ def rule_numpy2img(state):  # def rule_numpy2img(state):
             _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #         case state:
             _coconut_match_temp_5 = _coconut_match_to.get("meta", _coconut_sentinel)  #         case state:
             if (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "RGB") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HWC") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255") and (_coconut_match_temp_5 is not _coconut_sentinel):  #         case state:
+                cr = _coconut_match_temp_2  #         case state:
+                meta = _coconut_match_temp_5  #         case state:
+                _coconut_case_check_9 = True  #         case state:
+        if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #         case state:
+            _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #         case state:
+            _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #         case state:
+            _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #         case state:
+            if (not _coconut_case_check_9) and (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "RGBA") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HWC") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255") and (_coconut_match_temp_5 is not _coconut_sentinel):  #         case state:
+                cr = _coconut_match_temp_2  #         case state:
+                _coconut_match_temp_3 = _coconut_match_to.get("arrange", _coconut_sentinel)  #         case state:
+                _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #         case state:
+                _coconut_match_temp_5 = _coconut_match_to.get("meta", _coconut_sentinel)  #         case state:
+                meta = _coconut_match_temp_5  #         case state:
+                _coconut_case_check_9 = True  #         case state:
+        if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #         case state:
+            _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #         case state:
+            _coconut_match_temp_1 = _coconut_match_to.get("dtype", _coconut_sentinel)  #         case state:
+            _coconut_match_temp_2 = _coconut_match_to.get("ch_rpr", _coconut_sentinel)  #         case state:
+            if (not _coconut_case_check_9) and (_coconut_match_temp_0 is not _coconut_sentinel) and (_coconut_match_temp_0 == "numpy") and (_coconut_match_temp_1 is not _coconut_sentinel) and (_coconut_match_temp_1 == "uint8") and (_coconut_match_temp_2 is not _coconut_sentinel) and (_coconut_match_temp_2 == "YCbCr") and (_coconut_match_temp_3 is not _coconut_sentinel) and (_coconut_match_temp_3 == "HWC") and (_coconut_match_temp_4 is not _coconut_sentinel) and (_coconut_match_temp_4 == "0_255") and (_coconut_match_temp_5 is not _coconut_sentinel):  #         case state:
+                cr = _coconut_match_temp_2  #         case state:
+                _coconut_match_temp_3 = _coconut_match_to.get("arrange", _coconut_sentinel)  #         case state:
+                _coconut_match_temp_4 = _coconut_match_to.get("v_range", _coconut_sentinel)  #         case state:
+                _coconut_match_temp_5 = _coconut_match_to.get("meta", _coconut_sentinel)  #         case state:
                 meta = _coconut_match_temp_5  #         case state:
                 _coconut_case_check_9 = True  #         case state:
         if _coconut_case_check_9:  #         case state:
-            return [(Image.fromarray, ImageDef(PILImage("RGB", "RGB"), meta), "Image.fromarray", 1)]  #                 return [(
+            return [(Image.fromarray, ImageDef(PILImage(cr, cr), meta), "Image.fromarray", 1)]  #                 return [(
         if not _coconut_case_check_9:  #                     Image.fromarray,
             if (_coconut.isinstance(_coconut_match_to, _coconut.abc.Mapping)) and (_coconut.len(_coconut_match_to) == 6):  #                     Image.fromarray,
                 _coconut_match_temp_0 = _coconut_match_to.get("type", _coconut_sentinel)  #                     Image.fromarray,
@@ -880,7 +903,7 @@ def repeat_ch(state):  # def repeat_ch(state):
     if _coconut_case_check_25 and not (len(ch_splitter(ch)) == 1):  #     case state:
         _coconut_case_check_25 = False  #     case state:
     if _coconut_case_check_25:  #     case state:
-        return [(lambda a: np.repeat(np.array(a)[:, :, None], 3, axis=2), frozendict(type="numpy", dtype="uint8", arrange="HWC", ch_rpr=ch * 3, v_range="0_255", meta=fdict({"shape": (shape[0], shape[1], 3), **other})), "repeat_channel_3", 10)]  #             return [
+        return [(lambda a: np.repeat(np.array(a)[:, :, None], 3, axis=2), fdict(type="numpy", dtype="uint8", arrange="HWC", ch_rpr=ch * 3, v_range="0_255", meta=fdict({"shape": (shape[0], shape[1], 3), **other})), "repeat_channel_3", 10)]  #             return [
 
 
 

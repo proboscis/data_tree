@@ -46,8 +46,9 @@ def test_list_vgg_prep_to_vgg_prep_batch():
     #assert np.abs(inverted.value - start.value).max() < 1
     converted = vgg_prep.convert("vgg_prep_batch").convert("numpy_rgb")
     converted.to("image,RGB,RGB,None:None:3")
-    targets = [("image,L,L","numpy,float32,HWC,LLL,0_1")]
-    embed()
+    targets = [("image,L,L","numpy,float32,HWC,LLL,0_1"),
+               ("numpy,float32,HWC,XYZ,-1_1","image,RGBA,RGBA") # path is t,0,6,6,11,8,7,6,6,12,8,1,9,2,0,8,2,1,3
+               ]
     for src,dst in targets:
         logger.info(auto(src)(None).converter(dst))
     # now, can we embed numbers into a state?

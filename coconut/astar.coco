@@ -88,7 +88,8 @@ class Conversion:
         """
         #print(tabulate(path_data))
         #return pformat(info)
-        return tabulate(path_data)
+        res = f"""Conversion:(cost={sum([e.cost for e in self.edges])})\n"""
+        return res+tabulate(path_data)
     def trace(self,tgt):
         x = tgt
         for e in self.edges:
@@ -129,6 +130,7 @@ def _astar(
         #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
         #print(f"visit:{trace[-1] if trace else 'no trace'}")
         if len(trace) >= max_depth: # terminate search on max_depth
+            logger.error(f"search terminated due to max_depth")
             continue
         if matcher(pos): # reached a goal
             logger.debug(f"found after {visited} visits.")

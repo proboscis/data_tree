@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x9316f485
+# __coconut_hash__ = 0x2a680484
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -225,6 +225,24 @@ def tag_matcher(**kwargs):  # def tag_matcher(**kwargs):
 
 SOLVERS = dict()  # SOLVERS = dict()
 
+class Tracer:  # class Tracer:
+    def __init__(self, solver, state, creator):  #     def __init__(self,solver,state,creator):
+        self.state = state  #         self.state = state
+        self.solver = solver  #         self.solver = solver
+        self.creator = creator  #         self.creator = creator
+    def nexts(self):  #     def nexts(self):
+        edges = self.solver.solver.neighbors(self.state)  #         edges = self.solver.solver.neighbors(self.state)
+        return [Tracer(self.solver, new_state, creator) for _, new_state, _, creator in edges]  #         return [Tracer(self.solver,new_state,creator) for _,new_state,_,creator in edges]
+    def __getitem__(self, item):  #     def __getitem__(self,item):
+        return self.nexts()[item]  #         return self.nexts()[item]
+    def __repr__(self):  #     def __repr__(self):
+        res = []  #         res = []
+        self_str = "Tracer: {_coconut_format_0:30s} -> {_coconut_format_1}".format(_coconut_format_0=(self.creator), _coconut_format_1=(self.state))  #         self_str = f"Tracer: {self.creator:30s} -> {self.state}"
+        res.append(self_str)  #         res.append(self_str)
+        for i, n in enumerate(self.nexts()):  #         for i,n in enumerate(self.nexts()):
+            res.append("{_coconut_format_0:>6d}: {_coconut_format_1:30s} -> {_coconut_format_2}".format(_coconut_format_0=(i), _coconut_format_1=(n.creator), _coconut_format_2=(n.state)))  #             res.append(f"{i:>6d}: {n.creator:30s} -> {n.state}")
+        return "\n".join(res)  #         return "\n".join(res)
+
 class AutoData:  # class AutoData:
     """
     Interface class for a user
@@ -296,7 +314,8 @@ class AutoData:  # class AutoData:
 
     def neighbors(self):  #     def neighbors(self):
         return self.solver.solver.neighbors(self.format)  #         return self.solver.solver.neighbors(self.format)
-
+    def tracer(self):  #     def tracer(self):
+        return Tracer(self.solver, self.format, "origin")  #         return Tracer(self.solver,self.format,"origin")
     def to_widget(self):  #     def to_widget(self):
         return self.to("widget")  #         return self.to("widget")
 
