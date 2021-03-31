@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x1f571898
+# __coconut_hash__ = 0xfceb1a67
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -832,9 +832,9 @@ def _VGG_NORMALIZER():  # def _VGG_NORMALIZER():
     nrm = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  #     nrm = transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
     return nrm  #     return nrm
 def inverse_vgg_prep(tensor):  # def inverse_vgg_prep(tensor):
-    return tensor * torch.tensor([0.229, 0.224, 0.225])[:, None, None] + torch.tensor([0.485, 0.456, 0.406])[:, None, None]  #     return tensor * torch.tensor([0.229,0.224,0.225])[:,None,None] + torch.tensor([0.485,0.456,0.406])[:,None,None]
+    return tensor.cpu() * torch.tensor([0.229, 0.224, 0.225])[:, None, None] + torch.tensor([0.485, 0.456, 0.406])[:, None, None]  #     return tensor.cpu() * torch.tensor([0.229,0.224,0.225])[:,None,None] + torch.tensor([0.485,0.456,0.406])[:,None,None]
 def inverse_vgg_prep_batch(tensor):  # def inverse_vgg_prep_batch(tensor):
-    return tensor * torch.tensor([0.229, 0.224, 0.225])[None, :, None, None] + torch.tensor([0.485, 0.456, 0.406])[None, :, None, None]  #     return tensor * torch.tensor([0.229,0.224,0.225])[None,:,None,None] + torch.tensor([0.485,0.456,0.406])[None,:,None,None]
+    return tensor.cpu() * torch.tensor([0.229, 0.224, 0.225])[None, :, None, None] + torch.tensor([0.485, 0.456, 0.406])[None, :, None, None]  #     return tensor.cpu() * torch.tensor([0.229,0.224,0.225])[None,:,None,None] + torch.tensor([0.485,0.456,0.406])[None,:,None,None]
 def torch_img_to_vgg_prep(state):  # def torch_img_to_vgg_prep(state):
     VGG_NORMALIZER = _VGG_NORMALIZER()  #     VGG_NORMALIZER = _VGG_NORMALIZER()
     _coconut_match_to = state  #     case state:
@@ -920,7 +920,7 @@ def lll_is_rgb(state):  # def lll_is_rgb(state):
 
 
 
-DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image2lab), AutoSolver.create_conversion_rule(rule_rgba2laba), AutoSolver.create_conversion_rule(rule_lab_value_conversion), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
+DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
 
 SMART_RULES = [AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),]  # SMART_RULES =[
 

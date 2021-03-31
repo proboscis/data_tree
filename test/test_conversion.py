@@ -4,7 +4,9 @@ from loguru import logger
 import numpy as np
 def test_rgb_to_yuv():
     from data_tree import auto
-    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments import pix2pix_rgb_batch
+    from archpainter.experiments import torch_xyz
+    from archpainter.experiments import TORCH_XYZ_BATCH
     from archpainter.dataset.ask import ask256
     img = ask256.original_pairs[0][0]
     import numpy as np

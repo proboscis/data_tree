@@ -176,34 +176,41 @@ def _astar_direct(
     heapq.heappush(to_visit,
                    _HeapContainer(scores[start],(start,[])))
     visited = 0
-    bar = tqdm(desc="solving with astar_direct")
+    bar = tqdm(desc=f"solving with astar_direct from {start} to {end}")
+    #logger.debug(f"starting search")
     last_bar_update = visited
     while to_visit:
         if visited - last_bar_update > 1000:
             bar.update(visited-last_bar_update)
             last_bar_update = visited
+        #logger.info(f"trying to heappop from {to_visit}")
         hc = heapq.heappop(to_visit)
+        #logger.info(f"popped container:{hc}")
         score = hc.score
+        #logger.info(f"got score:{score}")
         (pos,trace) = hc.data
+        #logger.info(f"pos:{pos},trace:{trace}")
+        #logger.info(f"{score}:{pos}")
         if not silent:
-            #logger.info(f"{score}:{pos}")
             #bar.write(f"score:{score}")
             pass
 
         #logger.debug(f"visiting:{pos}")
         visited += 1
-        #print(f"visit:{pos}")
-        #print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
-        #print(f"visit:{trace[-1] if trace else 'no trace'}")
         if len(trace) >= max_depth: # terminate search on max_depth
+            #logger.info(f"terminate search on max depth")
             continue
         if pos == end: # reached a goal
+            #logger.info(f"reached goal")
             if not silent:
                 logger.debug(f"found after {visited} visits.")
                 logger.debug(f"search result:\n{new_conversion(trace)}")
             bar.close()
+            #logger.info(f"returning trace")
             return trace
+        #logger.info(f"getting neighbors from {neighbors}")
         normal_nodes = list(neighbors(pos))
+        #logger.info(f"getting smart neighbors")
         smart_nodes = list(smart_neighbors(pos,end))
         #logger.debug(f"{normal_nodes},{smart_nodes}")
         if visited % 10000 == 0:
@@ -273,15 +280,20 @@ class AStarSolver:
         self.debug_hook = debug_hook
 
     def neighbors(self,node):
+        #logger.info(f"trying to get neighbors")
         if node in self.neighbors_memo:
             return self.neighbors_memo[node]
 
         res = []
         for rule in self.rules:
+            #logger.info(f"checking rule:{rule}")
             edges = rule(node)
+            #logger.info(f"got rules:{edges}")
             if edges is not None:
                  res += edges
+        #logger.info(f"memorizing neighbors")
         self.neighbors_memo[node] = res
+        #logger.info(f"memorized neighbors")
         return res
     def smart_neighbors(self,node,end):
         if (node,end) in self.smart_neighbors_memo:
@@ -362,6 +374,7 @@ class AStarSolver:
             return conversion
         else:
             conversion = self._search_direct(key)
+            #logger.info(f"caching conversion:\n{conversion}")
             self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
             self.direct_search_memo[key] = conversion
             # I can memo every path in conversion actually.

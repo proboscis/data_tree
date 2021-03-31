@@ -22,10 +22,13 @@ def auto_image(format):
     from data_tree.coconut.omni_converter import SOLVER as omni_solver
 
     def _gen_ai(value):
-        return AutoImage(value,format,solver)
+        return AutoImage(value,format,omni_solver)
+    return _gen_ai
 
 
 def auto_img(codec):
+    from data_tree.auto_data.auto_image import AutoImage
+    from data_tree.coconut.omni_converter import SOLVER as omni_solver
     def _l(img):
-        return AutoImage(img, codec,solver)
+        return AutoImage(img, codec,omni_solver)
     return _l

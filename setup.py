@@ -35,6 +35,5 @@ setup(
         "easydict",
         "torch",
         "scikit-learn",
-        "visdom"
     ],
 )

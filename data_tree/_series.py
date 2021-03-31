@@ -7,8 +7,9 @@ from collections import OrderedDict
 from concurrent.futures import Executor
 from datetime import datetime
 from hashlib import sha1
+from multiprocessing.dummy import Pool
 from random import randint
-from typing import Iterable, NamedTuple, Union, Mapping, Callable, List
+from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar, Generic
 
 import h5py
 
@@ -201,11 +202,15 @@ class Trace(NamedTuple):
                 display(hbox)
 
 
-def mp_each_helper(_self, i, f):
+def mp_each_helper(t):
+    _self,i,f = t
     f(_self.value[i])
 
 
-class Series(metaclass=abc.ABCMeta):
+T = TypeVar("T")
+
+
+class Series(Generic[T], metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def indexer(self) -> Indexer:
@@ -213,22 +218,22 @@ class Series(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def total(self):
+    def total(self)->int:
         pass
 
     def __len__(self):
         return self.total
 
     @abc.abstractmethod
-    def _get_item(self, index):
+    def _get_item(self, index)->Union[T,Iterable[T]]:
         pass
 
     @abc.abstractmethod
-    def _get_slice(self, _slice):
+    def _get_slice(self, _slice)->Iterable[T]:
         pass
 
     @abc.abstractmethod
-    def _get_indices(self, indices):
+    def _get_indices(self, indices)->Iterable[T]:
         pass
 
     @abc.abstractmethod
@@ -283,7 +288,7 @@ class Series(metaclass=abc.ABCMeta):
         else:
             return self._get_item(smart_indices)
 
-    def __getitem__(self, item) -> Union["Series", object]:
+    def __getitem__(self, item) -> Union["Series[T]", object]:
         if isinstance(item, slice):
             return self.indexed(IdentityIndexer(self.total).slice(item))
         elif isinstance(item, np.ndarray):
@@ -320,6 +325,17 @@ class Series(metaclass=abc.ABCMeta):
 
     def mp_each(self, f, num_process=None, show_progress=True):
         from multiprocessing import Pool
+        holder = get_global_holder(self)
+
+        def gen():
+            for i in range(self.total):
+                yield holder, i, f
+
+        with Pool(num_process) as p:
+            for item in tqdm(p.imap_unordered(mp_each_helper, gen()), total=self.total):
+                pass
+    def mt_each(self,f,num_process=None):
+        from multiprocessing.dummy import Pool
         holder = get_global_holder(self)
 
         def gen():
@@ -454,6 +470,10 @@ class Series(metaclass=abc.ABCMeta):
         return PickledSeries(self, pickle_path=cache_path, src_hash=src_hash)
 
     def lazy(self):
+        """
+        keeps all the items in a list.
+        :return:
+        """
         from data_tree.ops.cache import LazySeries
         return LazySeries(self)
 
@@ -501,7 +521,10 @@ class Series(metaclass=abc.ABCMeta):
         if isinstance(values, np.ndarray):
             return Series.from_numpy(values)
         else:
-            return ListSeries(list(values))
+            return ListLikeSeries(list(values))
+    @staticmethod
+    def from_indexed(values):
+        return ListLikeSeries(values)
 
     @staticmethod
     def from_lambda(f, total):
@@ -542,10 +565,24 @@ class Series(metaclass=abc.ABCMeta):
         return indices
 
     def filter(self, _filter):
+        """
+        :param _filter: filter should return True to be kept in the result
+        :return: filtered series. works the same as numpy's ary[filter(ary)]
+
+        """
         # filter must check whole element since a series requires predetermined length...
         # I can make this length lazy though
-        mask = np.array(self.map(_filter).values, dtype=bool)
+        def wrapped_filter(item):
+            flag = _filter(item)
+            if flag is None:
+                raise RuntimeError("filter may never return None. return bool! check:{_filter}")
+            return flag
+        flags = self.map(wrapped_filter)
+        mask = np.array(flags.values, dtype=bool)
         return self[mask]
+
+    def select(self,selector:Callable[[T],bool])->"Series[T]":
+        return self.filter(selector)
 
     @en_lazy
     def hash(self):
@@ -1555,13 +1592,13 @@ class NumpySeries(Series):
         return self.data[item]
 
 
-class ListSeries(Series):
+class ListLikeSeries(Series):
     @property
     def parents(self):
         return []
 
     def clone(self, parents):
-        return ListSeries(self.data)
+        return ListLikeSeries(self.data)
 
     @property
     def indexer(self):

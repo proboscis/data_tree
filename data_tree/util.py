@@ -321,7 +321,7 @@ def scantree(path, yield_dir=False):
         logger.warning(f"permission error at {path}. ignoring...")
 
 
-def scanfiles(path):
+def scanfiles(path)->"Series[os.DirEntry]":
     def gen():
         for item in tqdm(scantree(path), desc="scanning files.."):
             yield item
@@ -420,3 +420,10 @@ def embed_qt(locals):
     console.eval_queued()
 
     return app.exec_()
+
+def next_without_exception(iterator):
+    try:
+        return next(iterator)
+    except StopIteration as e:
+        logger.info("iterator stop iteration")
+        return None
