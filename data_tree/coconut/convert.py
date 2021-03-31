@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x8711f352
+# __coconut_hash__ = 0x4043f695
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -33,6 +33,7 @@ import torch  # import torch
 import re  # import re
 from frozendict import frozendict as fdict  # from frozendict import frozendict as fdict
 from frozendict import frozendict  # from frozendict import frozendict
+
 VR_0_1 = "0_1"  # VR_0_1 = "0_1"
 VR_0_255 = "0_255"  # VR_0_255 = "0_255"
 VR_None = "None"  # VR_None = "None"
@@ -1106,6 +1107,7 @@ def rule_add_channel(imdef):  # def rule_add_channel(imdef):
             _coconut_case_check_20 = True  #                 a->a[None],
         if _coconut_case_check_20:  #                 a->a[None],
             return [(lambda a: a[:, None], ImageDef(Numpy(dtype, "BCHW", ch, vr), (ms_add_ch_to_bhw)(meta)), 1, "add_channel_dim")]  #             return [(
+
 def rule_swap_RGB_BGR(imdef):  # def rule_swap_RGB_BGR(imdef):
     _coconut_match_to = imdef  #     case imdef:
     _coconut_case_check_21 = False  #     case imdef:
@@ -1125,27 +1127,33 @@ def rule_swap_RGB_BGR(imdef):  # def rule_swap_RGB_BGR(imdef):
         _coconut_case_check_21 = True  #     case imdef:
     if _coconut_case_check_21:  #     case imdef:
         return [(lambda a: a[:, :, :, [2, 1, 0]], ImageDef(tl.__class__(dtype, "BHWC", "RGB" if rgb_order.startswith("B") else "BGR", vr), meta), 1, "swap rgb or bgr")]  #             return [(
+
 def rule_BGR_to_LAB(imdef):  # def rule_BGR_to_LAB(imdef):
-    from skimage import color  #     from skimage import color
+#logger.info(f"trying to load skimage")
+#from skimage import color
+#from skimage.color.colorconv import lab2rgb,rgb2lab
+#logger.info("loaded skimage")
+    from data_tree.colorconv import rgb2lab  #     from data_tree.colorconv import rgb2lab,lab2rgb
+    from data_tree.colorconv import lab2rgb  #     from data_tree.colorconv import rgb2lab,lab2rgb
     _coconut_match_to = imdef  #     case imdef:
     _coconut_case_check_22 = False  #     case imdef:
     if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float32") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "BGR") and (_coconut_match_to[0][3] == VR_0_1):  #     case imdef:
         meta = _coconut_match_to[1]  #     case imdef:
         _coconut_case_check_22 = True  #     case imdef:
     if _coconut_case_check_22:  #     case imdef:
-        return [(color.rgb2lab, ImageDef(Numpy("float32", "HWC", "LAB", "VR_LAB"), meta), 1, "bgr_0_1 to lab")]  #             return[(
-    if not _coconut_case_check_22:  #                 color.rgb2lab,
-        if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float32") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LAB") and (_coconut_match_to[0][3] == "VR_LAB"):  #                 color.rgb2lab,
-            meta = _coconut_match_to[1]  #                 color.rgb2lab,
-            _coconut_case_check_22 = True  #                 color.rgb2lab,
-        if _coconut_case_check_22:  #                 color.rgb2lab,
-            return [(color.lab2rgb, ImageDef(Numpy("float32", "HWC", "BGR", VR_0_1), meta), 1, "lab to bgr_0_1")]  #             return [(
+        return [(rgb2lab, ImageDef(Numpy("float32", "HWC", "LAB", "VR_LAB"), meta), 1, "bgr_0_1 to lab")]  #             return[(
+    if not _coconut_case_check_22:  #                 rgb2lab,
+        if (_coconut.isinstance(_coconut_match_to, ImageDef)) and (_coconut.len(_coconut_match_to) == 2) and (_coconut.isinstance(_coconut_match_to[0], Numpy)) and (_coconut.len(_coconut_match_to[0]) == 4) and (_coconut_match_to[0][0] == "float32") and (_coconut_match_to[0][1] == "HWC") and (_coconut_match_to[0][2] == "LAB") and (_coconut_match_to[0][3] == "VR_LAB"):  #                 rgb2lab,
+            meta = _coconut_match_to[1]  #                 rgb2lab,
+            _coconut_case_check_22 = True  #                 rgb2lab,
+        if _coconut_case_check_22:  #                 rgb2lab,
+            return [(lab2rgb, ImageDef(Numpy("float32", "HWC", "BGR", VR_0_1), meta), 1, "lab to bgr_0_1")]  #             return [(
 
 
 
 
 class AutoImage:  # class AutoImage:
-    default_rules = [imdef_neighbors, rule_xyz_to_rgb, rule_batch_xyz_to_rgb, rule_VR_None_to_normalized, rule_add_channel, rule_swap_RGB_BGR, rule_BGR_to_LAB]  #     default_rules = [
+    default_rules = [imdef_neighbors, rule_xyz_to_rgb, rule_batch_xyz_to_rgb, rule_VR_None_to_normalized, rule_add_channel, rule_swap_RGB_BGR,]  #     default_rules = [
     solver = AStarSolver(rules=default_rules.copy())  #     solver = AStarSolver(rules=default_rules.copy())
 
     @staticmethod  #     @staticmethod

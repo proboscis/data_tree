@@ -171,6 +171,33 @@ class ShelveSeries(CachedSeries):
         return os.remove(self.cache_path)
 
 
+class FlagCacheProvider:
+    def create_flags(self, total: int):
+        pass
+
+    def craete_cache(self, total: int):
+        pass
+
+
+class MpFlagCache(FlagCacheProvider):
+    def __init__(self):
+        self.manager = multiprocessing.Manager()
+
+    def create_flags(self, total: int):
+        return self.manager.list([False] * total)
+
+    def create_cache(self, total: int):
+        return self.manager.list([None] * total)
+
+
+class LocalFlagCache(FlagCacheProvider):
+    def create_flags(self, total: int):
+        return [False] * total
+
+    def create_cache(self, total: int):
+        return [None] * total
+
+
 class LazySeries(CachedSeries):
 
     def clone(self, parents):
@@ -190,35 +217,47 @@ class LazySeries(CachedSeries):
 
     def __init__(self, src: Series, prefer_slice=True):
         logger.debug(f"lazy series created")
-        self.manager = multiprocessing.Manager()
+        # using a manager is essential for multiprocessing
+        # but using a manager makes it impossible to run on JVM?
+        try:
+            provider = MpFlagCache()
+        except Exception as e:
+            logger.warning(f"could not create process safe cache. using non-process safe cache")
+            provider = LocalFlagCache()
+        # this class will be accessed by multiple processes so I need to make it process safe.
+        ctx = multiprocessing.get_context("fork")  # DO NOT USE SPAWNING
+        self.lock = ctx.RLock()
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
-        self.flags = self.manager.list([False] * self.total)
-        self.cache = self.manager.list([None] * self.total)
+        self.flags = provider.create_flags(self.total)
+        self.cache = provider.create_cache(self.total)
         self._index = np.arange(src.total)
         self.prefer_slice = prefer_slice  # not used currently
 
     def _get_item(self, index):
-        if not self.flags[index]:
-            self.cache[index] = self.src._values(index)
-            self.flags[index] = True
-        else:
-            pass
-        return self.cache[index]
+        with self.lock:
+            if not self.flags[index]:
+                logger.debug(f"cache not hit. pid:{os.getpid()} at {index}")
+                self.cache[index] = self.src._values(index)
+                self.flags[index] = True
+            else:
+                pass
+            return self.cache[index]
 
     def _ensure_and_return_smart(self, smart_indexer):
-        if not self.flags[smart_indexer].all():
-            non_cached_indices = self._index[smart_indexer][~self.flags[smart_indexer]]
-            for v, i in zip(self.src._values(non_cached_indices), non_cached_indices):
-                self.cache[i] = v
-                self.flags[i] = True
-        else:
-            pass
-            # logger.debug(f"hit")
-        if isinstance(smart_indexer, slice):
-            return self.cache[smart_indexer]
-        else:
-            return [self.cache[i] for i in smart_indexer]
+        with self.lock:
+            if not all(self.flags[smart_indexer]):
+                non_cached_indices = self._index[smart_indexer][~np.array(self.flags[smart_indexer])]
+                for v, i in zip(self.src._values(non_cached_indices), non_cached_indices):
+                    self.cache[i] = v
+                    self.flags[i] = True
+            else:
+                pass
+                # logger.debug(f"hit")
+            if isinstance(smart_indexer, slice):
+                return self.cache[smart_indexer]
+            else:
+                return [self.cache[i] for i in smart_indexer]
 
     def _get_slice(self, _slice):
         return self._ensure_and_return_smart(_slice)

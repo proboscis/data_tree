@@ -150,14 +150,14 @@ def test_omni_converter():  # def test_omni_converter():
 
 def test_tuple_conversion():  # def test_tuple_conversion():
     from data_tree import auto  #     from data_tree import auto
-    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
-    from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
-    from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments import torch_xyz
+    from archpainter.experiments import pix2pix_rgb_batch
+    from archpainter.experiments import TORCH_XYZ_BATCH
     logger.info(auto(("image,RGB,RGB", "image,RGB,RGB"))((None, None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))  #     logger.info(auto(("image,RGB,RGB","image,RGB,RGB"))((None,None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))
 
 def test_rgb_to_yuv():  # def test_rgb_to_yuv():
     from data_tree import auto  #     from data_tree import auto
-    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
-    from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
-    from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments import torch_xyz
+    from archpainter.experiments import pix2pix_rgb_batch
+    from archpainter.experiments import TORCH_XYZ_BATCH
     logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))  #     logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))

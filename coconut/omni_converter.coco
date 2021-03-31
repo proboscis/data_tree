@@ -520,9 +520,9 @@ def _VGG_NORMALIZER():
     nrm = transforms.Normalize(mean=[0.485,0.456,0.406],std=[0.229,0.224,0.225])
     return nrm
 def inverse_vgg_prep(tensor):
-    return tensor * torch.tensor([0.229,0.224,0.225])[:,None,None] + torch.tensor([0.485,0.456,0.406])[:,None,None]
+    return tensor.cpu() * torch.tensor([0.229,0.224,0.225])[:,None,None] + torch.tensor([0.485,0.456,0.406])[:,None,None]
 def inverse_vgg_prep_batch(tensor):
-    return tensor * torch.tensor([0.229,0.224,0.225])[None,:,None,None] + torch.tensor([0.485,0.456,0.406])[None,:,None,None]
+    return tensor.cpu() * torch.tensor([0.229,0.224,0.225])[None,:,None,None] + torch.tensor([0.485,0.456,0.406])[None,:,None,None]
 def torch_img_to_vgg_prep(state):
     VGG_NORMALIZER = _VGG_NORMALIZER()
     case state:
@@ -603,9 +603,9 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(rule_img2widget),
     AutoSolver.create_conversion_rule(rule_numpy2img),
     AutoSolver.create_conversion_rule(rule_image2gray),
-    AutoSolver.create_conversion_rule(rule_image2lab),
-    AutoSolver.create_conversion_rule(rule_rgba2laba),
-    AutoSolver.create_conversion_rule(rule_lab_value_conversion),
+    #AutoSolver.create_conversion_rule(rule_image2lab),
+    #AutoSolver.create_conversion_rule(rule_rgba2laba),
+    #AutoSolver.create_conversion_rule(rule_lab_value_conversion),
     AutoSolver.create_conversion_rule(intra_list_conversions),
     AutoSolver.create_conversion_rule(numpys_to_numpy),
     AutoSolver.create_conversion_rule(tensor_to_list),
@@ -615,7 +615,6 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(torch_img_to_pixpix_input),
     AutoSolver.create_conversion_rule(torch_img_to_vgg_prep),
     #AutoSolver.create_conversion_rule(intra_tuple_conversions),
-
     AutoSolver.create_conversion_rule(auto_tuple2widget),
     AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
     AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255"),

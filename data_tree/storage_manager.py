@@ -86,8 +86,9 @@ class FileStorageManager(DBProvider):
         import inspect
         curframe = inspect.currentframe()
         calframe = inspect.getouterframes(curframe, 2)
-        logger.debug('caller name:', calframe[1][3])
-        ...
+        
+        frame = calframe[1]
+        logger.debug(f'caller name: {frame.filename}, {frame.index}')
         def find_matching():
             for k, c in self.info_cache.value.items():
                 matched = True

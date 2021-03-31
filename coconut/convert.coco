@@ -10,6 +10,7 @@ import torch
 import re
 from frozendict import frozendict as fdict
 from frozendict import frozendict
+
 VR_0_1 = "0_1"
 VR_0_255 = "0_255"
 VR_None = "None"
@@ -745,6 +746,7 @@ def rule_add_channel(imdef):
                 1,
                 "add_channel_dim"
             )]
+
 def rule_swap_RGB_BGR(imdef):
     case imdef:
         match ImageDef(TensorLike(dtype,"BHWC",("RGB" or "BGR") as rgb_order,vr) as tl,meta):
@@ -754,19 +756,24 @@ def rule_swap_RGB_BGR(imdef):
                 1,
                 "swap rgb or bgr"
             )]
+
 def rule_BGR_to_LAB(imdef):
-    from skimage import color
+    #logger.info(f"trying to load skimage")
+    #from skimage import color
+    #from skimage.color.colorconv import lab2rgb,rgb2lab
+    #logger.info("loaded skimage")
+    from data_tree.colorconv import rgb2lab,lab2rgb
     case imdef:
         match ImageDef(Numpy("float32","HWC","BGR",=VR_0_1),meta):
             return[(
-                color.rgb2lab,
+                rgb2lab,
                 ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),meta),
                 1,
                 "bgr_0_1 to lab"
             )]
         match ImageDef(Numpy("float32","HWC","LAB","VR_LAB"),meta):
             return [(
-                color.lab2rgb,
+                lab2rgb,
                 ImageDef(Numpy("float32","HWC","BGR",VR_0_1),meta),
                 1,
                 "lab to bgr_0_1"
@@ -783,7 +790,7 @@ class AutoImage:
         rule_VR_None_to_normalized,
         rule_add_channel,
         rule_swap_RGB_BGR,
-        rule_BGR_to_LAB
+        #rule_BGR_to_LAB
         ]
     solver = AStarSolver(rules=default_rules.copy())
 

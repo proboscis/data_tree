@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x2a680484
+# __coconut_hash__ = 0xf073490a
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -137,6 +137,9 @@ class AutoSolver:  # class AutoSolver:
     Factory for an AutoData class
     """  #     """
     def __init__(self, rules, smart_rules, heuristics=lambda x, y: 0, edge_cutter=lambda x, y, end: False, debug_hook=None):  #     def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False,debug_hook=None):
+        """
+        smart_rules accepts not only current state but also the target state so that it can return the next edge smartly
+        """  #         """
         self.initial_rules = rules  #         self.initial_rules = rules
         self.smart_rules = smart_rules  #         self.smart_rules = smart_rules
         self.solver = AStarSolver(rules=self.initial_rules.copy(), smart_rules=self.smart_rules.copy(), heuristics=heuristics, edge_cutter=edge_cutter, debug_hook=debug_hook)  #         self.solver = AStarSolver(

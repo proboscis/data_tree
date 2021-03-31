@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xb18c5f12
+# __coconut_hash__ = 0xee54a95e
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -178,34 +178,41 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
     scores[start] = heuristics(start, end)  #     scores[start] = heuristics(start,end)
     heapq.heappush(to_visit, _HeapContainer(scores[start], (start, [])))  #     heapq.heappush(to_visit,
     visited = 0  #     visited = 0
-    bar = tqdm(desc="solving with astar_direct")  #     bar = tqdm(desc="solving with astar_direct")
+    bar = tqdm(desc="solving with astar_direct from {_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(end)))  #     bar = tqdm(desc=f"solving with astar_direct from {start} to {end}")
+#logger.debug(f"starting search")
     last_bar_update = visited  #     last_bar_update = visited
     while to_visit:  #     while to_visit:
         if visited - last_bar_update > 1000:  #         if visited - last_bar_update > 1000:
             bar.update(visited - last_bar_update)  #             bar.update(visited-last_bar_update)
             last_bar_update = visited  #             last_bar_update = visited
+#logger.info(f"trying to heappop from {to_visit}")
         hc = heapq.heappop(to_visit)  #         hc = heapq.heappop(to_visit)
+#logger.info(f"popped container:{hc}")
         score = hc.score  #         score = hc.score
+#logger.info(f"got score:{score}")
         (pos, trace) = hc.data  #         (pos,trace) = hc.data
-        if not silent:  #         if not silent:
+#logger.info(f"pos:{pos},trace:{trace}")
 #logger.info(f"{score}:{pos}")
+        if not silent:  #         if not silent:
 #bar.write(f"score:{score}")
             pass  #             pass
 
 #logger.debug(f"visiting:{pos}")
         visited += 1  #         visited += 1
-#print(f"visit:{pos}")
-#print(f"{((trace[-1].a,trace[-1].name) if trace else 'no trace')}")
-#print(f"visit:{trace[-1] if trace else 'no trace'}")
         if len(trace) >= max_depth:  # terminate search on max_depth  #         if len(trace) >= max_depth: # terminate search on max_depth
+#logger.info(f"terminate search on max depth")
             continue  #             continue
         if pos == end:  # reached a goal  #         if pos == end: # reached a goal
+#logger.info(f"reached goal")
             if not silent:  #             if not silent:
                 logger.debug("found after {_coconut_format_0} visits.".format(_coconut_format_0=(visited)))  #                 logger.debug(f"found after {visited} visits.")
                 logger.debug("search result:\n{_coconut_format_0}".format(_coconut_format_0=(new_conversion(trace))))  #                 logger.debug(f"search result:\n{new_conversion(trace)}")
             bar.close()  #             bar.close()
+#logger.info(f"returning trace")
             return trace  #             return trace
+#logger.info(f"getting neighbors from {neighbors}")
         normal_nodes = list(neighbors(pos))  #         normal_nodes = list(neighbors(pos))
+#logger.info(f"getting smart neighbors")
         smart_nodes = list(smart_neighbors(pos, end))  #         smart_nodes = list(smart_neighbors(pos,end))
 #logger.debug(f"{normal_nodes},{smart_nodes}")
         if visited % 10000 == 0:  #         if visited % 10000 == 0:
@@ -268,15 +275,20 @@ class AStarSolver:  # class AStarSolver:
         self.debug_hook = debug_hook  #         self.debug_hook = debug_hook
 
     def neighbors(self, node):  #     def neighbors(self,node):
+#logger.info(f"trying to get neighbors")
         if node in self.neighbors_memo:  #         if node in self.neighbors_memo:
             return self.neighbors_memo[node]  #             return self.neighbors_memo[node]
 
         res = []  #         res = []
         for rule in self.rules:  #         for rule in self.rules:
+#logger.info(f"checking rule:{rule}")
             edges = rule(node)  #             edges = rule(node)
+#logger.info(f"got rules:{edges}")
             if edges is not None:  #             if edges is not None:
                 res += edges  #                  res += edges
+#logger.info(f"memorizing neighbors")
         self.neighbors_memo[node] = res  #         self.neighbors_memo[node] = res
+#logger.info(f"memorized neighbors")
         return res  #         return res
     def smart_neighbors(self, node, end):  #     def smart_neighbors(self,node,end):
         if (node, end) in self.smart_neighbors_memo:  #         if (node,end) in self.smart_neighbors_memo:
@@ -362,6 +374,7 @@ class AStarSolver:  # class AStarSolver:
             return conversion  #             return conversion
         else:  #         else:
             conversion = self._search_direct(key)  #             conversion = self._search_direct(key)
+#logger.info(f"caching conversion:\n{conversion}")
             self.direct_search_cache[key] = [(e.src, e.dst) for e in conversion.edges]  #             self.direct_search_cache[key] = [(e.src,e.dst) for e in conversion.edges]
             self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
 # I can memo every path in conversion actually.

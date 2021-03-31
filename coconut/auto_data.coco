@@ -76,6 +76,9 @@ class AutoSolver:
     Factory for an AutoData class
     """
     def __init__(self,rules,smart_rules,heuristics=lambda x,y:0,edge_cutter=lambda x,y,end:False,debug_hook=None):
+        """
+        smart_rules accepts not only current state but also the target state so that it can return the next edge smartly
+        """
         self.initial_rules = rules
         self.smart_rules = smart_rules
         self.solver = AStarSolver(
