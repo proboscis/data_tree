@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xee54a95e
+# __coconut_hash__ = 0xec35fd42
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -66,11 +66,13 @@ class Conversion:  # class Conversion:
                 logger.error("caught an exception. inspecting..{_coconut_format_0}".format(_coconut_format_0=(ex)))  #                 logger.error(f"caught an exception. inspecting..{ex}")
                 logger.warning("saving erroneous conversion for debug".format())  #                 logger.warning(f"saving erroneous conversion for debug")
                 info = dict(start=self.edges[0].src, end=self.edges[-1].dst, x=init_x)  #                 info= dict(
+
                 logger.debug("conversion info = start:{_coconut_format_0},x:{_coconut_format_1}".format(_coconut_format_0=(info['start']), _coconut_format_1=(info['x'])))  #                 logger.debug(f"conversion info = start:{info['start']},x:{info['x']}")
-                with open("last_erroneous_conversion.pkl", "wb") as f:  #                 with open("last_erroneous_conversion.pkl","wb") as f:
+                p = os.path.abspath("last_erroneous_conversion.pkl")  #                 p = os.path.abspath("last_erroneous_conversion.pkl")
+                with open(p, "wb") as f:  #                 with open(p,"wb") as f:
                     pickle.dump(info, f)  #                     pickle.dump(info,f)
                 source = inspect.getsource(e.f)  #                 source = inspect.getsource(e.f)
-                logger.warning("saved last conversion error cause")  #                 logger.warning("saved last conversion error cause")
+                logger.warning("saved last conversion error cause at {_coconut_format_0}".format(_coconut_format_0=(p)))  #                 logger.warning(f"saved last conversion error cause at {p}")
                 raise ConversionError("exception in edge:{_coconut_format_0} \n paths:{_coconut_format_1} \n x:{_coconut_format_2} \n edge source:{_coconut_format_3}".format(_coconut_format_0=(e.name), _coconut_format_1=([e.name for e in self.edges]), _coconut_format_2=(x), _coconut_format_3=(source))) from ex  #                 raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x} \n edge source:{source}") from ex
         return x  #         return x
 
@@ -178,11 +180,12 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
     scores[start] = heuristics(start, end)  #     scores[start] = heuristics(start,end)
     heapq.heappush(to_visit, _HeapContainer(scores[start], (start, [])))  #     heapq.heappush(to_visit,
     visited = 0  #     visited = 0
-    bar = tqdm(desc="solving with astar_direct from {_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(end)))  #     bar = tqdm(desc=f"solving with astar_direct from {start} to {end}")
+    if not silent:  #     if not silent:
+        bar = tqdm(desc="solving with astar_direct from {_coconut_format_0} to {_coconut_format_1}".format(_coconut_format_0=(start), _coconut_format_1=(end)))  #         bar = tqdm(desc=f"solving with astar_direct from {start} to {end}")
 #logger.debug(f"starting search")
     last_bar_update = visited  #     last_bar_update = visited
     while to_visit:  #     while to_visit:
-        if visited - last_bar_update > 1000:  #         if visited - last_bar_update > 1000:
+        if visited - last_bar_update > 1000 and not silent:  #         if visited - last_bar_update > 1000 and not silent:
             bar.update(visited - last_bar_update)  #             bar.update(visited-last_bar_update)
             last_bar_update = visited  #             last_bar_update = visited
 #logger.info(f"trying to heappop from {to_visit}")
@@ -207,7 +210,7 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
             if not silent:  #             if not silent:
                 logger.debug("found after {_coconut_format_0} visits.".format(_coconut_format_0=(visited)))  #                 logger.debug(f"found after {visited} visits.")
                 logger.debug("search result:\n{_coconut_format_0}".format(_coconut_format_0=(new_conversion(trace))))  #                 logger.debug(f"search result:\n{new_conversion(trace)}")
-            bar.close()  #             bar.close()
+                bar.close()  #                 bar.close()
 #logger.info(f"returning trace")
             return trace  #             return trace
 #logger.info(f"getting neighbors from {neighbors}")
@@ -215,7 +218,7 @@ def _astar_direct(start, end, neighbors, smart_neighbors, heuristics, edge_cutte
 #logger.info(f"getting smart neighbors")
         smart_nodes = list(smart_neighbors(pos, end))  #         smart_nodes = list(smart_neighbors(pos,end))
 #logger.debug(f"{normal_nodes},{smart_nodes}")
-        if visited % 10000 == 0:  #         if visited % 10000 == 0:
+        if visited % 10000 == 0 and not silent:  #         if visited % 10000 == 0 and not silent:
             msg = str(pos)[:50]  #             msg = str(pos)[:50]
             bar.set_description("""pos:{_coconut_format_0:<50}""".format(_coconut_format_0=(msg)))  #             bar.set_description(f"""pos:{msg:<50}""")
         for i, (mapper, next_node, cost, name) in enumerate(chain(normal_nodes, smart_nodes)):  #         for i,(mapper,next_node,cost,name) in enumerate(chain(normal_nodes,smart_nodes)):
@@ -270,7 +273,8 @@ class AStarSolver:  # class AStarSolver:
         self.neighbors_memo = LRU(MAX_MEMO)  # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.  #         self.neighbors_memo = LRU(MAX_MEMO) # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.
         self.search_memo = LRU(MAX_MEMO)  #         self.search_memo = LRU(MAX_MEMO)
         self.smart_neighbors_memo = LRU(MAX_MEMO)  #         self.smart_neighbors_memo = LRU(MAX_MEMO)
-        self.direct_search_cache = DefaultShelveCache(self._search_direct, cache_path)  #         self.direct_search_cache = DefaultShelveCache(self._search_direct,cache_path)
+        logger.debug("using autodata search cache at {_coconut_format_0}".format(_coconut_format_0=(cache_path)))  #         logger.debug(f"using autodata search cache at {cache_path}")
+        self.direct_search_cache = DefaultShelveCache(lambda key: [(e.src, e.dst) for e in self._search_direct(key)], cache_path)  #         self.direct_search_cache = DefaultShelveCache(lambda key:[(e.src,e.dst) for e in self._search_direct(key)],cache_path)
         self.direct_search_memo = LRU(MAX_MEMO)  #         self.direct_search_memo = LRU(MAX_MEMO)
         self.debug_hook = debug_hook  #         self.debug_hook = debug_hook
 
@@ -362,6 +366,7 @@ class AStarSolver:  # class AStarSolver:
                 _coconut_case_check_1 = True  #             match Failure(e,trc):
             if _coconut_case_check_1:  #             match Failure(e,trc):
                 raise e  #                 raise e
+
     def search_direct(self, start, end, silent=False):  #     def search_direct(self,start,end,silent=False):
         key = (start, end, silent)  #         key = (start,end,silent)
         if key in self.direct_search_memo:  #         if key in self.direct_search_memo:

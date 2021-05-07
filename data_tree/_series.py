@@ -5,6 +5,7 @@ import queue
 import threading
 from collections import OrderedDict
 from concurrent.futures import Executor
+from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha1
 from multiprocessing.dummy import Pool
@@ -206,6 +207,15 @@ def mp_each_helper(t):
     _self,i,f = t
     f(_self.value[i])
 
+@dataclass
+class MetadataUpdater:
+    src:dict
+    def __call__(self, m):
+        # print(f"incoming:{m}")
+        copied = m.copy()
+        copied.update(self.src)
+        # print(f"result:{copied}")
+        return copied
 
 T = TypeVar("T")
 
@@ -497,14 +507,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         return MetadataOpsSeries(self, operator=_add_tag)
 
     def update_metadata(self, **metadata):
-        def _update_metadata(m: dict):
-            # print(f"incoming:{m}")
-            copied = m.copy()
-            copied.update(metadata)
-            # print(f"result:{copied}")
-            return copied
-
-        return MetadataOpsSeries(self, operator=_update_metadata)
+        return MetadataOpsSeries(self, operator=MetadataUpdater(metadata))
 
     def meta(self, **metadata):
         return self.update_metadata(**metadata)
@@ -1157,7 +1160,7 @@ class FlattenedSeries(MultiSourcedSeries):
         self._range = np.arange(self.total)
         i = 0
         count = 0
-        for s in src.values:
+        for s in src:
             self.mapping[count:count + s.total] = i
             self.offsets[count:count + s.total] = np.arange(s.total)
             i += 1

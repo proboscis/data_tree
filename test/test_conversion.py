@@ -56,3 +56,20 @@ def test_list_vgg_prep_to_vgg_prep_batch():
     # now, can we embed numbers into a state?
     logger.warning(f"check outputs!")
     #embed()
+
+def test_convert_batch_to_tile():
+    from data_tree import auto_image
+    import numpy as np
+    s = (2,256,256)
+    ary = np.arange(np.product(s),dtype="float32").reshape(s)
+    ai = auto_image("numpy,float32,BHW,L,None")(ary)
+    a = ai.to("numpy,float32,HWC,L,None")
+    #from matplotlib import pyplot as plt
+    #plt.imshow(a)
+    #plt.colorbar()
+    #plt.show()
+    ai.color_map(show=True,value_range="None")
+
+def test_converter_cache():
+    from data_tree import auto
+    logger.info(auto("image,RGB,RGB")(None).converter("numpy,uint8,HWC,RGB,0_1"))

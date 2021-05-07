@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xf073490a
+# __coconut_hash__ = 0x88dae857
 
 # Compiled with Coconut version 1.4.3 [Ernest Scribbler]
 
@@ -339,11 +339,26 @@ class AutoData:  # class AutoData:
     def cast(self, format):  #     def cast(self,format):
         return self.__class__(self.value, format, self.solver)  #         return self.__class__(self.value,format,self.solver)
 
+    def imshow(self):  #     def imshow(self):
+        while True:  #         from matplotlib.pyplot import imshow
+            from matplotlib.pyplot import imshow  #         from matplotlib.pyplot import imshow
+            try:  #         return imshow(self.to("numpy_rgb"))
+                _coconut_is_recursive = imshow is _coconut_recursive_func_38  #         return imshow(self.to("numpy_rgb"))
+            except _coconut.NameError:  #         return imshow(self.to("numpy_rgb"))
+                _coconut_is_recursive = False  #         return imshow(self.to("numpy_rgb"))
+            if _coconut_is_recursive:  #         return imshow(self.to("numpy_rgb"))
+                self = self.to("numpy_rgb")  #         return imshow(self.to("numpy_rgb"))
+                continue  #         return imshow(self.to("numpy_rgb"))
+            else:  #         return imshow(self.to("numpy_rgb"))
+                return imshow(self.to("numpy_rgb"))  #         return imshow(self.to("numpy_rgb"))
+
+
+            return None  #     def show(self):
+    _coconut_recursive_func_38 = imshow  #     def show(self):
     def show(self):  #     def show(self):
-        from matplotlib.pyplot import imshow  #         from matplotlib.pyplot import imshow,show
-        from matplotlib.pyplot import show  #         from matplotlib.pyplot import imshow,show
-        imshow(self.to("numpy_rgb"))  #         imshow(self.to("numpy_rgb"))
-        show()  #         show()
+        from matplotlib.pyplot import show as mpl_show  #         from matplotlib.pyplot import show as mpl_show
+        self.imshow()  #         self.imshow()
+        return mpl_show()  #         return mpl_show()
 
 
 #    def __getstate__(self):

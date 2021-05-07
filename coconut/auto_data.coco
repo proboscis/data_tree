@@ -289,10 +289,14 @@ class AutoData:
     def cast(self,format):
         return self.__class__(self.value,format,self.solver)
 
+    def imshow(self):
+        from matplotlib.pyplot import imshow
+        return imshow(self.to("numpy_rgb"))
+
     def show(self):
-        from matplotlib.pyplot import imshow,show
-        imshow(self.to("numpy_rgb"))
-        show()
+        from matplotlib.pyplot import show as mpl_show
+        self.imshow()
+        return mpl_show()
 
 
 #    def __getstate__(self):

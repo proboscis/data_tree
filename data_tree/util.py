@@ -8,6 +8,7 @@ from threading import Thread
 
 import numpy as np
 import pandas as pd
+from IPython import embed
 from easydict import EasyDict as edict
 from filelock import FileLock
 from frozendict import frozendict
@@ -18,15 +19,17 @@ from tqdm.autonotebook import tqdm
 WARN_SLOW_PREFETCH = False
 import pickle
 
+
 # logger.remove()
 # logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
 
-def load_or_save(path, proc):
+def load_or_save(path, proc, backend=pickle):
     try:
         with open(path, "rb") as f:
-            logger.info(f"loading cache at {path}")
+            logger.info(f"using backend:{backend}")
+            logger.info(f"pid:|{os.getpid()}|loading cache at {path}")
             start = datetime.now()
-            res = pickle.load(f)
+            res = backend.load(f)
             end = datetime.now()
             dt = end - start
             logger.info(f"loading cache at {path} took {dt.total_seconds():.2f} seconds")
@@ -37,7 +40,7 @@ def load_or_save(path, proc):
         ensure_path_exists(path)
         with open(path, "wb") as f:
             logger.info(f"caching at {path}")
-            pickle.dump(res, f)
+            backend.dump(res, f)
         return res
 
 
@@ -182,7 +185,7 @@ class ShelvedCache:
     def __init__(self, path):
         import filelock
         self.path = path
-        self.lock = filelock.FileLock(path+".lock")
+        self.lock = filelock.FileLock(path + ".lock")
         self.mem_cache = dict()
 
     def get_cache(self):
@@ -190,30 +193,34 @@ class ShelvedCache:
         return shelve.open(self.path, writeback=True)
 
     def __contains__(self, key):
-        key = pickle.dumps(key,0).decode()
+        key = pickle.dumps(key, 0).decode()
         if key in self.mem_cache:
             return True
         else:
             with self.get_cache() as db:
-                #logger.info(list(db.keys()))
+                # logger.info(list(db.keys()))
                 return key in db
 
     def __setitem__(self, key, value):
-        key = pickle.dumps(key,0).decode()
+        key = pickle.dumps(key, 0).decode()
         self.mem_cache[key] = value
         with self.lock, self.get_cache() as db:
             db[key] = value
             db.sync()
 
     def __getitem__(self, key):
-        key = pickle.dumps(key,0).decode()
+        key = pickle.dumps(key, 0).decode()
         if key in self.mem_cache:
             return self.mem_cache[key]
         else:
             with self.lock, self.get_cache() as db:
                 if key in db:
-                    res = db[key]
-                    self.mem_cache[key] = res
+                    try:
+                        res = db[key]
+                        self.mem_cache[key] = res
+                    except Exception as e:
+                        logger.warning(f"failed to load from shelve.key={key}")
+                        return self.__missing__(key)
                     return res
                 else:
                     return self.__missing__(key)
@@ -248,10 +255,14 @@ class DefaultShelveCache(ShelvedCache):
         super().__init__(path)
         self.f = f
 
+    @logger.catch
     def __missing__(self, key):
         jsonkey = pickle.loads(key.encode())
         res = self.f(jsonkey)
-        self[jsonkey] = res
+        try:
+            self[jsonkey] = res
+        except Exception as e:
+            logger.error(f"cannot save data \n\t{res} to key \n\t{key} of shelve.")
         return res
 
 
@@ -269,26 +280,35 @@ class PickledTrait:
 
 
 class Pickled(PickledTrait):
-    def __init__(self, path, proc):
+    def __init__(self, path, proc, backend=pickle):
         self.loaded = False
         self._value = None
         self.path = path
         self.proc = proc
         self.lock = FileLock(self.path + ".lock")
+        ensure_path_exists(self.lock.lock_file)
+        self.backend = backend
 
     @property
     def value(self):
         with self.lock:
             if not self.loaded:
-                self._value = load_or_save(self.path, self.proc)
+                self._value = load_or_save(self.path, self.proc, backend=self.backend)
                 self.loaded = True
             return self._value
 
     def clear(self):
         with self.lock:
-            os.remove(self.path)
-            self.loaded = False
-            logger.info(f"deleted pickled file at {self.path}")
+            try:
+                # this try has no effect at all?
+                ensure_dir_exists(self.path)
+                os.remove(self.path)
+                self.loaded = False
+                logger.info(f"deleted pickled file at {self.path}")
+            except FileNotFoundError as e:
+                self.loaded = False
+                logger.warning(f"no cache found at {self.path}")
+                # embed()
 
     def map(self, f):
         return MappedPickled(self, f)
@@ -321,7 +341,7 @@ def scantree(path, yield_dir=False):
         logger.warning(f"permission error at {path}. ignoring...")
 
 
-def scanfiles(path)->"Series[os.DirEntry]":
+def scanfiles(path) -> "Series[os.DirEntry]":
     def gen():
         for item in tqdm(scantree(path), desc="scanning files.."):
             yield item
@@ -331,8 +351,14 @@ def scanfiles(path)->"Series[os.DirEntry]":
 
 
 def scan_images(path):
-    from data_tree import series
     from PIL import Image
+    return scan_image_paths.tag("dir_entries").update_metadata(scan_path=path).tag("path").map(
+        Image.open).tag("load_image")
+
+
+def scan_image_paths(path):
+    from data_tree import series
+
     EXTS = {"jpg", "png", "gif", "jpeg"}
 
     def gen():
@@ -340,11 +366,17 @@ def scan_images(path):
             ext = item.name.split(".")
             if len(ext):
                 ext = ext[-1]
-            if ext in EXTS:
-                yield item
+            if ext.lower() in EXTS:
+                yield item.path
 
-    return series(gen()).tag("dir_entries").update_metadata(scan_path=path).map(lambda p: p.path).tag("path").map(
-        Image.open).tag("load_image")
+    return series(gen())
+
+
+def scan_images_sorted(path):
+    scanned = scan_images(path)
+    indices = scanned.tagged_value("path").argsort()
+    scanned = scanned[indices]
+    return scanned
 
 
 def scan_images_cached(cache_path, scan_path) -> PickledTrait:
@@ -420,6 +452,7 @@ def embed_qt(locals):
     console.eval_queued()
 
     return app.exec_()
+
 
 def next_without_exception(iterator):
     try:
