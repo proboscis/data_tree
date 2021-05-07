@@ -199,6 +199,13 @@ class LocalFlagCache(FlagCacheProvider):
 
 
 class LazySeries(CachedSeries):
+    try:
+        provider = MpFlagCache()
+        logger.warning(f"created lazy series with multi processing manager")
+        # each manager creation causes a new process to be spawned. beware!
+    except Exception as e:
+        logger.warning(f"could not create process safe cache. using non-process safe cache")
+        provider = LocalFlagCache()
 
     def clone(self, parents):
         return LazySeries(src=parents[0], prefer_slice=self.prefer_slice)
@@ -216,30 +223,26 @@ class LazySeries(CachedSeries):
         return self._indexer
 
     def __init__(self, src: Series, prefer_slice=True):
-        logger.debug(f"lazy series created")
-        # using a manager is essential for multiprocessing
-        # but using a manager makes it impossible to run on JVM?
-        try:
-            provider = MpFlagCache()
-        except Exception as e:
-            logger.warning(f"could not create process safe cache. using non-process safe cache")
-            provider = LocalFlagCache()
         # this class will be accessed by multiple processes so I need to make it process safe.
         ctx = multiprocessing.get_context("fork")  # DO NOT USE SPAWNING
+        # this may be causing a dead lock
         self.lock = ctx.RLock()
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
-        self.flags = provider.create_flags(self.total)
-        self.cache = provider.create_cache(self.total)
+        self.flags = self.provider.create_flags(self.total)
+        self.cache = self.provider.create_cache(self.total)
         self._index = np.arange(src.total)
         self.prefer_slice = prefer_slice  # not used currently
 
     def _get_item(self, index):
+        #logger.debug(f"trying to get lock pid:{os.getpid()}")
         with self.lock:
+            #logger.debug(f"obtained a lock:{os.getpid()}")
             if not self.flags[index]:
                 logger.debug(f"cache not hit. pid:{os.getpid()} at {index}")
                 self.cache[index] = self.src._values(index)
                 self.flags[index] = True
+                #logger.debug(f"written data to {index} from pid: {os.getpid()}")
             else:
                 pass
             return self.cache[index]

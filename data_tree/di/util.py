@@ -21,7 +21,7 @@ T = TypeVar("T")
 
 class TraversableBinding(BindingSpec):
     def traversed(self):
-        return DynamicBindingContainer.gather_spec(self)
+        return Design.gather_spec(self)
 
 
 def inject_proto(all_except=None, arg_names=None):
@@ -86,7 +86,8 @@ class ExtendedObjectGraph:
     an object graph which can also provide instances based on its name not only from class object.
     """
 
-    def __init__(self, src: ObjectGraph):
+    def __init__(self, design: "Design", src: ObjectGraph):
+        self.design = design
         self.src = src
 
     def provide(self, target: Union[str, Type[T]]) -> Union[object, T]:
@@ -100,9 +101,35 @@ class ExtendedObjectGraph:
         else:
             raise TypeError(f"target must be either class or a string")
 
+    def run(self, f):
+        argspec = inspect.getfullargspec(f)
+        logger.info(self)
+        assert argspec.varargs is None
+        args = [self.provide(k) for k in argspec.args]
+        return f(*args)
+
+    def __repr__(self):
+        return f"ExtendedObjectGraph of a design:\n{self.design}"
+
+
+class DesignBindContext:
+    def __init__(self, src: "Design", key: str):
+        self.src = src
+        self.key = key
+
+    def to_class(self, cls: type, **kwargs):
+        return self.src.bind_immutable(self.key, to_class=cls, **kwargs)
+
+    def to_instance(self, instance, **kwargs):
+        return self.src.bind_immutable(self.key, to_instance=instance, **kwargs)
+
+    def to_provider(self, provider, all_except=None, arg_names=None, in_scope=None):
+        return self.src.bind_provider_immutable(self.key, provider, all_except=all_except, arg_names=arg_names,
+                                                in_scope=in_scope)
+
 
 @dataclass
-class DynamicBindingContainer:
+class Design:
     """
     This is an injection binding class which can be used to compose configures and providers.
     """
@@ -126,48 +153,54 @@ class DynamicBindingContainer:
                               })
         return DynamicBinding()
 
-    def __add__(self, other: Union["DynamicBindingContainer", BindingSpec]):
+    def __add__(self, other: Union["Design", BindingSpec]):
         other = self._ensure_dbc(other)
         return self.merged(other)
 
-    def update(self, *others: Union["DynamicBindingContainer", BindingSpec]):
+    def bind(self, key: str) -> DesignBindContext:
+        return DesignBindContext(self, key)
+
+    def update(self, *others: Union["Design", BindingSpec]):
         """adds bindings from others. into this instance. inplace operation"""
         for o in others:
             self.merge_inplace(o)
 
-    def _ensure_dbc(self, other: Union["DynamicBindingContainer", BindingSpec]):
+    def _ensure_dbc(self, other: Union["Design", BindingSpec]):
         if isinstance(other, BindingSpec):
-            other = DynamicBindingContainer.gather_spec(other)
+            other = Design.gather_spec(other)
         return other
 
-    def merged(self, other: "DynamicBindingContainer"):
+    def merged(self, other: "Design"):
         """creates another instance with merged bindings. does not modify self"""
         # logger.debug(f"merging:\n\t{self} to \n\t{other}")
-        res = DynamicBindingContainer(
+        assert isinstance(other, Design), f"merge target is not a Design. type:{type(other)}:{other}"
+        res = Design(
             providers=self.providers.copy(),
             configures=self.configures.copy(),
-            modules=list(set(self.modules) | set(self.modules)),
-            classes=list(set(self.classes) | set(self.classes))
+            modules=list(set(self.modules) | set(other.modules)),
+            classes=list(set(self.classes) | set(other.classes))
         )
         for k, v in other.providers.items():
             if k in res.configures:
-                logger.warning(f"override configure\n\t:{k}->{self.configures[k]} to {v}")
+                # logger.warning(f"override configure\n\t:{k}->{self.configures[k]} to {v}")
                 del res.configures[k]
             if k in res.providers:
-                logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
+                pass
+                # logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
             res.providers[k] = v
         for k, v in other.configures.items():
             if k in res.configures:
-                logger.warning(f"override configure\n\t:{k}->{self.configures[k]} to {v}")
+                pass
+                # logger.warning(f"override configure\n\t:{k}->{self.configures[k]} to {v}")
             if k in res.providers:
-                logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
+                # logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
                 del res.providers[k]
             res.configures[k] = v
 
         # logger.debug(f"merged:\n\t{res}")
         return res
 
-    def merge_inplace(self, other: "Union[DynamicBindingContainer,BindingSpec]"):
+    def merge_inplace(self, other: "Union[Design,BindingSpec]"):
         other = self._ensure_dbc(other)
         merged = self.merged(other)
         self.providers = merged.providers
@@ -176,20 +209,51 @@ class DynamicBindingContainer:
         self.classes = merged.classes
         return self
 
-    def provide_inplace(self, key, provider):
-        """
-        :param key:
-        :param provider: any provider function like def (self,deps)->result. canbe annotated
-        with @pinject.inject like @inject(all_except=..., annotated_with...)
-        :return:
-        """
-        # provider.__name__ = f"provide_{key}"
-        _override = DynamicBindingContainer(
-            providers={key: provider},
+    def bind_provider(self, key, f, all_except=None, arg_names=None, in_scope=None):
+        updates = self._bind_provider_updates(key, f, all_except=all_except, arg_names=arg_names, in_scope=None)
+        return self.merge_inplace(updates)
+
+    def _bind_provider_updates(self, key, f, all_except=None, arg_names=None, in_scope=None):
+        argspec = inspect.getfullargspec(f)
+        if f.__name__ == "<lambda>":
+            f.__name__ = "_lambda_"
+        # so first you need to convert a method in to function
+        if "__name__" not in dir(f):
+            f = method_to_function(f)
+        # now ensure the function has self arg
+        f = ensure_self_arg(f)
+
+        @wraps(f)  # called 78 times
+        def wrapper(*args, **kwargs):
+            return f(*args, **kwargs)
+
+        wrapper.__name__ = f"provide_{key}"
+        if all_except is not None or arg_names is not None:
+            wrapper = inject_proto(all_except=all_except, arg_names=arg_names)(wrapper)
+        if in_scope is not None:
+            wrapper = pinject.provides(in_scope=in_scope)(wrapper)
+        new_argspec = inspect.getfullargspec(wrapper)
+        # logger.debug(f"set_provider:{wrapper} \n\t {new_argspec}")
+        if "self" not in new_argspec.args:
+            embed()
+            raise RuntimeError("self must be insided signature for provider")
+        return Design(
+            providers={key: wrapper},
             configures=dict(),
             modules=[]
         )
-        return self.merge_inplace(_override)
+
+    def bind_provider_immutable(self, key, f, all_except=None, arg_names=None, in_scope=None):
+        return self + self._bind_provider_updates(key, f, all_except=all_except, arg_names=arg_names, in_scope=in_scope)
+
+    def _bind_updates(self, key, **kwargs):
+        _override = Design(
+            providers=dict(),
+            configures={key: kwargs},
+            modules=[],
+            classes=[]
+        )
+        return _override
 
     def bind_inplace(self, key, **kwargs):
         """
@@ -197,34 +261,48 @@ class DynamicBindingContainer:
         :param kwargs: to_instance or to_class, and annotated_with
         :return:
         """
-        _override = DynamicBindingContainer(
-            providers=dict(),
-            configures={key: kwargs},
-            modules=[]
-        )
-        return self.merge_inplace(_override)
+        return self.merge_inplace(self._bind_updates(key, **kwargs))
 
-    def batch_provide_inplace(self, providers: dict):
-        x = self
-        for k, p in providers.items():
-            x = x.provide_inplace(k, p)
-        return self
+    def bind_immutable(self, key, **kwargs):
+        return self + self._bind_updates(key, **kwargs)
 
-    def batch_bind_inplace(self, configs: dict):
+    def batch_bind_inplace(self, **kwargs):
         x = self
-        for k, p in configs.items():
-            x = x.bind_inplace(k, **p)
+        for k, p in kwargs.items():
+            x.bind_inplace(k, **p)
+        return x
+
+    def batch_bind_instance(self, **kwargs):
+        x = self
+        for k, v in kwargs.items():
+            x = x.bind(k).to_instance(v)
+        return x
+
+    def batch_bind_provider(self, **kwargs):
+        x = self
+        for k, v in kwargs.items():
+            x = x.bind(k).to_provider(v)
+        return x
+
+    def batch_bind_class(self, **kwargs):
+        x = self
+        for k, v in kwargs.items():
+            x = x.bind(k).to_class(v)
         return x
 
     def to_graph(self, modules=None, classes=None) -> ExtendedObjectGraph:
         modules = self.modules + (modules or [])
         classes = self.classes + (classes or [])
-        logger.info(f"to_graph:\n\t{pformat(modules)}\n\t{pformat(classes)}")
-        assert classes
-        return ExtendedObjectGraph(pinject.new_object_graph(
-            modules=modules, binding_specs=[self.to_binding_spec()],
-            classes=classes
-        ))
+        # logger.info(f"to_graph:\n\t{pformat(modules)}\n\t{pformat(classes)}")
+        return ExtendedObjectGraph(
+            self,
+            pinject.new_object_graph(
+                modules=modules, binding_specs=[self.to_binding_spec()],
+                classes=classes
+            ))
+
+    def run(self, f, modules=None, classes=None):
+        return self.to_graph(modules, classes).run(f)
 
     def provided(self, target: str, modules=None, classes=None) -> object:
         """
@@ -235,13 +313,13 @@ class DynamicBindingContainer:
         return self.to_graph(modules=modules, classes=classes).provide(target)
 
     @staticmethod
-    def gather_spec(b: BindingSpec) -> "DynamicBindingContainer":
-        dep_spec = DynamicBindingContainer(dict(), dict(), [], [])
+    def gather_spec(b: BindingSpec) -> "Design":
+        dep_spec = Design(dict(), dict(), [], [])
         for dep in b.dependencies() or []:
-            spec = DynamicBindingContainer.gather_spec(dep)
+            spec = Design.gather_spec(dep)
             # logger.debug(f"dependency:{spec}")
             dep_spec = dep_spec.merged(spec)
-        spec = DynamicBindingContainer(dict(), dict(), [], [])
+        spec = Design(dict(), dict(), [], [])
 
         def binder(key, **kwargs):
             spec.configures[key] = kwargs
@@ -259,7 +337,7 @@ class DynamicBindingContainer:
 
     @staticmethod
     def traverse_specs(*bindings: BindingSpec):
-        spec = DynamicBindingContainer(dict(), dict(), [])
+        spec = Design(dict(), dict(), [])
         for b in bindings:
             spec = spec + b
         # logger.debug(f"traversed binding:\n\t{spec}")
@@ -270,33 +348,6 @@ class DynamicBindingContainer:
 
     def set_classes(self, classes):
         self.classes = classes
-
-    def bind_provider(self, key, f, all_except=None, arg_names=None):
-        argspec = inspect.getfullargspec(f)
-        if f.__name__ == "<lambda>":
-            f.__name__ = "_lambda_"
-        # so first you need to convert a method in to function
-        if "__name__" not in dir(f):
-            f = method_to_function(f)
-        # now ensure the function has self arg
-        f = ensure_self_arg(f)
-
-        @wraps(f)
-        def wrapper(*args, **kwargs):
-            return f(*args, **kwargs)
-
-        wrapper.__name__ = f"provide_{key}"
-        if all_except is not None or arg_names is not None:
-            wrapper = inject_proto(all_except=all_except, arg_names=arg_names)(wrapper)
-        new_argspec = inspect.getfullargspec(wrapper)
-        # logger.debug(f"set_provider:{wrapper} \n\t {new_argspec}")
-        if "self" not in new_argspec.args:
-            embed()
-            raise RuntimeError("self must be insided signature for provider")
-        if key in self.configures:
-            del self.configures[key]
-        self.providers[key] = wrapper
-        return self
 
     def as_provider(self, f):
         self.bind_provider(f.__name__, ensure_self_arg(f))
@@ -459,16 +510,39 @@ class DynamicBindingContainer:
     def __repr__(self):
         return str(self)
 
+    def path_through(self, design: "Design", keys):
+        """beware of using this as modifications after this point makes no sense to the given design"""
+        for k in keys:
+            design = design.bind(f"provide_{k}").to_provider()
+        return design
+
+    def to_str_dict(self):
+        res = dict()
+        for k, v in self.providers.items():
+            res[k] = v.__name__
+        for k, v in self.configures.items():
+            if "to_instance" in v:
+                res[k] = v["to_instance"]
+            elif "to_class" in v:
+                res[k] = v["to_class"]
+        return res
+
+
+class PrefixedModules:
+    def __init__(self, prefix):
+        import sys
+        self.modules = [v for k, v in sys.modules.items() if k.startswith(prefix)]
+
 
 class DynamicSpec(BindingSpec):
     def __init__(self):
         logger.error(f"initializing dynamic spec")
-        container = DynamicBindingContainer()
+        container = Design()
         self.dynamic_configure(container)
         self._dependencies = [container.to_binding_spec()]
 
     @abc.abstractmethod
-    def dynamic_configure(self, binder: DynamicBindingContainer):
+    def dynamic_configure(self, binder: Design):
         pass
 
     def configure(self, bind):

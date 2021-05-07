@@ -23,16 +23,18 @@ class AutoImage(AutoData):
         plt.legend()
         plt.show()
 
-    def color_map(self,show=True):
+    def color_map(self,show=True,value_range="0_1",vmin=None,vmax=None):
         from matplotlib import pyplot as plt
 
         aim = self.convert(type="numpy", arrange="BHWC")
         #ary = aim.value
         chs = ch_splitter(aim.format["ch_rpr"])
         figs = []
-        for c in chs:
+        for i,c in enumerate(chs):
             figs.append(plt.figure())
-            plt.imshow(aim.to((f"numpy,uint8,HW,{c},0_255")))
+            tgt = aim.to(f"numpy,float32,HW,{c},{value_range}")
+            plt.imshow(tgt,vmin=vmin,vmax=vmax)
+            #plt.imshow(aim.to((f"numpy,uint8,HW,{c},0_255")))
             plt.colorbar()
         if show:
             plt.show()

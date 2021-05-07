@@ -21,6 +21,7 @@ from easydict import EasyDict as edict
 #    debug=print
 # )
 from six import reraise
+from snoop import snoop, pp
 
 from data_tree.util import shared_npy_array_like
 
@@ -223,8 +224,8 @@ class SequentialTaskParallel:
             logger.info("finished yielder")
 
 
-def _worker2(self, worker_id):
-    f = self.worker_generator()
+def _worker2(self, worker_id,worker_gen_args):
+    f = self.worker_generator(*worker_gen_args)
     # a worker dies silently?
     task_count = 0
     self.worker_task_counts[worker_id] = task_count
@@ -314,7 +315,11 @@ def _worker2(self, worker_id):
 class SequentialTaskParallel2:
     TERMINATION_SIGNAL = "__END__"
 
-    def __init__(self, worker_generator, num_worker=8, max_pending_result=100):
+    def __init__(self,
+                 worker_generator,
+                 worker_gen_args,
+                 num_worker=8, max_pending_result=100):
+        self.worker_gen_args = worker_gen_args
         self.worker_generator = worker_generator
         self.num_worker = num_worker
         self.manager = multiprocessing.Manager()  # always use manager to avoid wtf errors!
@@ -398,7 +403,7 @@ class SequentialTaskParallel2:
                 time.sleep(0.1)
             logger.info(f"monitoring thread stopped")
 
-        workers = [multiprocessing.Process(target=_worker2, args=(self.self_object, i), daemon=True) for i in
+        workers = [multiprocessing.Process(target=_worker2, args=(self.self_object, i,self.worker_gen_args), daemon=True) for i in
                    range(self.num_worker)]
         for w in workers:
             w.start()
@@ -484,6 +489,7 @@ class SequentialTaskParallel2:
             self.monitor_termination_signal.set()
             self.monitor_thread.join()
         logger.info(f"monitoring thread is stopped")
+
 
 
 class SharedBufferPool:

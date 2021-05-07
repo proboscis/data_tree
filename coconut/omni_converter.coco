@@ -13,6 +13,7 @@ import numpy as np
 # actually, this kind of pattern matches are too hard to write in pure python. what do I do???
 # wait for pep622,pep642, to be implemented in python 3.10
 
+
 def imagedef2dict(imdef:ImageDef):
     case imdef:
         match ImageDef(data_type,meta):
@@ -121,6 +122,42 @@ def rule_imgs2tile(state):
                 10
             )]
 
+# todo
+def batch_to_tiled(ary,max_size=1024,padding=1):
+    # ary shape == (B,H,W,C)
+    w = ary.shape[2]
+    n_imgs = min((max_size//w)**2,ary.shape[0])
+    ary = ary[:n_imgs]
+    nrow = int(sqrt(n_imgs))
+    if (nrow*nrow < n_imgs):
+        nrow += 1
+    return make_grid(ary,nrow,padding=padding)
+def batch_to_tiled_shape_shift(shape,max_size=1024,padding=1):
+    b,h,w,c = shape
+    if b is None:
+        return (None,None,c)
+    if w is None:
+        return (None,None,c)
+    n_imgs = min((max_size//w)**2,shape[0])
+    #n_imgs = min(max_size//w,b.shape[0])
+    nrow = int(sqrt(n_imgs))
+    if (nrow*nrow < n_imgs):
+        nrow += 1
+    r = int((w-((nrow+1)*padding))/nrow) # width/height of each tile
+    nh = (nrow-1)*padding + nrow*h
+    nw = (nrow-1)*padding + nrow*w
+    new_shape = (nh,nw,c)
+    return new_shape
+ms_batch_to_tiled = batch_to_tiled_shape_shift |> ss_to_ms$
+def rule_batch_to_tiled(state):
+    case state:
+        match ImageDef(Numpy(dt,"BHWC",chrpr,vr),meta):
+            return [(
+                batch_to_tiled,
+                ImageDef(Numpy(dt,"HWC",chrpr,vr),ms_batch_to_tiled(meta)),
+                "numpy bhwc to hwc by tiling",
+                20
+            )]
 
 def rule_img2widget(state):
     case state:
@@ -161,6 +198,14 @@ def rule_numpy2img(state):
                     "Image.fromarray",
                     1
                 )]
+
+def rule_format(state):
+    if hasattr(state,"__neighbors__"):
+        ngs = state.__neighbors__()
+        if not isinstance(ngs,list):
+            ngs = [ngs]
+        return ngs
+
 
 ms_img2L = (s->(s[0],s[1])) |> ss_to_ms$
 ms_img2LA = (s->(s[0],s[1],2)) |> ss_to_ms$
@@ -599,7 +644,9 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_cast_rule(cast_tuple2auto_tuple,"tuple <--> auto_tuple"),
     #AutoSolver.create_cast_rule(dict2visdomable),
     AutoSolver.create_conversion_rule(any2widget),
+    AutoSolver.create_conversion_rule(rule_format),
     AutoSolver.create_conversion_rule(rule_imgs2tile),
+    AutoSolver.create_conversion_rule(rule_batch_to_tiled),
     AutoSolver.create_conversion_rule(rule_img2widget),
     AutoSolver.create_conversion_rule(rule_numpy2img),
     AutoSolver.create_conversion_rule(rule_image2gray),
