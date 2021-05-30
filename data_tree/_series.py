@@ -7,6 +7,7 @@ from collections import OrderedDict
 from concurrent.futures import Executor
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from hashlib import sha1
 from multiprocessing.dummy import Pool
 from random import randint
@@ -22,6 +23,7 @@ from lazy import lazy as en_lazy
 from loguru import logger
 from pyvis.network import Network
 from sklearn.preprocessing import MinMaxScaler
+from snoop import snoop
 from tqdm.autonotebook import tqdm
 
 from data_tree.cache import ConditionedFilePathProvider
@@ -39,10 +41,13 @@ def en_numpy(data):
         t = object
         if data:
             sample = data[0]
-            if isinstance(sample, int):
+            if isinstance(sample,bool):
+                t = np.bool
+            elif isinstance(sample, int):
                 t = np.int64
             elif isinstance(sample, float):
                 t = np.float64
+
         buf = np.empty(len(data), dtype=t)
         buf[:] = data
         return buf
@@ -81,14 +86,15 @@ class Trace(NamedTuple):
             if metadata_generator is not None:
                 meta.update(metadata_generator(trace))
             buf = f"{indent_str}:{str(trace.series)} | {meta}\n"
-            if not trace.parents:
-                buf += indent_str + ">" + str(trace.get_value()) + "\n"
-            else:
+            buf += indent_str + ">" + str(trace.get_value()) + "\n"
+            if trace.parents:
                 for p in trace.parents:
                     buf += _print_trace(p, indent + 1)
             return buf
 
         return _print_trace(self, 0)
+
+
 
     def print_trace(self):
         print(self.trace_string())
@@ -153,6 +159,7 @@ class Trace(NamedTuple):
         else:
             viz = infer_widget(data)
         return viz
+
 
     def show_traceback_html(self,
                             skipping_tags=("slow",),
@@ -297,7 +304,6 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
                 return self._get_indices(smart_indices)
         else:
             return self._get_item(smart_indices)
-
     def __getitem__(self, item) -> Union["Series[T]", object]:
         if isinstance(item, slice):
             return self.indexed(IdentityIndexer(self.total).slice(item))
@@ -564,7 +570,12 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             values_for_sort = self.map(key).values
         else:
             values_for_sort = self.values
+        if isinstance(values_for_sort[0],Iterable):
+            tgt = np.empty(len(values_for_sort),dtype=object)
+            tgt[:] = values_for_sort
+            values_for_sort = tgt
         indices = np.argsort(values_for_sort)
+        assert len(indices.shape) == 1
         return indices
 
     def filter(self, _filter):
@@ -903,8 +914,10 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             param_controllers=defaults
         )
 
-    def values_progress(self, batch_size=16, progress_bar=tqdm):
+    def values_progress(self, batch_size=16, progress_bar=tqdm,desc = None):
         res = []
+        if desc is not None:
+            progress_bar = partial(progress_bar,desc=desc)
         for batch in self.batch_generator(batch_size=batch_size, preload=0, progress_bar=progress_bar):
             res += batch
         return res
@@ -1518,7 +1531,9 @@ class MPMappedSeries(IndexedSeries):
             stp = SequentialTaskParallel2(
                 worker_generator=stp_worker_generator(self.single_mapper, global_resources=resources),
                 num_worker=multiprocessing.cpu_count() if self.num_process is None else self.num_process,
-                max_pending_result=self.max_pending_result)
+                max_pending_result=self.max_pending_result,
+                worker_gen_args=()
+            )
 
             def _fetcher():
                 logger.info(f"multiprocessing fetcher started")

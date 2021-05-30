@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x88dae857
+# __coconut_hash__ = 0x9a7d6f7a
 
-# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
+# Compiled with Coconut version 1.5.0 [Fish License]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -313,7 +313,7 @@ class AutoData:  # class AutoData:
         return self.__class__(f(self.value), format, self.solver)  #         return self.__class__(f(self.value),format,self.solver)
 
     def map_in(self, start_format, f, new_format=None):  #     def map_in(self,start_format,f,new_format=None):
-        return self.__class__(f(self.to(start_format)), (lambda _coconut_none_coalesce_item: self.format if _coconut_none_coalesce_item is None else _coconut_none_coalesce_item)(new_format), self.solver)  #         return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver)
+        return self.__class__(f(self.to(start_format)), (lambda _coconut_x: self.format if _coconut_x is None else _coconut_x)(new_format), self.solver)  #         return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver)
 
     def neighbors(self):  #     def neighbors(self):
         return self.solver.solver.neighbors(self.format)  #         return self.solver.solver.neighbors(self.format)
@@ -353,12 +353,12 @@ class AutoData:  # class AutoData:
                 return imshow(self.to("numpy_rgb"))  #         return imshow(self.to("numpy_rgb"))
 
 
-            return None  #     def show(self):
-    _coconut_recursive_func_38 = imshow  #     def show(self):
-    def show(self):  #     def show(self):
+            return None  #     def show(self,block=True):
+    _coconut_recursive_func_38 = imshow  #     def show(self,block=True):
+    def show(self, block=True):  #     def show(self,block=True):
         from matplotlib.pyplot import show as mpl_show  #         from matplotlib.pyplot import show as mpl_show
         self.imshow()  #         self.imshow()
-        return mpl_show()  #         return mpl_show()
+        return mpl_show(block=block)  #         return mpl_show(block=block)
 
 
 #    def __getstate__(self):
@@ -367,9 +367,10 @@ class AutoData:  # class AutoData:
 try:  # def AutoData.call(self,name,*args,**kwargs):
     _coconut_dotted_func_name_store_0 = call  # def AutoData.call(self,name,*args,**kwargs):
 except _coconut.NameError:  # def AutoData.call(self,name,*args,**kwargs):
-    _coconut_dotted_func_name_store_0 = None  # def AutoData.call(self,name,*args,**kwargs):
+    _coconut_dotted_func_name_store_0 = _coconut_sentinel  # def AutoData.call(self,name,*args,**kwargs):
 def call(self, name, *args, **kwargs):  # def AutoData.call(self,name,*args,**kwargs):
     return self.to(name)(*args, **kwargs)  #     return self.to(name)(*args,**kwargs)
 
 AutoData.call = call  #     return self.to(name)(*args,**kwargs)
-call = _coconut_dotted_func_name_store_0  #     return self.to(name)(*args,**kwargs)
+if _coconut_dotted_func_name_store_0 is not _coconut_sentinel:  #     return self.to(name)(*args,**kwargs)
+    call = _coconut_dotted_func_name_store_0  #     return self.to(name)(*args,**kwargs)

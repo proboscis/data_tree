@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x4043f695
+# __coconut_hash__ = 0x3fe348f
 
-# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
+# Compiled with Coconut version 1.5.0 [Fish License]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -75,11 +75,7 @@ class TensorLike(_coconut.collections.namedtuple("TensorLike", "dtype, arrange, 
                 _coconut_match_check = True  # data TensorLike(
 
         if not _coconut_match_check:  # data TensorLike(
-            _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  # data TensorLike(
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is str) from DataType:'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data TensorLike(
-            _coconut_match_err.pattern = 'data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is str) from DataType:'  # data TensorLike(
-            _coconut_match_err.value = _coconut_match_to_args  # data TensorLike(
-            raise _coconut_match_err  # data TensorLike(
+            raise _coconut_FunctionMatchError('data TensorLike(     dtype is str,     arrange is str,     channel_repr is str,     value_range is str) from DataType:', _coconut_match_to_args)  # data TensorLike(
 
         return _coconut.tuple.__new__(_cls, (dtype, arrange, channel_repr, value_range))  # data TensorLike(
     def __repr__(self):  #     def __repr__(self):
@@ -159,11 +155,7 @@ class ImageDef(_coconut.collections.namedtuple("ImageDef", "data_type, meta")): 
                 _coconut_match_check = True  # data ImageDef(data_type is DataType,meta is frozendict):
 
         if not _coconut_match_check:  # data ImageDef(data_type is DataType,meta is frozendict):
-            _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  # data ImageDef(data_type is DataType,meta is frozendict):
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'data ImageDef(data_type is DataType,meta is frozendict):'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data ImageDef(data_type is DataType,meta is frozendict):
-            _coconut_match_err.pattern = 'data ImageDef(data_type is DataType,meta is frozendict):'  # data ImageDef(data_type is DataType,meta is frozendict):
-            _coconut_match_err.value = _coconut_match_to_args  # data ImageDef(data_type is DataType,meta is frozendict):
-            raise _coconut_match_err  # data ImageDef(data_type is DataType,meta is frozendict):
+            raise _coconut_FunctionMatchError('data ImageDef(data_type is DataType,meta is frozendict):', _coconut_match_to_args)  # data ImageDef(data_type is DataType,meta is frozendict):
 
         return _coconut.tuple.__new__(_cls, (data_type, meta))  # data ImageDef(data_type is DataType,meta is frozendict):
     def __repr__(self):  #     def __repr__(self):
@@ -200,11 +192,7 @@ class DataEdge(_coconut.collections.namedtuple("DataEdge", "a, b, f, cost, name,
                 _coconut_match_check = True  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
 
         if not _coconut_match_check:  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
-            _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
-            _coconut_match_err.pattern = 'data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):'  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
-            _coconut_match_err.value = _coconut_match_to_args  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
-            raise _coconut_match_err  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
+            raise _coconut_FunctionMatchError('data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):', _coconut_match_to_args)  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
 
         return _coconut.tuple.__new__(_cls, (a, b, f, cost, name, meta_shifter))  # data DataEdge(a is DataType,b is DataType,f,cost is int,name is str,meta_shifter=x->x):
     def to_edge(self, src: 'ImageDef'):  #     def to_edge(self,src:ImageDef):
@@ -258,11 +246,7 @@ class Edge(_coconut.collections.namedtuple("Edge", "a, b, f, cost, name")):  # d
                 _coconut_match_check = True  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
 
         if not _coconut_match_check:  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
-            _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " '\'data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):\'' " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
-            _coconut_match_err.pattern = 'data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):'  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
-            _coconut_match_err.value = _coconut_match_to_args  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
-            raise _coconut_match_err  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
+            raise _coconut_FunctionMatchError('data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):', _coconut_match_to_args)  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
 
         return _coconut.tuple.__new__(_cls, (a, b, f, cost, name))  # data Edge(a is ImageDef,b is ImageDef,f,cost is int,name="undefined"):
     def __repr__(self):  #     def __repr__(self):
@@ -1219,11 +1203,7 @@ class AutoImage:  # class AutoImage:
                 log_trace = _coconut_match_temp_2  #     def to(self,img_def is (str,ImageDef),log_trace=False):
                 _coconut_match_check = True  #     def to(self,img_def is (str,ImageDef),log_trace=False):
         if not _coconut_match_check:  #     def to(self,img_def is (str,ImageDef),log_trace=False):
-            _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  #     def to(self,img_def is (str,ImageDef),log_trace=False):
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'def to(self,img_def is (str,ImageDef),log_trace=False):'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  #     def to(self,img_def is (str,ImageDef),log_trace=False):
-            _coconut_match_err.pattern = 'def to(self,img_def is (str,ImageDef),log_trace=False):'  #     def to(self,img_def is (str,ImageDef),log_trace=False):
-            _coconut_match_err.value = _coconut_match_to_args  #     def to(self,img_def is (str,ImageDef),log_trace=False):
-            raise _coconut_match_err  #     def to(self,img_def is (str,ImageDef),log_trace=False):
+            raise _coconut_FunctionMatchError('def to(self,img_def is (str,ImageDef),log_trace=False):', _coconut_match_to_args)  #     def to(self,img_def is (str,ImageDef),log_trace=False):
 
         return self.convert(img_def).data  #         return self.convert(img_def).data
 
@@ -1375,23 +1355,25 @@ class AutoImage:  # class AutoImage:
 try:  # @property
     _coconut_dotted_func_name_store_0 = images  # @property
 except _coconut.NameError:  # @property
-    _coconut_dotted_func_name_store_0 = None  # @property
+    _coconut_dotted_func_name_store_0 = _coconut_sentinel  # @property
 @property  # @property
 def images(self):  # def AutoImage.images(self):
     return self.to(self.to_images_def())  #     return self.to(self.to_images_def())
 
 AutoImage.images = images  # @property
-images = _coconut_dotted_func_name_store_0  # @property
+if _coconut_dotted_func_name_store_0 is not _coconut_sentinel:  # @property
+    images = _coconut_dotted_func_name_store_0  # @property
 try:  # @property
     _coconut_dotted_func_name_store_1 = image_size  # @property
 except _coconut.NameError:  # @property
-    _coconut_dotted_func_name_store_1 = None  # @property
+    _coconut_dotted_func_name_store_1 = _coconut_sentinel  # @property
 @property  # @property
 def image_size(self):  # def AutoImage.image_size(self):
     return self.images[0].size  #     return self.images[0].size
 
 AutoImage.image_size = image_size  # def make_grid(imgs, nrow, padding=0):
-image_size = _coconut_dotted_func_name_store_1  # def make_grid(imgs, nrow, padding=0):
+if _coconut_dotted_func_name_store_1 is not _coconut_sentinel:  # def make_grid(imgs, nrow, padding=0):
+    image_size = _coconut_dotted_func_name_store_1  # def make_grid(imgs, nrow, padding=0):
 def make_grid(imgs, nrow, padding=0):  # def make_grid(imgs, nrow, padding=0):
     """Numpy配列の複数枚の画像を、1枚の画像にタイルします
 
@@ -1427,7 +1409,7 @@ def make_grid(imgs, nrow, padding=0):  # def make_grid(imgs, nrow, padding=0):
 try:  # def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
     _coconut_dotted_func_name_store_2 = tile_image  # def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
 except _coconut.NameError:  # def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
-    _coconut_dotted_func_name_store_2 = None  # def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
+    _coconut_dotted_func_name_store_2 = _coconut_sentinel  # def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
 def tile_image(self, w=1024, h=1024, max_image=100, padding=1):  # def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
     ch = self.to_images_def().data_type.channel_repr  #     ch = self.to_images_def().data_type.channel_repr
     if len(ch) == 1:  #     if len(ch) == 1:
@@ -1443,7 +1425,8 @@ def tile_image(self, w=1024, h=1024, max_image=100, padding=1):  # def AutoImage
     return AutoImage(make_grid(imgs, nrow, padding=1), "numpy,uint8,HWC,{_coconut_format_0},0_255".format(_coconut_format_0=(ch)))  #     return AutoImage(make_grid(imgs,nrow,padding=1),f"numpy,uint8,HWC,{ch},0_255")
 
 AutoImage.tile_image = tile_image  # img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
-tile_image = _coconut_dotted_func_name_store_2  # img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
+if _coconut_dotted_func_name_store_2 is not _coconut_sentinel:  # img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
+    tile_image = _coconut_dotted_func_name_store_2  # img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
 img_to_shifting_grids = lambda img: (shifting_grids)(make_grids(*img.image_size))  # img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
 def auto_to_3res(img: '"AutoImage"', cx, cy, r=256) -> '"AutoImage"':  # def auto_to_3res(img:"AutoImage",cx,cy,r=256)->"AutoImage":
     img = img.to("image,L,L")  #     img = img.to("image,L,L")
@@ -1460,11 +1443,12 @@ def img_to_grid_batch(img: 'AutoImage'):  # def img_to_grid_batch(img:AutoImage)
 try:  # def AutoImage.cast(self,imgdef):
     _coconut_dotted_func_name_store_3 = cast  # def AutoImage.cast(self,imgdef):
 except _coconut.NameError:  # def AutoImage.cast(self,imgdef):
-    _coconut_dotted_func_name_store_3 = None  # def AutoImage.cast(self,imgdef):
+    _coconut_dotted_func_name_store_3 = _coconut_sentinel  # def AutoImage.cast(self,imgdef):
 def cast(self, imgdef):  # def AutoImage.cast(self,imgdef):
     return AutoImage(self.data, imgdef)  #     return AutoImage(self.data,imgdef)
 
 
 
 AutoImage.cast = cast  # 
-cast = _coconut_dotted_func_name_store_3  #
+if _coconut_dotted_func_name_store_3 is not _coconut_sentinel:  # 
+    cast = _coconut_dotted_func_name_store_3  #

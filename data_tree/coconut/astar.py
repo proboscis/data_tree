@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xec35fd42
+# __coconut_hash__ = 0x90690b43
 
-# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
+# Compiled with Coconut version 1.5.0 [Fish License]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -38,6 +38,7 @@ import os  # import os
 from frozendict import frozendict  # from frozendict import frozendict
 from itertools import chain  # from itertools import chain
 from tabulate import tabulate  # from tabulate import tabulate
+from snoop import snoop  # from snoop import snoop
 class Edge(_coconut.collections.namedtuple("Edge", "src dst f cost name")):  # data Edge(src,dst,f,cost,name="unnamed"):
     __slots__ = ()  # data Edge(src,dst,f,cost,name="unnamed"):
     __ne__ = _coconut.object.__ne__  # data Edge(src,dst,f,cost,name="unnamed"):
@@ -69,8 +70,14 @@ class Conversion:  # class Conversion:
 
                 logger.debug("conversion info = start:{_coconut_format_0},x:{_coconut_format_1}".format(_coconut_format_0=(info['start']), _coconut_format_1=(info['x'])))  #                 logger.debug(f"conversion info = start:{info['start']},x:{info['x']}")
                 p = os.path.abspath("last_erroneous_conversion.pkl")  #                 p = os.path.abspath("last_erroneous_conversion.pkl")
-                with open(p, "wb") as f:  #                 with open(p,"wb") as f:
-                    pickle.dump(info, f)  #                     pickle.dump(info,f)
+                try:  #                 try:
+                    with open(p, "wb") as f:  #                     with open(p,"wb") as f:
+                        pickle.dump(info, f)  #                         pickle.dump(info,f)
+                except Exception as save_error:  #                 except Exception as save_error:
+                    from IPython import embed  #                     from IPython import embed
+                    logger.info("faield to dump failed conversions.".format())  #                     logger.info(f"faield to dump failed conversions.")
+                    raise save_error  #                     raise save_error
+#embed()
                 source = inspect.getsource(e.f)  #                 source = inspect.getsource(e.f)
                 logger.warning("saved last conversion error cause at {_coconut_format_0}".format(_coconut_format_0=(p)))  #                 logger.warning(f"saved last conversion error cause at {p}")
                 raise ConversionError("exception in edge:{_coconut_format_0} \n paths:{_coconut_format_1} \n x:{_coconut_format_2} \n edge source:{_coconut_format_3}".format(_coconut_format_0=(e.name), _coconut_format_1=([e.name for e in self.edges]), _coconut_format_2=(x), _coconut_format_3=(source))) from ex  #                 raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x} \n edge source:{source}") from ex
@@ -375,7 +382,7 @@ class AStarSolver:  # class AStarSolver:
             edges = self.direct_search_cache[key]  #             edges = self.direct_search_cache[key]
             conversion = self._research_from_edges(edges)  #             conversion = self._research_from_edges(edges)
             self.direct_search_memo[key] = conversion  #             self.direct_search_memo[key] = conversion
-            logger.debug("researched_conversion:\n{_coconut_format_0}".format(_coconut_format_0=(conversion)))  #             logger.debug(f"researched_conversion:\n{conversion}")
+#logger.debug(f"researched_conversion:\n{conversion}")
             return conversion  #             return conversion
         else:  #         else:
             conversion = self._search_direct(key)  #             conversion = self._search_direct(key)
