@@ -5,16 +5,20 @@ from datetime import datetime
 from hashlib import sha1
 from queue import Queue, Full
 from threading import Thread
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 from IPython import embed
+from cytoolz import memoize
 from easydict import EasyDict as edict
 from filelock import FileLock
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
 from tqdm.autonotebook import tqdm
+
+# from data_tree._series import Series
 
 WARN_SLOW_PREFETCH = False
 import pickle
@@ -26,7 +30,7 @@ import pickle
 def load_or_save(path, proc, backend=pickle):
     try:
         with open(path, "rb") as f:
-            logger.info(f"using backend:{backend}")
+            # logger.info(f"using backend:{backend}")
             logger.info(f"pid:|{os.getpid()}|loading cache at {path}")
             start = datetime.now()
             res = backend.load(f)
@@ -37,10 +41,13 @@ def load_or_save(path, proc, backend=pickle):
     except Exception as e:
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
         res = proc()
-        ensure_path_exists(path)
-        with open(path, "wb") as f:
-            logger.info(f"caching at {path}")
-            backend.dump(res, f)
+        try:
+            ensure_path_exists(path)
+            with open(path, "wb") as f:
+                logger.info(f"caching at {path}")
+                backend.dump(res, f)
+        except Exception as e:
+            logger.warning(f"failed to cache proc result at {path}. check the filesystem is writable.")
         return res
 
 
@@ -77,6 +84,20 @@ def ensure_path_exists(fileName):
             makedirs(parent)
         except FileExistsError as fee:
             pass
+def cached_ensure_path_exists(name):
+    parent = os.path.dirname(name)
+    return cached_makedirs(parent)
+   
+@memoize 
+def cached_makedirs(dir):
+    if not os.path.exists(dir) and dir:
+        try:
+            logger.info(f"making dirs for {dir}")
+            os.makedirs(dir)
+        except FileExistsError as fee:
+            pass
+
+
 
 
 def ensure_dir_exists(dirname):
@@ -340,6 +361,18 @@ def scantree(path, yield_dir=False):
     except PermissionError as e:
         logger.warning(f"permission error at {path}. ignoring...")
 
+def scantree_filtered(path,ignore:Callable,yield_dir=False):
+    try:
+        for entry in os.scandir(path):
+            if entry.is_dir(follow_symlinks=False):
+                if yield_dir:
+                    yield entry
+                if not ignore(entry.path):
+                    yield from scantree(entry.path, yield_dir=yield_dir)  # see below for Python 2.x
+            else:
+                yield entry
+    except PermissionError as e:
+        logger.warning(f"permission error at {path}. ignoring...")
 
 def scanfiles(path) -> "Series[os.DirEntry]":
     def gen():
@@ -352,7 +385,7 @@ def scanfiles(path) -> "Series[os.DirEntry]":
 
 def scan_images(path):
     from PIL import Image
-    return scan_image_paths.tag("dir_entries").update_metadata(scan_path=path).tag("path").map(
+    return scan_image_paths(path).tag("dir_entries").update_metadata(scan_path=path).tag("path").map(
         Image.open).tag("load_image")
 
 
@@ -370,6 +403,10 @@ def scan_image_paths(path):
                 yield item.path
 
     return series(gen())
+
+
+def scan_image_paths_cached(path, cache_path) -> "Series[str]":
+    return Pickled(cache_path, lambda: scan_image_paths(path)).value
 
 
 def scan_images_sorted(path):

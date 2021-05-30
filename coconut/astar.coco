@@ -14,6 +14,7 @@ import os
 from frozendict import frozendict
 from itertools import chain
 from tabulate import tabulate
+from snoop import snoop
 data Edge(src,dst,f,cost,name="unnamed"):
     def __repr__(self):
         return f"Edge(<{self.src}> -> <{self.dst}> : {self.name})"
@@ -41,8 +42,14 @@ class Conversion:
 
                 logger.debug(f"conversion info = start:{info['start']},x:{info['x']}")
                 p = os.path.abspath("last_erroneous_conversion.pkl")
-                with open(p,"wb") as f:
-                    pickle.dump(info,f)
+                try:
+                    with open(p,"wb") as f:
+                        pickle.dump(info,f)
+                except Exception as save_error:
+                    from IPython import embed
+                    logger.info(f"faield to dump failed conversions.")
+                    raise save_error
+                    #embed()
                 source = inspect.getsource(e.f)
                 logger.warning(f"saved last conversion error cause at {p}")
                 raise ConversionError(f"exception in edge:{e.name} \n paths:{[e.name for e in self.edges]} \n x:{x} \n edge source:{source}") from ex
@@ -375,7 +382,7 @@ class AStarSolver:
             edges = self.direct_search_cache[key]
             conversion = self._research_from_edges(edges)
             self.direct_search_memo[key] = conversion
-            logger.debug(f"researched_conversion:\n{conversion}")
+            #logger.debug(f"researched_conversion:\n{conversion}")
             return conversion
         else:
             conversion = self._search_direct(key)

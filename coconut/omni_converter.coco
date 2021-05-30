@@ -199,6 +199,17 @@ def rule_numpy2img(state):
                     1
                 )]
 
+def rule_image_path_to_image(state):
+    if isinstance(state,str) and state == "image_path":
+       return [
+           (
+               p -> Image.open(p).convert("RGB"),
+               "image,RGB,RGB",
+               "PIL.open ..> .convert('RGB')",
+               1
+            )
+       ]
+
 def rule_format(state):
     if hasattr(state,"__neighbors__"):
         ngs = state.__neighbors__()
@@ -650,6 +661,7 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(rule_img2widget),
     AutoSolver.create_conversion_rule(rule_numpy2img),
     AutoSolver.create_conversion_rule(rule_image2gray),
+    AutoSolver.create_conversion_rule(rule_image_path_to_image),
     #AutoSolver.create_conversion_rule(rule_image2lab),
     #AutoSolver.create_conversion_rule(rule_rgba2laba),
     #AutoSolver.create_conversion_rule(rule_lab_value_conversion),

@@ -293,10 +293,10 @@ class AutoData:
         from matplotlib.pyplot import imshow
         return imshow(self.to("numpy_rgb"))
 
-    def show(self):
+    def show(self,block=True):
         from matplotlib.pyplot import show as mpl_show
         self.imshow()
-        return mpl_show()
+        return mpl_show(block=block)
 
 
 #    def __getstate__(self):

@@ -73,3 +73,9 @@ def test_convert_batch_to_tile():
 def test_converter_cache():
     from data_tree import auto
     logger.info(auto("image,RGB,RGB")(None).converter("numpy,uint8,HWC,RGB,0_1"))
+
+def test_convert_impath_to_image():
+    from data_tree import auto
+    from data_tree.coconut.omni_converter import rule_image_path_to_image
+    logger.info(rule_image_path_to_image("image_path"))
+    logger.info(auto("image_path")(None).converter("image,RGB,RGB"))

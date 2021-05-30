@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xda5f8a5c
+# __coconut_hash__ = 0x4d5538b4
 
-# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
+# Compiled with Coconut version 1.5.0 [Fish License]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -384,6 +384,10 @@ def rule_numpy2img(state):  # def rule_numpy2img(state):
             if _coconut_case_check_10:  #                     Image.fromarray,
                 return [(Image.fromarray, ImageDef(PILImage("L", "L"), meta), "Image.fromarray", 1)]  #                 return [(
 
+def rule_image_path_to_image(state):  # def rule_image_path_to_image(state):
+    if isinstance(state, str) and state == "image_path":  #     if isinstance(state,str) and state == "image_path":
+        return [(lambda p: Image.open(p).convert("RGB"), "image,RGB,RGB", "PIL.open ..> .convert('RGB')", 1)]  #        return [
+
 def rule_format(state):  # def rule_format(state):
     if hasattr(state, "__neighbors__"):  #     if hasattr(state,"__neighbors__"):
         ngs = state.__neighbors__()  #         ngs = state.__neighbors__()
@@ -508,11 +512,7 @@ class AutoTuple(_coconut.collections.namedtuple("AutoTuple", "formats")):  # dat
                 _coconut_match_check = True  # data AutoTuple(formats is tuple)
 
         if not _coconut_match_check:  # data AutoTuple(formats is tuple)
-            _coconut_match_val_repr = _coconut.repr(_coconut_match_to_args)  # data AutoTuple(formats is tuple)
-            _coconut_match_err = _coconut_FunctionMatchError("pattern-matching failed for " "'data AutoTuple(formats is tuple)'" " in " + (_coconut_match_val_repr if _coconut.len(_coconut_match_val_repr) <= 500 else _coconut_match_val_repr[:500] + "..."))  # data AutoTuple(formats is tuple)
-            _coconut_match_err.pattern = 'data AutoTuple(formats is tuple)'  # data AutoTuple(formats is tuple)
-            _coconut_match_err.value = _coconut_match_to_args  # data AutoTuple(formats is tuple)
-            raise _coconut_match_err  # data AutoTuple(formats is tuple)
+            raise _coconut_FunctionMatchError('data AutoTuple(formats is tuple)', _coconut_match_to_args)  # data AutoTuple(formats is tuple)
 
         return _coconut.tuple.__new__(_cls, (formats,))  # data AutoTuple(formats is tuple)
 
@@ -967,7 +967,7 @@ def lll_is_rgb(state):  # def lll_is_rgb(state):
 
 
 
-DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_format), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_batch_to_tiled), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
+DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_format), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_batch_to_tiled), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image_path_to_image), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
 
 SMART_RULES = [AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),]  # SMART_RULES =[
 

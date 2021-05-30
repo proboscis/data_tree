@@ -1,7 +1,7 @@
 import abc
 import inspect
 from copy import copy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from types import FunctionType
 from typing import Union, Type, TypeVar
 
@@ -11,6 +11,7 @@ from loguru import logger
 from makefun import create_function, wraps
 from pinject import BindingSpec
 from pinject.object_graph import ObjectGraph
+from pinject.scoping import SingletonScope
 from pprintpp import pformat
 
 prototype = pinject.provides(in_scope=pinject.PROTOTYPE)
@@ -38,7 +39,9 @@ def method_to_function(method):
     converts a class method to a function
     """
     argspec = inspect.getfullargspec(method)
-    signature = f"""f_of_{method.__name__}({" ,".join((argspec.args or []) + (argspec.varargs or []))})"""
+    assert not isinstance(argspec.args, str)
+    # assert not isinstance(argspec.varargs,str)
+    signature = f"""f_of_{method.__name__}({" ,".join((argspec.args or []))})"""
 
     def impl(self, *args, **kwargs):
         return method(*args, **kwargs)  # gets multiple values for self
@@ -103,7 +106,7 @@ class ExtendedObjectGraph:
 
     def run(self, f):
         argspec = inspect.getfullargspec(f)
-        logger.info(self)
+        #logger.info(self)
         assert argspec.varargs is None
         args = [self.provide(k) for k in argspec.args]
         return f(*args)
@@ -209,7 +212,7 @@ class Design:
         self.classes = merged.classes
         return self
 
-    def bind_provider(self, key, f, all_except=None, arg_names=None, in_scope=None):
+    def bind_provider_inplace(self, key, f, all_except=None, arg_names=None, in_scope=None):
         updates = self._bind_provider_updates(key, f, all_except=all_except, arg_names=arg_names, in_scope=None)
         return self.merge_inplace(updates)
 
@@ -272,19 +275,19 @@ class Design:
             x.bind_inplace(k, **p)
         return x
 
-    def batch_bind_instance(self, **kwargs):
+    def bind_instance(self, **kwargs):
         x = self
         for k, v in kwargs.items():
             x = x.bind(k).to_instance(v)
         return x
 
-    def batch_bind_provider(self, **kwargs):
+    def bind_provider(self, **kwargs):
         x = self
         for k, v in kwargs.items():
             x = x.bind(k).to_provider(v)
         return x
 
-    def batch_bind_class(self, **kwargs):
+    def bind_class(self, **kwargs):
         x = self
         for k, v in kwargs.items():
             x = x.bind(k).to_class(v)
@@ -304,7 +307,7 @@ class Design:
     def run(self, f, modules=None, classes=None):
         return self.to_graph(modules, classes).run(f)
 
-    def provided(self, target: str, modules=None, classes=None) -> object:
+    def provide(self, target: Union[str, type], modules=None, classes=None) -> object:
         """
         :param target: provided name
         :param modules: modules to use for graph construction
@@ -333,6 +336,7 @@ class Design:
             if item.startswith("provide") and callable(getattr(b, item)):
                 spec.providers[item.replace("provide_", "")] = getattr(b, item)
         res = dep_spec.merged(spec)
+        res = dep_spec.merged(spec)
         return res
 
     @staticmethod
@@ -350,7 +354,7 @@ class Design:
         self.classes = classes
 
     def as_provider(self, f):
-        self.bind_provider(f.__name__, ensure_self_arg(f))
+        self.bind_provider_inplace(f.__name__, ensure_self_arg(f))
         return f
 
     def extend_provider_inplace(self, src_key, new_name, provider):
@@ -364,12 +368,12 @@ class Design:
         """
         if src_key in self.providers:
             tmp = self.providers[src_key]
-            self.bind_provider(src_key, provider)
-            self.bind_provider(new_name, tmp)
+            self.bind_provider_inplace(src_key, provider)
+            self.bind_provider_inplace(new_name, tmp)
         if src_key in self.configures:
             tmp = self.configures[src_key]
             del self.configures[src_key]
-            self.bind_provider(src_key, provider)
+            self.bind_provider_inplace(src_key, provider)
             self.configures[new_name] = tmp
 
     def _gen_name(self, name):
@@ -451,7 +455,7 @@ class Design:
         else:
             raise RuntimeError(f"unknown situation in mapping")
 
-        self.bind_provider(src_key, provider)
+        self.bind_provider_inplace(src_key, provider)
 
     def map_value_inplace(self, src_key, f):
         """
@@ -476,7 +480,7 @@ class Design:
             wrapped = map_wrap(tmp)
             argspec = inspect.getfullargspec(wrapped)
             assert "self" in argspec.args
-            self.bind_provider(src_key, wrapped)
+            self.bind_provider_inplace(src_key, wrapped)
         elif src_key in self.configures:
             # delete binding and add a provider mapped with f
             tmp = self.configures[src_key]
@@ -490,10 +494,27 @@ class Design:
                     return tmp["to_instance"]
 
                 provider = create_function(signature, impl)
-            self.bind_provider(src_key, map_wrap(provider))
+            self.bind_provider_inplace(src_key, map_wrap(provider))
         else:
             raise KeyError(f"no provider to map:{src_key}")
         return self
+
+    def keys(self):
+        return self.providers.keys() | self.configures.keys()
+
+    def unbind(self, key) -> "Design":
+        if key in self.providers:
+            copied = self.providers.copy()
+            del copied[key]
+            return replace(self,
+                           providers=copied
+                           )
+        if key in self.configures:
+            copied = self.configures.copy()
+            del copied[key]
+            return replace(self,
+                           configures=copied
+                           )
 
     def __contains__(self, item):
         return item in self.providers or item in self.configures
@@ -536,7 +557,6 @@ class PrefixedModules:
 
 class DynamicSpec(BindingSpec):
     def __init__(self):
-        logger.error(f"initializing dynamic spec")
         container = Design()
         self.dynamic_configure(container)
         self._dependencies = [container.to_binding_spec()]
@@ -550,3 +570,21 @@ class DynamicSpec(BindingSpec):
 
     def dependencies(self):
         return self._dependencies
+
+
+def _patched_provide(self, binding_key, default_provider_fn):
+    with self._rlock:
+        d: dict = self._binding_key_to_instance
+        if binding_key not in d:
+            val = default_provider_fn()
+            d[binding_key] = val
+        return d[binding_key]
+
+
+def patch_pinject_singleton_scope():
+    logger.warning(f"patching pinject's SingletonScope to produce better exception")
+    SingletonScope.provide = _patched_provide
+    logger.warning(f"patching done")
+
+
+patch_pinject_singleton_scope()

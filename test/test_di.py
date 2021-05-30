@@ -15,14 +15,14 @@ def test_add_binding():
     dbc1 = Design(modules=[util]).bind("a").to_class(A)
     dbc2 = Design(modules=[di]).bind("a").to_instance("hello")
     classes = [A,B,Tgt]
-    tgt = dbc1.provided("tgt",classes=classes)
+    tgt = dbc1.provide("tgt", classes=classes)
     logger.info(tgt)
     assert isinstance(tgt.a,A)
     assert set((dbc1+dbc2).modules) == {util, di}
-    tgt = (dbc1+dbc2).provided("tgt",classes=classes)
+    tgt = (dbc1+dbc2).provide("tgt", classes=classes)
     logger.info(tgt)
     assert tgt.a=="hello"
-    tgt = (dbc1+dbc2+dbc1).provided("tgt",classes=classes)
+    tgt = (dbc1+dbc2+dbc1).provide("tgt", classes=classes)
     logger.info(tgt)
     assert isinstance(tgt.a,A)
 

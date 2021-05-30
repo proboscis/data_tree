@@ -1,12 +1,12 @@
 import os
+import shutil
 from typing import NamedTuple
 
 import yaml
 from loguru import logger
 
+from data_tree.resource import fopen
 from data_tree.util import ensure_path_exists, dict_hash
-from data_tree.resource import ContextResource, fopen
-import shutil
 
 
 class CacheHandle(NamedTuple):
