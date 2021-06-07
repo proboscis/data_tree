@@ -41,7 +41,7 @@ def en_numpy(data):
         t = object
         if data:
             sample = data[0]
-            if isinstance(sample,bool):
+            if isinstance(sample, bool):
                 t = np.bool
             elif isinstance(sample, int):
                 t = np.int64
@@ -93,8 +93,6 @@ class Trace(NamedTuple):
             return buf
 
         return _print_trace(self, 0)
-
-
 
     def print_trace(self):
         print(self.trace_string())
@@ -160,7 +158,6 @@ class Trace(NamedTuple):
             viz = infer_widget(data)
         return viz
 
-
     def show_traceback_html(self,
                             skipping_tags=("slow",),
                             showing_tags=None,
@@ -211,12 +208,14 @@ class Trace(NamedTuple):
 
 
 def mp_each_helper(t):
-    _self,i,f = t
+    _self, i, f = t
     f(_self.value[i])
+
 
 @dataclass
 class MetadataUpdater:
-    src:dict
+    src: dict
+
     def __call__(self, m):
         # print(f"incoming:{m}")
         copied = m.copy()
@@ -224,7 +223,16 @@ class MetadataUpdater:
         # print(f"result:{copied}")
         return copied
 
+
 T = TypeVar("T")
+
+
+class _StarMapHelper:
+    def __init__(self, f):
+        self.f = f
+
+    def __call__(self, t):
+        return self.f(*t)
 
 
 class Series(Generic[T], metaclass=abc.ABCMeta):
@@ -235,22 +243,22 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def total(self)->int:
+    def total(self) -> int:
         pass
 
     def __len__(self):
         return self.total
 
     @abc.abstractmethod
-    def _get_item(self, index)->Union[T,Iterable[T]]:
+    def _get_item(self, index) -> Union[T, Iterable[T]]:
         pass
 
     @abc.abstractmethod
-    def _get_slice(self, _slice)->Iterable[T]:
+    def _get_slice(self, _slice) -> Iterable[T]:
         pass
 
     @abc.abstractmethod
-    def _get_indices(self, indices)->Iterable[T]:
+    def _get_indices(self, indices) -> Iterable[T]:
         pass
 
     @abc.abstractmethod
@@ -304,6 +312,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
                 return self._get_indices(smart_indices)
         else:
             return self._get_item(smart_indices)
+
     def __getitem__(self, item) -> Union["Series[T]", object]:
         if isinstance(item, slice):
             return self.indexed(IdentityIndexer(self.total).slice(item))
@@ -324,12 +333,12 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         return MappedSeries(self, f, batch_f)
 
     def star_map(self, f):
-        return MappedSeries(self, single_mapper=lambda args: f(*args))
+        return MappedSeries(self, single_mapper=_StarMapHelper(f))
 
     def map_b(self, batch_f):
         return MappedSeries(self, lambda b: batch_f(b[None])[0], batch_f)
 
-    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None, max_pending_result=8):
+    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None, max_pending_result=1000):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
         :param global_resources: Mapping[Str,Resource[GlobalHolder]]
@@ -350,7 +359,8 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         with Pool(num_process) as p:
             for item in tqdm(p.imap_unordered(mp_each_helper, gen()), total=self.total):
                 pass
-    def mt_each(self,f,num_process=None):
+
+    def mt_each(self, f, num_process=None):
         from multiprocessing.dummy import Pool
         holder = get_global_holder(self)
 
@@ -503,9 +513,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
     def tag(self, *tags):
         def _add_tag(m: dict):
             copied = m.copy()
-            old_tags = copied.get("tags")
-            if old_tags is None:
-                old_tags = set()
+            old_tags = copied.get("tags") or set()
             new_tags = old_tags | set(tags)
             copied["tags"] = new_tags
             return copied
@@ -531,9 +539,10 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             return Series.from_numpy(values)
         else:
             return ListLikeSeries(list(values))
+
     @staticmethod
     def from_indexed(values):
-        return ListLikeSeries(values)
+        return IntMapSeries(values)
 
     @staticmethod
     def from_lambda(f, total):
@@ -570,8 +579,8 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             values_for_sort = self.map(key).values
         else:
             values_for_sort = self.values
-        if isinstance(values_for_sort[0],Iterable):
-            tgt = np.empty(len(values_for_sort),dtype=object)
+        if isinstance(values_for_sort[0], Iterable):
+            tgt = np.empty(len(values_for_sort), dtype=object)
             tgt[:] = values_for_sort
             values_for_sort = tgt
         indices = np.argsort(values_for_sort)
@@ -584,6 +593,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         :return: filtered series. works the same as numpy's ary[filter(ary)]
 
         """
+
         # filter must check whole element since a series requires predetermined length...
         # I can make this length lazy though
         def wrapped_filter(item):
@@ -591,11 +601,12 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             if flag is None:
                 raise RuntimeError("filter may never return None. return bool! check:{_filter}")
             return flag
+
         flags = self.map(wrapped_filter)
         mask = np.array(flags.values, dtype=bool)
         return self[mask]
 
-    def select(self,selector:Callable[[T],bool])->"Series[T]":
+    def select(self, selector: Callable[[T], bool]) -> "Series[T]":
         return self.filter(selector)
 
     @en_lazy
@@ -914,11 +925,11 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             param_controllers=defaults
         )
 
-    def values_progress(self, batch_size=16, progress_bar=tqdm,desc = None):
+    def values_progress(self, batch_size=16, progress_bar=tqdm, desc=None, preload=0):
         res = []
         if desc is not None:
-            progress_bar = partial(progress_bar,desc=desc)
-        for batch in self.batch_generator(batch_size=batch_size, preload=0, progress_bar=progress_bar):
+            progress_bar = partial(progress_bar, desc=desc)
+        for batch in self.batch_generator(batch_size=batch_size, preload=preload, progress_bar=progress_bar):
             res += batch
         return res
 
@@ -929,6 +940,40 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
 
 #    def zip_with_index(self):
 #        return self.zip(Series.from_iterable(list(range(self.total))))
+class IntMapSeries(Series[T]):
+
+    def __init__(self, src: Mapping[int, T]):
+        self.data = src
+        self._indexer = IdentityIndexer(self.total)
+        self.indices = np.arange(self.total)
+
+    @property
+    def indexer(self) -> Indexer:
+        return self._indexer
+
+    @property
+    def total(self) -> int:
+        return len(self.data)
+
+    def _get_item(self, index) -> Union[T, Iterable[T]]:
+        return self.data[int(index)]
+        pass
+
+    def _get_slice(self, _slice) -> Iterable[T]:
+        return [self.data[(i)] for i in self.indices[_slice]]
+
+    def _get_indices(self, indices) -> Iterable[T]:
+        return [self.data[int(i)] for i in self.indices[indices]]
+
+    def _get_mask(self, mask):
+        return [self.data[int(i)] for i in self.indices[mask]]
+
+    @property
+    def parents(self) -> List["Series"]:
+        return []
+
+    def clone(self, parents):
+        return IntMapSeries(self.data)
 
 
 class MultiSourcedSeries(Series):
@@ -1438,6 +1483,17 @@ def stp_worker_generator(mapper, global_resources):
     return _worker_generator
 
 
+class Worker:
+    def __init__(self, mapper, resources):
+        self.mapper = mapper
+        self.resources = resources
+
+    def __call__(self, value):
+        v, token = value
+        resources = {k: g.value for k, g in self.resources.items()}
+        return self.mapper(v, **resources), token
+
+
 class MPMappedSeries(IndexedSeries):
     def clone(self, parents):
         return MPMappedSeries(src=parents[0], single_mapper=self.single_mapper, resources_kwargs=self.resources,
@@ -1529,12 +1585,13 @@ class MPMappedSeries(IndexedSeries):
         def batches():
             resources = {k: r.prepare() for k, r in self.resources.items()}
             stp = SequentialTaskParallel2(
-                worker_generator=stp_worker_generator(self.single_mapper, global_resources=resources),
+                worker_generator=Worker,
                 num_worker=multiprocessing.cpu_count() if self.num_process is None else self.num_process,
                 max_pending_result=self.max_pending_result,
-                worker_gen_args=()
+                worker_gen_args=(self.single_mapper, resources)
             )
 
+            # why is this slow?
             def _fetcher():
                 logger.info(f"multiprocessing fetcher started")
                 for batch in self.src.slice_generator(src_slices, preload=preload, en_numpy=False):
@@ -1552,9 +1609,9 @@ class MPMappedSeries(IndexedSeries):
             fetch_thread = threading.Thread(target=_fetcher)
             fetch_thread.start()
             try:
-                with stp.managed_start() as gen:
+                with stp.managed_start(debug=False) as gen:
                     batch_buffer = []
-                    for item, token in tqdm(gen, desc="multi process mapping progress.."):
+                    for item, token in tqdm(gen, desc="multi process mapping progress..", total=self.total):
                         batch_buffer.append(item)
                         if token == "end":
                             if en_numpy:
@@ -1571,6 +1628,19 @@ class MPMappedSeries(IndexedSeries):
                 logger.debug(f"mp user resources are released")
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
+
+
+class MPMappedSeries2(MPMappedSeries):
+
+    def slice_generator(self, slices, preload=5, en_numpy=False):
+        resources = {k: r.prepare() for k, r in self.resources.items()}
+        with multiprocessing.Pool(processes=self.num_process) as pool:
+            futures = (pool.apply_async(mp_mapper, args=(self.single_mapper, resources, v)) for v in
+                       self.src.slice_generator(slices, preload=preload, en_numpy=en_numpy))
+            results = [f.get() for f in bar(futures, desc="waiting for mp map results")]
+        for k, r in self.resources.items():
+            r.release(r)
+        return results
 
 
 class NumpySeries(Series):

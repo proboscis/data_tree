@@ -318,14 +318,18 @@ class SequentialTaskParallel2:
     def __init__(self,
                  worker_generator,
                  worker_gen_args,
-                 num_worker=8, max_pending_result=100):
+                 num_worker=8,
+                 max_pending_result=100,
+                 mp = multiprocessing
+                 ):
         self.worker_gen_args = worker_gen_args
         self.worker_generator = worker_generator
         self.num_worker = num_worker
-        self.manager = multiprocessing.Manager()  # always use manager to avoid wtf errors!
+        self.mp = mp
+        self.manager = mp.Manager()  # always use manager to avoid wtf errors!
         # you need to master the 'proper' way of using this..
 
-        self.task_queue = self.manager.Queue(max_pending_result)
+        self.task_queue = self.manager.Queue()
         self.result_queue = self.manager.Queue()
         self.worker_start_signal = self.manager.Event()
         self.termination_signal = self.manager.Event()
@@ -403,7 +407,7 @@ class SequentialTaskParallel2:
                 time.sleep(0.1)
             logger.info(f"monitoring thread stopped")
 
-        workers = [multiprocessing.Process(target=_worker2, args=(self.self_object, i,self.worker_gen_args), daemon=True) for i in
+        workers = [self.mp.Process(target=_worker2, args=(self.self_object, i,self.worker_gen_args), daemon=True) for i in
                    range(self.num_worker)]
         for w in workers:
             w.start()
@@ -442,7 +446,7 @@ class SequentialTaskParallel2:
         sorter_thread.start()
         self.sorter_thread = sorter_thread
 
-        bar = tqdm()
+        #bar = tqdm()
         try:
             while not self.termination_signal.is_set():
                 if waiting_index not in self.results:
@@ -458,7 +462,7 @@ class SequentialTaskParallel2:
                 with self.lock:
                     del self.results[waiting_index]
                     self.finished_pending.value -= 1
-                bar.update(1)
+                #bar.update(1)
                 yield result
                 # logger.info(f"yielder yielded:{waiting_index}")
                 waiting_index += 1
@@ -471,8 +475,8 @@ class SequentialTaskParallel2:
             # logger.info("finished yielder")
 
     @contextmanager
-    def managed_start(self):
-        yield self.start()
+    def managed_start(self,debug=False):
+        yield self.start(debug=debug)
         # the code is not reaching here.
         logger.info(f"stopping workers")
         self.termination_signal.set()
@@ -511,7 +515,7 @@ class SharedBufferPool:
             self.buffers.append(buffer)
 
 
-class SequentialTaskParallel3:
+class SequentialNumpyTaskParallel:
     """
     parallel task processing of numpy-to-numpy task
     """

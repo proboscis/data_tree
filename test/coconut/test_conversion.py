@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xf4c4d607
+# __coconut_hash__ = 0x74d980cc
 
-# Compiled with Coconut version 1.4.3 [Ernest Scribbler]
+# Compiled with Coconut version 1.5.0 [Fish License]
 
 # Coconut Header: -------------------------------------------------------------
 
@@ -14,7 +14,7 @@ if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cach
     del _coconut_sys.modules["__coconut__"]
 _coconut_sys.path.insert(0, _coconut_file_path)
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_back_pipe, _coconut_star_pipe, _coconut_back_star_pipe, _coconut_dubstar_pipe, _coconut_back_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match
+from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -150,14 +150,14 @@ def test_omni_converter():  # def test_omni_converter():
 
 def test_tuple_conversion():  # def test_tuple_conversion():
     from data_tree import auto  #     from data_tree import auto
-    from archpainter.experiments import torch_xyz
-    from archpainter.experiments import pix2pix_rgb_batch
-    from archpainter.experiments import TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     logger.info(auto(("image,RGB,RGB", "image,RGB,RGB"))((None, None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))  #     logger.info(auto(("image,RGB,RGB","image,RGB,RGB"))((None,None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))
 
 def test_rgb_to_yuv():  # def test_rgb_to_yuv():
     from data_tree import auto  #     from data_tree import auto
-    from archpainter.experiments import torch_xyz
-    from archpainter.experiments import pix2pix_rgb_batch
-    from archpainter.experiments import TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
+    from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))  #     logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))

@@ -1,12 +1,15 @@
 import abc
 import inspect
+from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, field, replace
+from itertools import chain
 from types import FunctionType
 from typing import Union, Type, TypeVar
 
 import pinject
 from IPython import embed
+from cytoolz import merge
 from loguru import logger
 from makefun import create_function, wraps
 from pinject import BindingSpec
@@ -59,11 +62,17 @@ def ensure_self_arg(func):
     argspec = inspect.getfullargspec(func)
     if argspec.args and argspec.args[0] == "self":
         return func
-    source = inspect.getsource(func)
+    assert "self" not in argspec.args, f"{argspec.args}"
+    #source = inspect.getsource(func)
     module = inspect.getmodule(func)
-    lines, ln = inspect.getsourcelines(func)
+    try:
+        lines, ln = inspect.getsourcelines(func)
+        fname = f"""{module.__name__.replace(".", "_")}_ln_{ln}_{func.__name__}"""
+    except OSError as ose:
+        fname= f"""{module.__name__.replace(".","_")}_{func.__name__}"""
+
+    signature = f"""{fname}({" ,".join(["self"] + (argspec.args or []) + (argspec.varargs or []))})"""
     # logger.error(source)
-    signature = f"""{module.__name__.replace(".", "_")}_ln_{ln}_{func.__name__}({" ,".join(["self"] + (argspec.args or []) + (argspec.varargs or []))})"""
 
     def impl(self, *args, **kwargs):
         return func(*args, **kwargs)  # gets multiple values for self
@@ -130,6 +139,9 @@ class DesignBindContext:
         return self.src.bind_provider_immutable(self.key, provider, all_except=all_except, arg_names=arg_names,
                                                 in_scope=in_scope)
 
+def extract_argnames(func):
+    spec = inspect.getfullargspec(func)
+    return spec.args
 
 @dataclass
 class Design:
@@ -138,12 +150,55 @@ class Design:
     """
     providers: dict = field(default_factory=dict)
     configures: dict = field(default_factory=dict)
+    multi_binds:dict = field(default_factory=dict)
     modules: list = field(default_factory=list)
     classes: list = field(default_factory=list)
+    def __post_init__(self):
+        assert isinstance(self.multi_binds,dict)
+
+    def multi_bind_provider(self,**kwargs):
+        return self + Design(
+            multi_binds={
+                k:{v}
+                for k,v in kwargs.items()
+            }
+        )
 
     def to_binding_spec(self):
         """Generate a BindingSpec class for pinject and returns its instance."""
-        configures = self.configures
+        def get_args(f):
+            args = inspect.getfullargspec(f).args
+            if isinstance(f,type) and "self" in args:
+                args.remove("self")
+            return args
+        design = self
+        for k,providers in self.multi_binds.items():
+            deps = [get_args(f) for f in providers]
+            dep_set=set(chain(*deps))
+            if "self" in dep_set:
+                dep_set.remove("self")
+            f_signature = f"multi_bind_provider_{k}({','.join(dep_set)})"
+            logger.info(f_signature)
+            for ds in deps:
+                for d in ds:
+                    assert d in dep_set
+
+            def create_impl(tgt_providers,tgt_dependencies):
+                def f_impl(**kwargs):
+                    logger.info(f"{f_signature} called with {list(kwargs.keys())}")
+                    values = []
+                    for provider,ds in zip(tgt_providers,tgt_dependencies):
+                        p_deps = {k:kwargs[k] for k in ds}
+                        v = provider(**p_deps)
+                        values.append(v) # unhashable type...
+                    return values
+                return f_impl
+
+            new_f = create_function(f_signature, create_impl(providers,deps))
+            binding = {k:new_f}
+            logger.info(binding)
+            design=design.bind_provider(**binding)
+        configures = design.configures
 
         def configure(self, bind):
             for c, v in configures.items():
@@ -152,7 +207,7 @@ class Design:
         DynamicBinding = type("DynamicBinding", (BindingSpec,),
                               {
                                   "configure": configure,
-                                  **{f"provide_{k}": v for k, v in self.providers.items()}
+                                  **{f"provide_{k}": v for k, v in design.providers.items()}
                               })
         return DynamicBinding()
 
@@ -180,8 +235,9 @@ class Design:
         res = Design(
             providers=self.providers.copy(),
             configures=self.configures.copy(),
+            multi_binds=self.multi_binds.copy(),
             modules=list(set(self.modules) | set(other.modules)),
-            classes=list(set(self.classes) | set(other.classes))
+            classes=list(set(self.classes) | set(other.classes)),
         )
         for k, v in other.providers.items():
             if k in res.configures:
@@ -199,6 +255,8 @@ class Design:
                 # logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
                 del res.providers[k]
             res.configures[k] = v
+        for k,v in other.multi_binds.items():
+            res.multi_binds[k] = (res.multi_binds.get(k) or set()) | v
 
         # logger.debug(f"merged:\n\t{res}")
         return res
@@ -210,6 +268,7 @@ class Design:
         self.configures = merged.configures
         self.modules = merged.modules
         self.classes = merged.classes
+        self.multi_binds = merged.multi_binds
         return self
 
     def bind_provider_inplace(self, key, f, all_except=None, arg_names=None, in_scope=None):
@@ -317,12 +376,12 @@ class Design:
 
     @staticmethod
     def gather_spec(b: BindingSpec) -> "Design":
-        dep_spec = Design(dict(), dict(), [], [])
+        dep_spec = Design()
         for dep in b.dependencies() or []:
             spec = Design.gather_spec(dep)
             # logger.debug(f"dependency:{spec}")
             dep_spec = dep_spec.merged(spec)
-        spec = Design(dict(), dict(), [], [])
+        spec = Design()
 
         def binder(key, **kwargs):
             spec.configures[key] = kwargs
@@ -336,12 +395,11 @@ class Design:
             if item.startswith("provide") and callable(getattr(b, item)):
                 spec.providers[item.replace("provide_", "")] = getattr(b, item)
         res = dep_spec.merged(spec)
-        res = dep_spec.merged(spec)
         return res
 
     @staticmethod
     def traverse_specs(*bindings: BindingSpec):
-        spec = Design(dict(), dict(), [])
+        spec = Design()
         for b in bindings:
             spec = spec + b
         # logger.debug(f"traversed binding:\n\t{spec}")
@@ -384,13 +442,22 @@ class Design:
             new_name = f"{new_name}_{i}"
         return new_name
 
+    def copy(self):
+        return self.__class__(
+            providers=copy(self.providers),
+            configures=copy(self.configures),
+            multi_binds=copy(self.multi_binds),
+            modules=copy(self.modules),
+            classes=copy(self.classes)
+        )
+
     def map_value(self, src_key, f):
-        copied = self.__class__(copy(self.providers), copy(self.configures), copy(self.modules), copy(self.classes))
+        copied = self.copy()
         copied.map_value_inplace(src_key=src_key, f=f)
         return copied
 
     def map_value_with_provider(self, src_key, dependencies, f):
-        copied = self.__class__(copy(self.providers), copy(self.configures), copy(self.modules), copy(self.classes))
+        copied = self.copy()
         copied.map_value_inplace_with_provider(src_key, dependencies, f)
         return copied
 
@@ -401,11 +468,6 @@ class Design:
         :param f: must expect single arg which is a list
         :return:
         """
-
-        def extract_argnames(func):
-            spec = inspect.getfullargspec(func)
-            return spec.args
-
         # first make f kwarg based function
         f_signature = f"mapper_with_dependencies(src,{','.join(dependencies)})"
 
@@ -526,7 +588,8 @@ class Design:
         import tabulate
         provs = tabulate.tabulate(sorted(list(self.providers.items())))
         confs = tabulate.tabulate(sorted(list(self.configures.items())))
-        return provs + "\n" + confs
+        multis = tabulate.tabulate(sorted(list(self.multi_binds.items())))
+        return provs + "\n" + confs + "\n" + multis
 
     def __repr__(self):
         return str(self)
@@ -548,6 +611,39 @@ class Design:
                 res[k] = v["to_class"]
         return res
 
+
+@dataclass
+class Design2:
+    design:Design= field(default_factory=Design)
+    multi_binds:dict = field(default_factory=dict)
+    def multi_bind_provider(self,key,provider):
+        assert key not in self.design
+        d:dict = self.multi_binds
+        added = (d.get(key) or []) + [provider]
+        return Design2(
+            design=self.design,
+            multi_binds=merge(self.multi_binds,{key:added})
+        )
+    def to_design(self):
+        def get_args(f):
+            return inspect.getfullargspec(f).args
+        design = self.design
+        for k,ps in self.multi_binds.items():
+            deps = [get_args(f) for f in ps]
+            dep_set=list(set(chain(*deps)))
+            f_signature = f"multi_bind_provider({','.join(dep_set)})"
+
+            def f_impl(**kwargs):
+                values = []
+                for p,ds in zip(ps,deps):
+                    p_deps = {k:kwargs[k] for k in ds}
+                    v = p(**p_deps)
+                    values.append(v)
+                return values
+
+            new_f = create_function(f_signature, f_impl)
+            design=design.bind_provider(**{k:new_f})
+        return design
 
 class PrefixedModules:
     def __init__(self, prefix):

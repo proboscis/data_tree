@@ -26,10 +26,10 @@ def auto(format):
 
 def auto_image(format):
     from data_tree.auto_data.auto_image import AutoImage
-    from data_tree.coconut.omni_converter import SOLVER as omni_solver
+    from data_tree.coconut.omni_converter import solver_getter
 
     def _gen_ai(value):
-        return AutoImage(value, format, omni_solver)
+        return AutoImage(value, format, solver_getter)
 
     return _gen_ai
 
