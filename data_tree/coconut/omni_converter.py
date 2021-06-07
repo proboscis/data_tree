@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x4d5538b4
+# __coconut_hash__ = 0x64d9b5d
 
 # Compiled with Coconut version 1.5.0 [Fish License]
 
@@ -1084,4 +1084,6 @@ def debug(conv):  # def debug(conv):
 
 
 SOLVER = AutoSolver(rules=DEFAULT_RULES.copy(), smart_rules=SMART_RULES.copy(), heuristics=tuple_widget_heuristics, edge_cutter=tuple_edge_cutter, debug_hook=debug)  # SOLVER = AutoSolver(
-auto_img = lambda format: lambda value: AutoData(value, format, SOLVER)  # auto_img = format->value->AutoData(value,format,SOLVER)
+def solver_getter():  # def solver_getter():
+    return SOLVER  #     return SOLVER
+auto_img = lambda format: lambda value: AutoData(value, format, solver_getter)  # auto_img = format->value->AutoData(value,format,solver_getter)

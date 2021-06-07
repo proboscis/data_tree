@@ -6,8 +6,8 @@ from loguru import logger
 
 
 class AutoImage(AutoData):
-    def __init__(self, value, format, solver):
-        super().__init__(value, format, solver)
+    def __init__(self, value, format, solver_getter):
+        super().__init__(value, format, solver_getter)
         # TODO add some assertions
 
     def histogram(self):

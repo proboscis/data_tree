@@ -784,4 +784,6 @@ SOLVER = AutoSolver(
     edge_cutter=tuple_edge_cutter,
     debug_hook=debug
     )
-auto_img = format->value->AutoData(value,format,SOLVER)
+def solver_getter():
+    return SOLVER
+auto_img = format->value->AutoData(value,format,solver_getter)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x9a7d6f7a
+# __coconut_hash__ = 0x72bd9df2
 
 # Compiled with Coconut version 1.5.0 [Fish License]
 
@@ -19,7 +19,8 @@ _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
 
-from typing import Mapping  # from typing import Mapping
+from typing import Mapping  # from typing import Mapping, Callable
+from typing import Callable  # from typing import Mapping, Callable
 from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import AStarSolver
 from IPython.display import display  # from IPython.display import display
 import dill  # to make the lambda functions picklable  # import dill # to make the lambda functions picklable
@@ -184,9 +185,6 @@ class AutoSolver:  # class AutoSolver:
         """  #         """
         self.solver.add_rule(AutoSolver.create_conversion_rule(rule))  #         self.solver.add_rule(AutoSolver.create_conversion_rule(rule))
 
-    def reset_solver(self,):  #     def reset_solver(self,):
-        self.solver = AStarSolver(rules=self.initial_rules.copy(), smart_rules=self.smart_rules.copy(), heuristics=heuristics, edge_cutter=edge_cutter)  #         self.solver = AStarSolver(
-
     def debug_conversion(self, a, b, samples):  #     def debug_conversion(self,a,b,samples):
         x = samples  #         x = samples
         edges = self.solver.search_direct(a, b).edges  #         edges = self.solver.search_direct(a,b).edges
@@ -226,8 +224,6 @@ class TagMatcher:  # class TagMatcher:
 def tag_matcher(**kwargs):  # def tag_matcher(**kwargs):
     return TagMatcher(**kwargs)  #     return TagMatcher(**kwargs)
 
-SOLVERS = dict()  # SOLVERS = dict()
-
 class Tracer:  # class Tracer:
     def __init__(self, solver, state, creator):  #     def __init__(self,solver,state,creator):
         self.state = state  #         self.state = state
@@ -254,16 +250,17 @@ class AutoData:  # class AutoData:
         format = parse_def(format)  #         format = parse_def(format)
         return AutoData.debug_conversion(self.format, format, self.value)  #         return AutoData.debug_conversion(self.format,format,self.value)
 
-    def __init__(self, value, format, solver):  #     def __init__(self,value,format,solver):
+    def __init__(self, value, format, solver_getter):  #     def __init__(self,value,format,solver_getter):
         self.value = value  #         self.value = value
         self.format = format  #         self.format = format
-        self.solver_id = id(solver)  # do not hold solver, but hold solver's id. in order to make this picklable.  #         self.solver_id = id(solver) # do not hold solver, but hold solver's id. in order to make this picklable.
-        if self.solver_id not in SOLVERS:  #         if self.solver_id not in SOLVERS:
-            SOLVERS[self.solver_id] = solver  #             SOLVERS[self.solver_id] = solver
+        self.solver_getter = solver_getter  #         self.solver_getter = solver_getter
+        assert isinstance(solver_getter, Callable)  #         assert isinstance(solver_getter,Callable)
 
     @property  #     @property
     def solver(self):  #     def solver(self):
-        return SOLVERS[self.solver_id]  #         return SOLVERS[self.solver_id]
+# We need to know how to make a solver on another process.
+# if all the rules were picklable, it is fine. but actually they are not.
+        return self.solver_getter()  #         return self.solver_getter()
 
     def converter(self, format=None, **kwargs):  #     def converter(self,format=None,**kwargs):
         if format is not None:  #         if format is not None:
@@ -275,7 +272,7 @@ class AutoData:  # class AutoData:
         """converts internal data to specified format."""  #         """converts internal data to specified format."""
         conversion = self.converter(format, **kwargs)  #         conversion = self.converter(format,**kwargs)
         if conversion.edges:  #         if conversion.edges:
-            return self.__class__(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
+            return self.__class__(conversion(self.value), conversion.edges[-1].dst, self.solver_getter)  #             return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver_getter)
         else:  #         else:
             return self  #             return self
     def search_converter(self, f):  #     def search_converter(self,f):
@@ -292,7 +289,7 @@ class AutoData:  # class AutoData:
         else:  #         else:
             conversion = self.search_converter(matcher)  #             conversion = self.search_converter(matcher)
         if conversion.edges:  #         if conversion.edges:
-            return self.__class__(conversion(self.value), conversion.edges[-1].dst, self.solver)  #             return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
+            return self.__class__(conversion(self.value), conversion.edges[-1].dst, self.solver_getter)  #             return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver_getter)
         else:  #         else:
             return self  #             return self
 
@@ -310,10 +307,10 @@ class AutoData:  # class AutoData:
             format = new_format  #             format = new_format
         else:  #         else:
             format = self.format  #             format = self.format
-        return self.__class__(f(self.value), format, self.solver)  #         return self.__class__(f(self.value),format,self.solver)
+        return self.__class__(f(self.value), format, self.solver_getter)  #         return self.__class__(f(self.value),format,self.solver_getter)
 
     def map_in(self, start_format, f, new_format=None):  #     def map_in(self,start_format,f,new_format=None):
-        return self.__class__(f(self.to(start_format)), (lambda _coconut_x: self.format if _coconut_x is None else _coconut_x)(new_format), self.solver)  #         return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver)
+        return self.__class__(f(self.to(start_format)), (lambda _coconut_x: self.format if _coconut_x is None else _coconut_x)(new_format), self.solver_getter)  #         return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver_getter)
 
     def neighbors(self):  #     def neighbors(self):
         return self.solver.solver.neighbors(self.format)  #         return self.solver.solver.neighbors(self.format)
@@ -337,13 +334,13 @@ class AutoData:  # class AutoData:
             return None  #             return None
 
     def cast(self, format):  #     def cast(self,format):
-        return self.__class__(self.value, format, self.solver)  #         return self.__class__(self.value,format,self.solver)
+        return self.__class__(self.value, format, self.solver_getter)  #         return self.__class__(self.value,format,self.solver_getter)
 
     def imshow(self):  #     def imshow(self):
         while True:  #         from matplotlib.pyplot import imshow
             from matplotlib.pyplot import imshow  #         from matplotlib.pyplot import imshow
             try:  #         return imshow(self.to("numpy_rgb"))
-                _coconut_is_recursive = imshow is _coconut_recursive_func_38  #         return imshow(self.to("numpy_rgb"))
+                _coconut_is_recursive = imshow is _coconut_recursive_func_37  #         return imshow(self.to("numpy_rgb"))
             except _coconut.NameError:  #         return imshow(self.to("numpy_rgb"))
                 _coconut_is_recursive = False  #         return imshow(self.to("numpy_rgb"))
             if _coconut_is_recursive:  #         return imshow(self.to("numpy_rgb"))
@@ -354,7 +351,7 @@ class AutoData:  # class AutoData:
 
 
             return None  #     def show(self,block=True):
-    _coconut_recursive_func_38 = imshow  #     def show(self,block=True):
+    _coconut_recursive_func_37 = imshow  #     def show(self,block=True):
     def show(self, block=True):  #     def show(self,block=True):
         from matplotlib.pyplot import show as mpl_show  #         from matplotlib.pyplot import show as mpl_show
         self.imshow()  #         self.imshow()

@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Mapping, Callable
 from data_tree.coconut.astar import AStarSolver
 from IPython.display import display
 import dill # to make the lambda functions picklable
@@ -129,14 +129,6 @@ class AutoSolver:
         """
         self.solver.add_rule(AutoSolver.create_conversion_rule(rule))
 
-    def reset_solver(self,):
-        self.solver = AStarSolver(
-            rules = self.initial_rules.copy(),
-            smart_rules = self.smart_rules.copy(),
-            heuristics = heuristics,
-            edge_cutter =edge_cutter
-        )
-
     def debug_conversion(self,a,b,samples):
         x = samples
         edges = self.solver.search_direct(a,b).edges
@@ -176,8 +168,6 @@ class TagMatcher:
 def tag_matcher(**kwargs):
     return TagMatcher(**kwargs)
 
-SOLVERS = dict()
-
 class Tracer:
     def __init__(self,solver,state,creator):
         self.state = state
@@ -204,16 +194,17 @@ class AutoData:
         format = parse_def(format)
         return AutoData.debug_conversion(self.format,format,self.value)
 
-    def __init__(self,value,format,solver):
+    def __init__(self,value,format,solver_getter):
         self.value = value
         self.format = format
-        self.solver_id = id(solver) # do not hold solver, but hold solver's id. in order to make this picklable.
-        if self.solver_id not in SOLVERS:
-            SOLVERS[self.solver_id] = solver
+        self.solver_getter = solver_getter
+        assert isinstance(solver_getter,Callable)
 
     @property
     def solver(self):
-        return SOLVERS[self.solver_id]
+        # We need to know how to make a solver on another process.
+        # if all the rules were picklable, it is fine. but actually they are not.
+        return self.solver_getter()
 
     def converter(self,format=None,**kwargs):
         if format is not None:
@@ -225,7 +216,7 @@ class AutoData:
         """converts internal data to specified format."""
         conversion = self.converter(format,**kwargs)
         if conversion.edges:
-            return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
+            return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver_getter)
         else:
             return self
     def search_converter(self,f):
@@ -242,7 +233,7 @@ class AutoData:
         else:
             conversion = self.search_converter(matcher)
         if conversion.edges:
-            return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver)
+            return self.__class__(conversion(self.value),conversion.edges[-1].dst,self.solver_getter)
         else:
             return self
 
@@ -260,10 +251,10 @@ class AutoData:
             format = new_format
         else:
             format = self.format
-        return self.__class__(f(self.value),format,self.solver)
+        return self.__class__(f(self.value),format,self.solver_getter)
 
     def map_in(self,start_format,f,new_format=None):
-        return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver)
+        return self.__class__(f(self.to(start_format)),new_format??self.format,self.solver_getter)
 
     def neighbors(self):
         return self.solver.solver.neighbors(self.format)
@@ -287,7 +278,7 @@ class AutoData:
             return None
 
     def cast(self,format):
-        return self.__class__(self.value,format,self.solver)
+        return self.__class__(self.value,format,self.solver_getter)
 
     def imshow(self):
         from matplotlib.pyplot import imshow

@@ -69,12 +69,13 @@ class FileStorageManager(DBProvider):
     def _scan(self):
         logger.warning(f"waiting for scan_lock")
         with self.scan_lock:
-            prog = re.compile("""^.*\.-(\w{6})-\./*$""")
+            prog = re.compile("""^.*\.-(\w{6})-\..*$""")
             # How can I distinguish ..?
             candidates = defaultdict(list)
             def ignore_matched_dir(p):
                 match = prog.fullmatch(p)
                 if match is not None:
+                    logger.debug(f"ignoring files in side dir:{p}")
                     return True # ignore this directory's content
                 return False
             def paths():
@@ -89,10 +90,12 @@ class FileStorageManager(DBProvider):
                         raise e
 
             for p in paths():
+                logger.debug(p.path)
                 match = prog.fullmatch(p.name)
                 if match is not None:
                     if not os.path.basename(p.path).startswith("."):
                         candidates[match[1]].append(os.path.abspath(p.path))
+            logger.info(candidates)
             return candidates
 
     @lru_cache(maxsize=None)
@@ -108,35 +111,37 @@ class FileStorageManager(DBProvider):
         #frame = calframe[1]
         #logger.debug(f'caller name: {frame.filename}, {frame.index}')
         def find_matching():
-            for k, c in self.info_cache.value.items():
-                matched = True
-                for ck, cv in conditions.items():
-                    if ck in c and c[ck] != cv:
-                        matched = False
-                        break
-                if matched and k in self.scan_cache.value:
-                    candidates = self.scan_cache.value[k]
-                    if len(candidates) >= 2:
-                        logger.warning(f"multiple candidates found. using {candidates[0]}.")
-                        logger.warning(f"candidates:{candidates}")
-                    return candidates[0]
-
-        res = find_matching()
-        if res is None or not os.path.exists(res):
-            logger.warning(f"no matching file found for {conditions}. rescanning...")
-            logger.debug(f"current info\n:{tabulate(sorted(self.info_cache.value.items()))}")
-            logger.debug(f"current scan\n:{tabulate(sorted(self.scan_cache.value.items()))}")
-            self.info_cache.clear()
-            self.scan_cache.clear()
+            with self.scan_lock:
+                for k, c in self.info_cache.value.items():
+                    matched = True
+                    for ck, cv in conditions.items():
+                        if ck in c and c[ck] != cv:
+                            matched = False
+                            break
+                    if matched and k in self.scan_cache.value:
+                        candidates = self.scan_cache.value[k]
+                        if len(candidates) >= 2:
+                            logger.warning(f"multiple candidates found. using {candidates[0]}.")
+                            logger.warning(f"candidates:{candidates}")
+                        return candidates[0]
+        with self.scan_lock:
             res = find_matching()
-        if res is None:
-            candidate = self.get_filename("any_name",**conditions)
-            raise RuntimeError(f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
-        logger.debug(f"found path for {conditions} : {res}")
-        return res
+            if res is None or not os.path.exists(res):
+                logger.warning(f"no matching file found for {conditions}. rescanning...")
+                logger.debug(f"current info\n:{tabulate(sorted(self.info_cache.value.items()))}")
+                logger.debug(f"current scan\n:{tabulate(sorted(self.scan_cache.value.items()))}")
+                self.info_cache.clear()
+                self.scan_cache.clear()
+                res = find_matching()
+            if res is None:
+                candidate = self.get_filename("any_name",**conditions)
+                raise RuntimeError(f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
+            logger.debug(f"found path for {conditions} : {res}")
+            return res
 
     def get_filename(self, basename, **conditions):
-        hash, filename = self._get_filename(basename, **conditions)
-        with open(os.path.join(self.db_path, hash + ".yaml"), "w") as f:
-            yaml.dump(conditions, f)
-        return filename
+        with self.scan_lock:
+            hash, filename = self._get_filename(basename, **conditions)
+            with open(os.path.join(self.db_path, hash + ".yaml"), "w") as f:
+                yaml.dump(conditions, f)
+            return filename
