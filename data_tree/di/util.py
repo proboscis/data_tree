@@ -142,7 +142,11 @@ class DesignBindContext:
 def extract_argnames(func):
     spec = inspect.getfullargspec(func)
     return spec.args
-
+def get_class_aware_args(f):
+    args = inspect.getfullargspec(f).args
+    if isinstance(f,type) and "self" in args:
+        args.remove("self")
+    return args
 @dataclass
 class Design:
     """
@@ -157,47 +161,32 @@ class Design:
         assert isinstance(self.multi_binds,dict)
 
     def multi_bind_provider(self,**kwargs):
+        """:cvar adds a provider to specified key so that result of calling multiple providers will be
+        aggreageted and provided as a list.
+        """
         return self + Design(
             multi_binds={
                 k:{v}
                 for k,v in kwargs.items()
             }
         )
+    def multi_bind_empty(self,*keys):
+        """:key returns a new design which returns a [] for "key" as default value. """
+        return self + Design(
+            multi_binds={
+                k:set() for k in keys
+            }
+        )
 
     def to_binding_spec(self):
         """Generate a BindingSpec class for pinject and returns its instance."""
-        def get_args(f):
-            args = inspect.getfullargspec(f).args
-            if isinstance(f,type) and "self" in args:
-                args.remove("self")
-            return args
+
         design = self
         for k,providers in self.multi_binds.items():
-            deps = [get_args(f) for f in providers]
-            dep_set=set(chain(*deps))
-            if "self" in dep_set:
-                dep_set.remove("self")
-            f_signature = f"multi_bind_provider_{k}({','.join(dep_set)})"
-            logger.info(f_signature)
-            for ds in deps:
-                for d in ds:
-                    assert d in dep_set
-
-            def create_impl(tgt_providers,tgt_dependencies):
-                def f_impl(**kwargs):
-                    logger.info(f"{f_signature} called with {list(kwargs.keys())}")
-                    values = []
-                    for provider,ds in zip(tgt_providers,tgt_dependencies):
-                        p_deps = {k:kwargs[k] for k in ds}
-                        v = provider(**p_deps)
-                        values.append(v) # unhashable type...
-                    return values
-                return f_impl
-
-            new_f = create_function(f_signature, create_impl(providers,deps))
-            binding = {k:new_f}
-            logger.info(binding)
-            design=design.bind_provider(**binding)
+            if len(providers) == 0:
+                design = design.bind_instance(**{k:[]})
+            else:
+                design = self.add_multi_binding(design, k, providers)
         configures = design.configures
 
         def configure(self, bind):
@@ -210,6 +199,35 @@ class Design:
                                   **{f"provide_{k}": v for k, v in design.providers.items()}
                               })
         return DynamicBinding()
+
+    def add_multi_binding(self, design, k, providers):
+        deps = [get_class_aware_args(f) for f in providers]
+        dep_set = set(chain(*deps))
+        if "self" in dep_set:
+            dep_set.remove("self")
+        f_signature = f"multi_bind_provider_{k}({','.join(dep_set)})"
+        logger.info(f_signature)
+        for ds in deps:
+            for d in ds:
+                assert d in dep_set
+
+        def create_impl(tgt_providers, tgt_dependencies):
+            def f_impl(**kwargs):
+                logger.info(f"{f_signature} called with {list(kwargs.keys())}")
+                values = []
+                for provider, ds in zip(tgt_providers, tgt_dependencies):
+                    p_deps = {k: kwargs[k] for k in ds}
+                    v = provider(**p_deps)
+                    values.append(v)  # unhashable type...
+                return values
+
+            return f_impl
+
+        new_f = create_function(f_signature, create_impl(providers, deps))
+        binding = {k: new_f}
+        logger.info(binding)
+        design = design.bind_provider(**binding)
+        return design
 
     def __add__(self, other: Union["Design", BindingSpec]):
         other = self._ensure_dbc(other)
