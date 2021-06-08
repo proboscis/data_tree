@@ -11,7 +11,7 @@ from functools import partial
 from hashlib import sha1
 from multiprocessing.dummy import Pool
 from random import randint
-from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar, Generic
+from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar, Generic, Generator, Iterator
 
 import h5py
 
@@ -537,8 +537,13 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
     def from_iterable(values):
         if isinstance(values, np.ndarray):
             return Series.from_numpy(values)
-        else:
+        if isinstance(values, list):
+            return ListLikeSeries(values)
+        if isinstance(values, Generator):
             return ListLikeSeries(list(values))
+        if isinstance(values,Iterator):
+            return ListLikeSeries(list(values))
+        return ListLikeSeries(values)
 
     @staticmethod
     def from_indexed(values):
