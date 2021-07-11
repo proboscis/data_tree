@@ -9,6 +9,7 @@ import threading
 from contextlib import contextmanager
 # from threading import RLock
 from multiprocessing import RLock
+from multiprocessing.dummy import Value
 
 import h5py
 import numpy as np
@@ -177,6 +178,8 @@ class FlagCacheProvider:
 
     def craete_cache(self, total: int):
         pass
+    def create_coint(self):
+        pass
 
 
 class MpFlagCache(FlagCacheProvider):
@@ -189,6 +192,8 @@ class MpFlagCache(FlagCacheProvider):
     def create_cache(self, total: int):
         return self.manager.list([None] * total)
 
+    def create_count(self):
+        return self.manager.Value("int",0)
 
 class LocalFlagCache(FlagCacheProvider):
     def create_flags(self, total: int):
@@ -196,6 +201,8 @@ class LocalFlagCache(FlagCacheProvider):
 
     def create_cache(self, total: int):
         return [None] * total
+    def create_coutn(self):
+        return Value("int",0)
 
 
 class LazySeries(CachedSeries):
@@ -231,6 +238,7 @@ class LazySeries(CachedSeries):
         self._indexer = IdentityIndexer(self.src.total)
         self.flags = self.provider.create_flags(self.total)
         self.cache = self.provider.create_cache(self.total)
+        self.num_loaded = self.provider.create_count()
         self._index = np.arange(src.total)
         self.prefer_slice = prefer_slice  # not used currently
 
@@ -239,9 +247,10 @@ class LazySeries(CachedSeries):
         with self.lock:
             #logger.debug(f"obtained a lock:{os.getpid()}")
             if not self.flags[index]:
-                logger.debug(f"cache not hit. pid:{os.getpid()} at {index}")
+                logger.debug(f"cache not hit. pid:{os.getpid()} at {index}.\t progress:{self.num_loaded.value}/{len(self.flags)}")
                 self.cache[index] = self.src._values(index)
                 self.flags[index] = True
+                self.num_loaded.value += 1
                 #logger.debug(f"written data to {index} from pid: {os.getpid()}")
             else:
                 pass

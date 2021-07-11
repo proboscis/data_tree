@@ -1,6 +1,9 @@
+import PIL.Image
+
 from data_tree.coconut.convert import *
 from data_tree.coconut.auto_data import AutoSolver,AutoData
 from data_tree.coconut.monad import try_monad,Try,Success,Failure
+from data_tree.coconut.rules.to_bytes import rule_image_str_to_jpg_bytes
 from frozendict import frozendict
 from typing import Mapping
 from ipywidgets import Text
@@ -217,6 +220,29 @@ def rule_format(state):
             ngs = [ngs]
         return ngs
 
+def to_spectral_img(img:"PIL.Image.Image"):
+    #gray_img = img.convert('L')
+    # NumPy 配列にする
+    f_xy = np.asarray(img)
+
+    # 2 次元高速フーリエ変換で周波数領域の情報を取り出す
+    f_uv = np.fft.fft2(f_xy)
+    # 画像の中心に低周波数の成分がくるように並べかえる
+    shifted_f_uv = np.fft.fftshift(f_uv)
+
+    # パワースペクトルに変換する
+    magnitude_spectrum2d = 20 * np.log(np.absolute(shifted_f_uv))
+    return magnitude_spectrum2d
+    #return auto("numpy,float64,HW,L,None")(magnitude_spectrum2d)
+
+def rule_to_spectrum(state):
+    if state == "image,L,L":
+        return [(
+            to_spectral_img,
+            "spectrum",
+            "image,L,L => spectrum",
+            1
+        )]
 
 ms_img2L = (s->(s[0],s[1])) |> ss_to_ms$
 ms_img2LA = (s->(s[0],s[1],2)) |> ss_to_ms$
@@ -662,6 +688,7 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(rule_numpy2img),
     AutoSolver.create_conversion_rule(rule_image2gray),
     AutoSolver.create_conversion_rule(rule_image_path_to_image),
+    AutoSolver.create_conversion_rule(rule_image_str_to_jpg_bytes),
     #AutoSolver.create_conversion_rule(rule_image2lab),
     #AutoSolver.create_conversion_rule(rule_rgba2laba),
     #AutoSolver.create_conversion_rule(rule_lab_value_conversion),
@@ -674,6 +701,7 @@ DEFAULT_RULES = AutoImage.default_rules.copy() + [
     AutoSolver.create_conversion_rule(torch_img_to_pixpix_input),
     AutoSolver.create_conversion_rule(torch_img_to_vgg_prep),
     #AutoSolver.create_conversion_rule(intra_tuple_conversions),
+    AutoSolver.create_conversion_rule(rule_to_spectrum),
     AutoSolver.create_conversion_rule(auto_tuple2widget),
     AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
     AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255"),

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x72bd9df2
+# __coconut_hash__ = 0x3fe75f8
 
 # Compiled with Coconut version 1.5.0 [Fish License]
 
@@ -353,6 +353,8 @@ class AutoData:  # class AutoData:
             return None  #     def show(self,block=True):
     _coconut_recursive_func_37 = imshow  #     def show(self,block=True):
     def show(self, block=True):  #     def show(self,block=True):
+        """show assumes that internal state always converts to rgba domain."""  #         """show assumes that internal state always converts to rgba domain."""
+# so if you want to visualize spectrum you have to cast it.
         from matplotlib.pyplot import show as mpl_show  #         from matplotlib.pyplot import show as mpl_show
         self.imshow()  #         self.imshow()
         return mpl_show(block=block)  #         return mpl_show(block=block)

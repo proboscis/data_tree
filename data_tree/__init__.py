@@ -38,6 +38,7 @@ def auto_img(codec):
     from data_tree.auto_data.auto_image import AutoImage
     from data_tree.coconut.omni_converter import SOLVER as omni_solver
     def _l(img):
-        return AutoImage(img, codec, omni_solver)
+        from data_tree.coconut.omni_converter import solver_getter
+        return AutoImage(img, codec, solver_getter)
 
     return _l

@@ -63,15 +63,16 @@ def ensure_self_arg(func):
     if argspec.args and argspec.args[0] == "self":
         return func
     assert "self" not in argspec.args, f"{argspec.args}"
-    #source = inspect.getsource(func)
+    # source = inspect.getsource(func)
     module = inspect.getmodule(func)
     try:
         lines, ln = inspect.getsourcelines(func)
         fname = f"""{module.__name__.replace(".", "_")}_ln_{ln}_{func.__name__}"""
     except OSError as ose:
-        fname= f"""{module.__name__.replace(".","_")}_{func.__name__}"""
+        fname = f"""{module.__name__.replace(".", "_")}_{func.__name__}"""
 
     signature = f"""{fname}({" ,".join(["self"] + (argspec.args or []) + (argspec.varargs or []))})"""
+
     # logger.error(source)
 
     def impl(self, *args, **kwargs):
@@ -115,7 +116,7 @@ class ExtendedObjectGraph:
 
     def run(self, f):
         argspec = inspect.getfullargspec(f)
-        #logger.info(self)
+        # logger.info(self)
         assert argspec.varargs is None
         args = [self.provide(k) for k in argspec.args]
         return f(*args)
@@ -139,42 +140,50 @@ class DesignBindContext:
         return self.src.bind_provider_immutable(self.key, provider, all_except=all_except, arg_names=arg_names,
                                                 in_scope=in_scope)
 
+
 def extract_argnames(func):
     spec = inspect.getfullargspec(func)
     return spec.args
+
+
 def get_class_aware_args(f):
     args = inspect.getfullargspec(f).args
-    if isinstance(f,type) and "self" in args:
+    if isinstance(f, type) and "self" in args:
         args.remove("self")
     return args
+
+
 @dataclass
 class Design:
     """
     This is an injection binding class which can be used to compose configures and providers.
     """
+    # TODO remove bind_inplace feature
     providers: dict = field(default_factory=dict)
     configures: dict = field(default_factory=dict)
-    multi_binds:dict = field(default_factory=dict)
+    multi_binds: dict = field(default_factory=dict)
     modules: list = field(default_factory=list)
     classes: list = field(default_factory=list)
-    def __post_init__(self):
-        assert isinstance(self.multi_binds,dict)
 
-    def multi_bind_provider(self,**kwargs):
+    def __post_init__(self):
+        assert isinstance(self.multi_binds, dict)
+
+    def multi_bind_provider(self, **kwargs):
         """:cvar adds a provider to specified key so that result of calling multiple providers will be
         aggreageted and provided as a list.
         """
         return self + Design(
             multi_binds={
-                k:{v}
-                for k,v in kwargs.items()
+                k: {v}
+                for k, v in kwargs.items()
             }
         )
-    def multi_bind_empty(self,*keys):
+
+    def multi_bind_empty(self, *keys):
         """:key returns a new design which returns a [] for "key" as default value. """
         return self + Design(
             multi_binds={
-                k:set() for k in keys
+                k: set() for k in keys
             }
         )
 
@@ -182,9 +191,9 @@ class Design:
         """Generate a BindingSpec class for pinject and returns its instance."""
 
         design = self
-        for k,providers in self.multi_binds.items():
+        for k, providers in self.multi_binds.items():
             if len(providers) == 0:
-                design = design.bind_instance(**{k:[]})
+                design = design.bind_instance(**{k: []})
             else:
                 design = self.add_multi_binding(design, k, providers)
         configures = design.configures
@@ -273,7 +282,7 @@ class Design:
                 # logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
                 del res.providers[k]
             res.configures[k] = v
-        for k,v in other.multi_binds.items():
+        for k, v in other.multi_binds.items():
             res.multi_binds[k] = (res.multi_binds.get(k) or set()) | v
 
         # logger.debug(f"merged:\n\t{res}")
@@ -328,10 +337,7 @@ class Design:
 
     def _bind_updates(self, key, **kwargs):
         _override = Design(
-            providers=dict(),
             configures={key: kwargs},
-            modules=[],
-            classes=[]
         )
         return _override
 
@@ -394,6 +400,7 @@ class Design:
 
     @staticmethod
     def gather_spec(b: BindingSpec) -> "Design":
+        assert isinstance(b,BindingSpec)
         dep_spec = Design()
         for dep in b.dependencies() or []:
             spec = Design.gather_spec(dep)
@@ -466,7 +473,7 @@ class Design:
             configures=copy(self.configures),
             multi_binds=copy(self.multi_binds),
             modules=copy(self.modules),
-            classes=copy(self.classes)
+            classes=copy(self.classes),
         )
 
     def map_value(self, src_key, f):
@@ -629,45 +636,11 @@ class Design:
                 res[k] = v["to_class"]
         return res
 
-
-@dataclass
-class Design2:
-    design:Design= field(default_factory=Design)
-    multi_binds:dict = field(default_factory=dict)
-    def multi_bind_provider(self,key,provider):
-        assert key not in self.design
-        d:dict = self.multi_binds
-        added = (d.get(key) or []) + [provider]
-        return Design2(
-            design=self.design,
-            multi_binds=merge(self.multi_binds,{key:added})
-        )
-    def to_design(self):
-        def get_args(f):
-            return inspect.getfullargspec(f).args
-        design = self.design
-        for k,ps in self.multi_binds.items():
-            deps = [get_args(f) for f in ps]
-            dep_set=list(set(chain(*deps)))
-            f_signature = f"multi_bind_provider({','.join(dep_set)})"
-
-            def f_impl(**kwargs):
-                values = []
-                for p,ds in zip(ps,deps):
-                    p_deps = {k:kwargs[k] for k in ds}
-                    v = p(**p_deps)
-                    values.append(v)
-                return values
-
-            new_f = create_function(f_signature, f_impl)
-            design=design.bind_provider(**{k:new_f})
-        return design
-
-class PrefixedModules:
-    def __init__(self, prefix):
-        import sys
-        self.modules = [v for k, v in sys.modules.items() if k.startswith(prefix)]
-
+# mapping is another layer of complication.
+# good way is to create a MappedDesign class which is not a subclass of a Design
+# only MappedDesign or Design can be __add__ ed to this class
+# calling to_design converts all lazy mapping into providers
+# so if anything is missing then fails.
 
 class DynamicSpec(BindingSpec):
     def __init__(self):

@@ -40,3 +40,5 @@ class AutoImage(AutoData):
             plt.show()
         return figs
 
+    def as_spectrum_img(self):
+        return self.convert("spectrum").cast("numpy,float64,HW,L,None")
