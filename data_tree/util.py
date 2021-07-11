@@ -434,9 +434,10 @@ def scan_images_cached(cache_path, scan_path) -> PickledTrait:
             ).values_progress(512, tqdm))
     )
     return paths.map(
-        lambda ps: series(ps).tag("dir_entries").map(
+        lambda ps: series(ps).meta(cache_path=cache_path).tag("dir_entries").map(
             lambda d: d.path).tag("image_path").map(
-            Image.open).tag("loaded_image"))
+            Image.open).tag("loaded_image")
+    )
 
 
 def save_images_to_path(series, path):

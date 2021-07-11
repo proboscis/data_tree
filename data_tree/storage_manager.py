@@ -3,6 +3,8 @@ from collections import defaultdict
 from functools import lru_cache
 from hashlib import sha1
 import base64
+from typing import List
+
 import yaml
 import os
 import re
@@ -120,10 +122,12 @@ class FileStorageManager(DBProvider):
                             break
                     if matched and k in self.scan_cache.value:
                         candidates = self.scan_cache.value[k]
+                        candidates = [c for c in candidates if os.path.exists(c)]
                         if len(candidates) >= 2:
                             logger.warning(f"multiple candidates found. using {candidates[0]}.")
                             logger.warning(f"candidates:{candidates}")
-                        return candidates[0]
+                        if candidates:
+                            return candidates[0]
         with self.scan_lock:
             res = find_matching()
             if res is None or not os.path.exists(res):
@@ -137,6 +141,7 @@ class FileStorageManager(DBProvider):
                 candidate = self.get_filename("any_name",**conditions)
                 raise RuntimeError(f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
             logger.debug(f"found path for {conditions} : {res}")
+            assert "Users" not in res
             return res
 
     def get_filename(self, basename, **conditions):
@@ -145,3 +150,7 @@ class FileStorageManager(DBProvider):
             with open(os.path.join(self.db_path, hash + ".yaml"), "w") as f:
                 yaml.dump(conditions, f)
             return filename
+
+    def get_store_path_candidates(self,basename,**conditions)->List[str]:
+        name = self.get_filename(basename,**conditions)
+        return [os.path.join(t,name) for t in self.tgt_dirs]

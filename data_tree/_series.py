@@ -5,7 +5,7 @@ import queue
 import threading
 from collections import OrderedDict
 from concurrent.futures import Executor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import partial
 from hashlib import sha1
@@ -16,6 +16,7 @@ from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar
 import h5py
 
 import numpy as np
+from IPython import embed
 
 from frozendict import frozendict
 
@@ -26,6 +27,7 @@ from sklearn.preprocessing import MinMaxScaler
 from snoop import snoop
 from tqdm.autonotebook import tqdm
 
+from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
 from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
@@ -70,7 +72,16 @@ def series_to_tree(s):
     return got_net.show("ancestors.html")
 
 
-class Trace(NamedTuple):
+def compile_trace(t: "Trace"):
+    if isinstance(t.series, MetadataOpsSeries):
+        m = t.metadata
+        return replace(t.parents[0], metadata=t.series.operator(m)).compiled
+    else:
+        return replace(t, parents=[p.compiled for p in t.parents])
+
+
+@dataclass
+class Trace:
     parents: List["Trace"]
     series: "Series"
     index: int
@@ -128,17 +139,14 @@ class Trace(NamedTuple):
         return Series.from_iterable(list(self.traverse()))
 
     def find_by_tag(self, tag: str):
-        return [t for t in self.compiled().traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
+        return [t for t in self.compiled.traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
 
     def find_one_by_tag(self, tag: str):
         return self.find_by_tag(tag)[0]
 
+    @en_lazy
     def compiled(self):
-        if isinstance(self.series, MetadataOpsSeries):
-            m = self.metadata
-            return self.parents[0]._replace(metadata=self.series.operator(m)).compiled()
-        else:
-            return self._replace(parents=[p.compiled() for p in self.parents])
+        return compile_trace(self)
 
     def __repr__(self):
         return self.trace_string()
@@ -235,6 +243,21 @@ class _StarMapHelper:
         return self.f(*t)
 
 
+@dataclass
+class TagAdder:
+    tags: tuple
+
+    def __call__(self, m: dict):
+        try:
+            copied = m.copy()
+            old_tags = copied.get("tags") or set()
+            new_tags = old_tags | set(self.tags)
+            copied["tags"] = new_tags
+            return copied
+        except Exception as e:
+            embed()
+
+
 class Series(Generic[T], metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
@@ -298,7 +321,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         return self.traversed.map(lambda m: m._metadata)
 
     def trace(self, index) -> Trace:
-        return self._trace(index).compiled()
+        return self._trace(index).compiled
 
     def _values(self, item):
         # logger.debug(f"{self} _values at:{item}")
@@ -511,14 +534,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         return FlattenedSeries(self)
 
     def tag(self, *tags):
-        def _add_tag(m: dict):
-            copied = m.copy()
-            old_tags = copied.get("tags") or set()
-            new_tags = old_tags | set(tags)
-            copied["tags"] = new_tags
-            return copied
-
-        return MetadataOpsSeries(self, operator=_add_tag)
+        return MetadataOpsSeries(self, operator=TagAdder(tags))
 
     def update_metadata(self, **metadata):
         return MetadataOpsSeries(self, operator=MetadataUpdater(metadata))
@@ -541,8 +557,13 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
             return ListLikeSeries(values)
         if isinstance(values, Generator):
             return ListLikeSeries(list(values))
-        if isinstance(values,Iterator):
+        if isinstance(values, Iterator):
             return ListLikeSeries(list(values))
+        if isinstance(values, Series):
+            return ListLikeSeries(list(values))
+        if isinstance(values, Iterable):
+            return ListLikeSeries(list(values))
+        # dict.items is not iterator or generator. but dict_items
         return ListLikeSeries(values)
 
     @staticmethod
@@ -1358,16 +1379,25 @@ class TaggedSeries(IndexedSeries):
 class MetadataOpsSeries(IndexedSeries):
 
     def clone(self, parents):
+        logger.info(f"cloning metadata ops")
         return MetadataOpsSeries(src=parents[0], operator=self.operator)
 
     def __init__(self, src: Series, operator: Callable):
+        logger.info(f"creating metadata ops")
         self.operator = operator
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
 
     @en_lazy
     def _metadata(self):
-        return self.operator(dict())
+        try:
+            logger.info(self.operator)
+            res = self.operator(dict())
+            logger.info(res)
+        except Exception as e:
+            logger.info(f"failed to get metadata..")
+            embed()
+        return res
 
     @property
     def src(self) -> Series:

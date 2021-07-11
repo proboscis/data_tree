@@ -285,6 +285,8 @@ class AutoData:
         return imshow(self.to("numpy_rgb"))
 
     def show(self,block=True):
+        """show assumes that internal state always converts to rgba domain."""
+        # so if you want to visualize spectrum you have to cast it.
         from matplotlib.pyplot import show as mpl_show
         self.imshow()
         return mpl_show(block=block)

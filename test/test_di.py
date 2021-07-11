@@ -1,5 +1,6 @@
 from loguru import logger
 
+import archpainter.experiments.config.root_cfg
 from data_tree.di.util import Design
 from data_tree.di import util
 from data_tree import di
@@ -18,7 +19,7 @@ def test_add_binding():
     tgt = dbc1.provide("tgt", classes=classes)
     logger.info(tgt)
     assert isinstance(tgt.a,A)
-    assert set((dbc1+dbc2).modules) == {util, di}
+    assert set(archpainter.experiments.config.root_cfg.modules) == {util, di}
     tgt = (dbc1+dbc2).provide("tgt", classes=classes)
     logger.info(tgt)
     assert tgt.a=="hello"

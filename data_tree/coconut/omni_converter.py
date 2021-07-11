@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x64d9b5d
+# __coconut_hash__ = 0xb612c888
 
 # Compiled with Coconut version 1.5.0 [Fish License]
 
@@ -19,6 +19,8 @@ _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
 
+import PIL.Image  # import PIL.Image
+
 from data_tree.coconut.convert import *  # from data_tree.coconut.convert import *
 from data_tree.coconut.auto_data import AutoSolver  # from data_tree.coconut.auto_data import AutoSolver,AutoData
 from data_tree.coconut.auto_data import AutoData  # from data_tree.coconut.auto_data import AutoSolver,AutoData
@@ -26,6 +28,7 @@ from data_tree.coconut.monad import try_monad  # from data_tree.coconut.monad im
 from data_tree.coconut.monad import Try  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Success  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Failure  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
+from data_tree.coconut.rules.to_bytes import rule_image_str_to_jpg_bytes  # from data_tree.coconut.rules.to_bytes import rule_image_str_to_jpg_bytes
 from frozendict import frozendict  # from frozendict import frozendict
 from typing import Mapping  # from typing import Mapping
 from ipywidgets import Text  # from ipywidgets import Text
@@ -395,6 +398,24 @@ def rule_format(state):  # def rule_format(state):
             ngs = [ngs]  #             ngs = [ngs]
         return ngs  #         return ngs
 
+def to_spectral_img(img: '"PIL.Image.Image"'):  # def to_spectral_img(img:"PIL.Image.Image"):
+#gray_img = img.convert('L')
+# NumPy 配列にする
+    f_xy = np.asarray(img)  #     f_xy = np.asarray(img)
+
+# 2 次元高速フーリエ変換で周波数領域の情報を取り出す
+    f_uv = np.fft.fft2(f_xy)  #     f_uv = np.fft.fft2(f_xy)
+# 画像の中心に低周波数の成分がくるように並べかえる
+    shifted_f_uv = np.fft.fftshift(f_uv)  #     shifted_f_uv = np.fft.fftshift(f_uv)
+
+# パワースペクトルに変換する
+    magnitude_spectrum2d = 20 * np.log(np.absolute(shifted_f_uv))  #     magnitude_spectrum2d = 20 * np.log(np.absolute(shifted_f_uv))
+    return magnitude_spectrum2d  #     return magnitude_spectrum2d
+#return auto("numpy,float64,HW,L,None")(magnitude_spectrum2d)
+
+def rule_to_spectrum(state):  # def rule_to_spectrum(state):
+    if state == "image,L,L":  #     if state == "image,L,L":
+        return [(to_spectral_img, "spectrum", "image,L,L => spectrum", 1)]  #         return [(
 
 ms_img2L = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: (s[0], s[1])))  # ms_img2L = (s->(s[0],s[1])) |> ss_to_ms$
 ms_img2LA = (_coconut.functools.partial(_coconut.functools.partial, ss_to_ms))((lambda s: (s[0], s[1], 2)))  # ms_img2LA = (s->(s[0],s[1],2)) |> ss_to_ms$
@@ -967,7 +988,7 @@ def lll_is_rgb(state):  # def lll_is_rgb(state):
 
 
 
-DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_format), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_batch_to_tiled), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image_path_to_image), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
+DEFAULT_RULES = AutoImage.default_rules.copy() + [AutoSolver.create_cast_rule(cast_imdef_to_dict, "cast_imdef_to_dict"), AutoSolver.create_cast_rule(cast_imdef_str_to_imdef, "cast_imdef_str_to_imdef"), AutoSolver.create_cast_rule(cast_imdef_to_imdef_str, "cast_imdef_to_imdef_str"), AutoSolver.create_cast_rule(dict2imdef, "dict2imdef"), AutoSolver.create_cast_rule(cast_ary_str_to_ary_type, "cast_ary_str_to_ary_type"), AutoSolver.create_cast_rule(img_list_is_imgs, "img_list_is_imgs"), AutoSolver.create_cast_rule(lll_is_rgb, "lll_is_rgb", cost=10), AutoSolver.create_cast_rule(cast_tuple2auto_tuple, "tuple <--> auto_tuple"), AutoSolver.create_conversion_rule(any2widget), AutoSolver.create_conversion_rule(rule_format), AutoSolver.create_conversion_rule(rule_imgs2tile), AutoSolver.create_conversion_rule(rule_batch_to_tiled), AutoSolver.create_conversion_rule(rule_img2widget), AutoSolver.create_conversion_rule(rule_numpy2img), AutoSolver.create_conversion_rule(rule_image2gray), AutoSolver.create_conversion_rule(rule_image_path_to_image), AutoSolver.create_conversion_rule(rule_image_str_to_jpg_bytes), AutoSolver.create_conversion_rule(intra_list_conversions), AutoSolver.create_conversion_rule(numpys_to_numpy), AutoSolver.create_conversion_rule(tensor_to_list), AutoSolver.create_conversion_rule(pil_convert), AutoSolver.create_conversion_rule(rgb_to_rgba), AutoSolver.create_conversion_rule(repeat_ch), AutoSolver.create_conversion_rule(torch_img_to_pixpix_input), AutoSolver.create_conversion_rule(torch_img_to_vgg_prep), AutoSolver.create_conversion_rule(rule_to_spectrum), AutoSolver.create_conversion_rule(auto_tuple2widget), AutoSolver.create_alias_rule("numpy_rgb", "numpy,uint8,HWC,RGB,0_255"), AutoSolver.create_alias_rule("numpy_rgba", "numpy,uint8,HWC,RGBA,0_255"),]  # DEFAULT_RULES = AutoImage.default_rules.copy() + [
 
 SMART_RULES = [AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),]  # SMART_RULES =[
 
