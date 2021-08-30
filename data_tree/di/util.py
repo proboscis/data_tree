@@ -5,7 +5,7 @@ from copy import copy
 from dataclasses import dataclass, field, replace
 from itertools import chain
 from types import FunctionType
-from typing import Union, Type, TypeVar
+from typing import Union, Type, TypeVar, Callable
 
 import pinject
 from IPython import embed
@@ -16,6 +16,8 @@ from pinject import BindingSpec
 from pinject.object_graph import ObjectGraph
 from pinject.scoping import SingletonScope
 from pprintpp import pformat
+
+from injected import Injected
 
 prototype = pinject.provides(in_scope=pinject.PROTOTYPE)
 # is it possible to create a binding class which also has an ability to dynamically add..?
@@ -103,7 +105,7 @@ class ExtendedObjectGraph:
         self.design = design
         self.src = src
 
-    def provide(self, target: Union[str, Type[T]]) -> Union[object, T]:
+    def provide(self, target: Union[str, Type[T], Injected[T]]) -> Union[object, T]:
         if isinstance(target, str):
             code = compile(f"""def __init__(self,{target}):self.res={target}""", "<string>", "exec")
             fn = FunctionType(code.co_consts[0], globals(), "__init__")
@@ -111,6 +113,18 @@ class ExtendedObjectGraph:
             return self.src.provide(Request).res
         elif isinstance(target, type):
             return self.src.provide(target)
+        elif isinstance(target, Injected):
+            deps = target.dependencies()
+            if 'self' in deps:
+                deps.remove('self')
+            signature = f"""__init__(self,{','.join(deps)})"""
+
+            def impl(self,**kwargs):
+                self.data = target.get_provider()(**kwargs)
+
+            __init__ = create_function(signature, func_impl=impl)
+            Request = type("Request", (object,), dict(__init__=__init__))
+            return self.src.provide(Request).data
         else:
             raise TypeError(f"target must be either class or a string")
 
@@ -151,6 +165,9 @@ def get_class_aware_args(f):
     if isinstance(f, type) and "self" in args:
         args.remove("self")
     return args
+
+
+T = TypeVar("T")
 
 
 @dataclass
@@ -364,6 +381,20 @@ class Design:
             x = x.bind(k).to_instance(v)
         return x
 
+    def bind_auto(self,**kwargs):
+        x = self
+        for k,v in kwargs.items():
+            match v:
+                case type():
+                    x = x.bind(k).to_class(v)
+                case Callable():
+                    x = x.bind(k).to_instance(v)
+                case Injected():
+                    x = x.bind(k).to_provider(v.get_provider())
+                case _:
+                    x = x.bind(k).to_instance(v)
+
+
     def bind_provider(self, **kwargs):
         x = self
         for k, v in kwargs.items():
@@ -390,7 +421,7 @@ class Design:
     def run(self, f, modules=None, classes=None):
         return self.to_graph(modules, classes).run(f)
 
-    def provide(self, target: Union[str, type], modules=None, classes=None) -> object:
+    def provide(self, target: Union[str, Type[T]], modules=None, classes=None) -> T:
         """
         :param target: provided name
         :param modules: modules to use for graph construction
@@ -400,7 +431,7 @@ class Design:
 
     @staticmethod
     def gather_spec(b: BindingSpec) -> "Design":
-        assert isinstance(b,BindingSpec)
+        assert isinstance(b, BindingSpec)
         dep_spec = Design()
         for dep in b.dependencies() or []:
             spec = Design.gather_spec(dep)
@@ -635,6 +666,7 @@ class Design:
             elif "to_class" in v:
                 res[k] = v["to_class"]
         return res
+
 
 # mapping is another layer of complication.
 # good way is to create a MappedDesign class which is not a subclass of a Design

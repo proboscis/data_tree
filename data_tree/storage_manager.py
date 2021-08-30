@@ -18,6 +18,8 @@ from data_tree.util import ensure_path_exists, scantree, Pickled, scantree_filte
 from loguru import logger
 from tqdm.autonotebook import tqdm
 import socket
+import yaml
+
 
 class DBProvider:
 
@@ -51,10 +53,11 @@ class FileStorageManager(DBProvider):
         self.tgt_dirs = [os.path.expanduser(p) for p in tgt_dirs]
         logger.debug(f"expanded scan targets:{self.tgt_dirs}")
         logger.info(f"scan targets expanded:{tgt_dirs}")
-        self.scan_lock = FileLock(os.path.join(self.db_path,f"scan_lock.lock"))
+        self.scan_lock = FileLock(os.path.join(self.db_path, f"scan_lock.lock"))
 
         self.scan_cache = Pickled(os.path.join(self.db_path, f"scan_cache_{socket.gethostname()}.pkl"), self._scan)
-        self.info_cache = Pickled(os.path.join(self.db_path, f"info_cache_{socket.gethostname()}.pkl"), self.gather_info)
+        self.info_cache = Pickled(os.path.join(self.db_path, f"info_cache_{socket.gethostname()}.pkl"),
+                                  self.gather_info)
 
     def gather_info(self):
         logger.warning(f"waiting for scan_lock")
@@ -65,25 +68,37 @@ class FileStorageManager(DBProvider):
                     _hash = os.path.splitext(os.path.basename(p))[0]
                     with open(p, "r") as f:
                         info[_hash] = yaml.load(f)
-            return info
 
+            # additionaly look for a scanned candidates for __info__.yaml
+            for _hash, paths in self.scan_cache.value.items():
+                for p in paths:
+                    info_file = os.path.join(p, "__info__.yaml")
+                    if os.path.exists(info_file):
+                        with open(info_file, "r") as f:
+                            info[_hash] = yaml.load(f)
+            # now any directory with .-as132-. can be searched with conditions
+            return info
 
     def _scan(self):
         logger.warning(f"waiting for scan_lock")
         with self.scan_lock:
-            prog = re.compile("""^.*\.-(\w{6})-\..*$""")
+            prog = re.compile("""^.*\.-(\w{6})-\.$""")
             # How can I distinguish ..?
             candidates = defaultdict(list)
+
             def ignore_matched_dir(p):
                 match = prog.fullmatch(p)
                 if match is not None:
-                    logger.debug(f"ignoring files in side dir:{p}")
-                    return True # ignore this directory's content
+                    logger.debug(f"ignoring files inside dir:{p}")
+                    return True  # ignore this directory's content
                 return False
+
             def paths():
                 for d in tqdm(self.tgt_dirs, desc="searching directories"):
                     try:
-                        for p in tqdm(scantree_filtered(d,ignore_matched_dir,yield_dir=True), desc=f"searching dir:{d}"):
+                        for p in tqdm(scantree_filtered(d, ignore_matched_dir, yield_dir=True),
+                                      desc=f"searching dir:{d}"):
+                            logger.info(f'checking path:{p}')
                             yield p
                     except FileNotFoundError as fnfe:
                         logger.warning(f"{d} is not found and is ignored.")
@@ -96,53 +111,62 @@ class FileStorageManager(DBProvider):
                 match = prog.fullmatch(p.name)
                 if match is not None:
                     if not os.path.basename(p.path).startswith("."):
-                        candidates[match[1]].append(os.path.abspath(p.path))
+                        if not p.path.endswith(".lock"):
+                            candidates[match[1]].append(os.path.abspath(p.path))
             logger.info(candidates)
             return candidates
 
-    @lru_cache(maxsize=None)
-    def find(self, **conditions)->str:
+    def find_matching(self, conditions):
+        with self.scan_lock:
+            for k, c in self.info_cache.value.items():
+                matched = True
+                for ck, cv in conditions.items():
+                    if ck in c and c[ck] != cv:
+                        matched = False
+                        break
+                if matched and k in self.scan_cache.value:
+                    candidates = self.scan_cache.value[k]
+                    candidates = [c for c in candidates if os.path.exists(c)]
+                    if len(candidates) >= 2:
+                        logger.warning(f"multiple candidates found. using {candidates[0]}.")
+                        logger.warning(f"candidates:{candidates}")
+                    if candidates:
+                        return candidates[0]
+
+    #@lru_cache(maxsize=None)
+    def find(self, **conditions) -> str:
         """
         :param conditions:
         :return: absolute path matching condition
         """
         import inspect
-        #curframe = inspect.currentframe()
-        #calframe = inspect.getouterframes(curframe, 2)
-        
-        #frame = calframe[1]
-        #logger.debug(f'caller name: {frame.filename}, {frame.index}')
-        def find_matching():
-            with self.scan_lock:
-                for k, c in self.info_cache.value.items():
-                    matched = True
-                    for ck, cv in conditions.items():
-                        if ck in c and c[ck] != cv:
-                            matched = False
-                            break
-                    if matched and k in self.scan_cache.value:
-                        candidates = self.scan_cache.value[k]
-                        candidates = [c for c in candidates if os.path.exists(c)]
-                        if len(candidates) >= 2:
-                            logger.warning(f"multiple candidates found. using {candidates[0]}.")
-                            logger.warning(f"candidates:{candidates}")
-                        if candidates:
-                            return candidates[0]
+        # curframe = inspect.currentframe()
+        # calframe = inspect.getouterframes(curframe, 2)
+
+        # frame = calframe[1]
+        # logger.debug(f'caller name: {frame.filename}, {frame.index}')
+
         with self.scan_lock:
-            res = find_matching()
+            res = self.find_matching(conditions)
             if res is None or not os.path.exists(res):
                 logger.warning(f"no matching file found for {conditions}. rescanning...")
                 logger.debug(f"current info\n:{tabulate(sorted(self.info_cache.value.items()))}")
                 logger.debug(f"current scan\n:{tabulate(sorted(self.scan_cache.value.items()))}")
                 self.info_cache.clear()
                 self.scan_cache.clear()
-                res = find_matching()
+                res = self.find_matching(conditions)
             if res is None:
-                candidate = self.get_filename("any_name",**conditions)
-                raise RuntimeError(f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
+                candidate = self.get_filename("any_name", **conditions)
+                raise RuntimeError(
+                    f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
             logger.debug(f"found path for {conditions} : {res}")
             assert "Users" not in res
             return res
+    def clear(self):
+        logger.warning(f"clearing all cache of storage manager")
+        with self.scan_lock:
+            self.scan_cache.clear()
+            self.info_cache.clear()
 
     def get_filename(self, basename, **conditions):
         with self.scan_lock:
@@ -151,6 +175,6 @@ class FileStorageManager(DBProvider):
                 yaml.dump(conditions, f)
             return filename
 
-    def get_store_path_candidates(self,basename,**conditions)->List[str]:
-        name = self.get_filename(basename,**conditions)
-        return [os.path.join(t,name) for t in self.tgt_dirs]
+    def get_store_path_candidates(self, basename, **conditions) -> List[str]:
+        name = self.get_filename(basename, **conditions)
+        return [os.path.join(t, name) for t in self.tgt_dirs]

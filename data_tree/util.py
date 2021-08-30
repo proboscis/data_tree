@@ -84,11 +84,14 @@ def ensure_path_exists(fileName):
             makedirs(parent)
         except FileExistsError as fee:
             pass
+
+
 def cached_ensure_path_exists(name):
     parent = os.path.dirname(name)
     return cached_makedirs(parent)
-   
-@memoize 
+
+
+@memoize
 def cached_makedirs(dir):
     if not os.path.exists(dir) and dir:
         try:
@@ -96,8 +99,6 @@ def cached_makedirs(dir):
             os.makedirs(dir)
         except FileExistsError as fee:
             pass
-
-
 
 
 def ensure_dir_exists(dirname):
@@ -214,7 +215,7 @@ class ShelvedCache:
         return shelve.open(self.path, writeback=True)
 
     def __contains__(self, key):
-        with self.lock,self.get_cache() as db:
+        with self.lock, self.get_cache() as db:
             key = pickle.dumps(key, 0).decode()
             if key in self.mem_cache:
                 return True
@@ -336,6 +337,7 @@ class Pickled(PickledTrait):
         return MappedPickled(self, f)
 
 
+
 class MappedPickled(PickledTrait):
     def __init__(self, src: PickledTrait, f):
         self.src = src
@@ -362,18 +364,21 @@ def scantree(path, yield_dir=False):
     except PermissionError as e:
         logger.warning(f"permission error at {path}. ignoring...")
 
-def scantree_filtered(path,ignore:Callable,yield_dir=False):
+
+def scantree_filtered(path, ignore: Callable, yield_dir=False):
     try:
         for entry in os.scandir(path):
             if entry.is_dir(follow_symlinks=False):
                 if yield_dir:
                     yield entry
                 if not ignore(entry.path):
-                    yield from scantree_filtered(entry.path,ignore=ignore, yield_dir=yield_dir)  # see below for Python 2.x
+                    yield from scantree_filtered(entry.path, ignore=ignore,
+                                                 yield_dir=yield_dir)  # see below for Python 2.x
             else:
                 yield entry
     except PermissionError as e:
         logger.warning(f"permission error at {path}. ignoring...")
+
 
 def scanfiles(path) -> "Series[os.DirEntry]":
     def gen():

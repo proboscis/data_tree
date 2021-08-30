@@ -55,6 +55,7 @@ import numpy as np
 from warnings import warn
 from numpy import linalg
 
+import data_tree.image_store
 from data_tree import dtype
 from data_tree.dtype import dtype_limits
 
@@ -573,7 +574,7 @@ def _convert(matrix, arr):
     """
     arr = _prepare_colorarray(arr)
 
-    return arr @ matrix.T.astype(arr.dtype)
+    return arr @ data_tree.image_store.T.astype(arr.dtype)
 
 
 def xyz2rgb(xyz):

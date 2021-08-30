@@ -6,7 +6,11 @@ from PIL import Image
 
 def to_image_bytes(img:PIL.Image.Image,format)->bytes:
     buf = io.BytesIO()
-    img.save(buf,format)
+    opts = dict()
+    if "jpg" in format.lower():
+        opts["subsampling"] = 0
+        opts["quality"] = 100
+    img.save(buf,format=format,**opts)
     return buf.getvalue()
 def from_jpg_bytes(bs:bytes)->PIL.Image.Image:
     return Image.open(io.BytesIO(bs))
@@ -18,7 +22,12 @@ def rule_image_str_to_jpg_bytes(state):
                 (i -> to_image_bytes(i,"jpeg"),
             "jpg_bytes",
             "image to jpg bytes",
-            1)
+            1),
+                (
+                    i->to_image_bytes(i,"png"),
+                    "png_bytes",
+                "image to png bytes",
+                1)
             ]
         match "jpg_bytes":
             return [
@@ -26,4 +35,10 @@ def rule_image_str_to_jpg_bytes(state):
                 "image,RGB,RGB",
                 "jpg bytes to Image",
                 1)
+            ]
+        match "png_bytes":
+            return [
+                (from_jpg_bytes,
+                 "image,RGB,RGB",
+                 "png bytes to Image")
             ]

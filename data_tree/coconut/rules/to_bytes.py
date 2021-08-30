@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0xf264fe64
+# __coconut_hash__ = 0xe5fb479a
 
 # Compiled with Coconut version 1.5.0 [Fish License]
 
@@ -27,7 +27,11 @@ from PIL import Image  # from PIL import Image
 
 def to_image_bytes(img: 'PIL.Image.Image', format) -> 'bytes':  # def to_image_bytes(img:PIL.Image.Image,format)->bytes:
     buf = io.BytesIO()  #     buf = io.BytesIO()
-    img.save(buf, format)  #     img.save(buf,format)
+    opts = dict()  #     opts = dict()
+    if "jpg" in format.lower():  #     if "jpg" in format.lower():
+        opts["subsampling"] = 0  #         opts["subsampling"] = 0
+        opts["quality"] = 100  #         opts["quality"] = 100
+    img.save(buf, format=format, **opts)  #     img.save(buf,format=format,**opts)
     return buf.getvalue()  #     return buf.getvalue()
 def from_jpg_bytes(bs: 'bytes') -> 'PIL.Image.Image':  # def from_jpg_bytes(bs:bytes)->PIL.Image.Image:
     return Image.open(io.BytesIO(bs))  #     return Image.open(io.BytesIO(bs))
@@ -38,9 +42,14 @@ def rule_image_str_to_jpg_bytes(state):  # def rule_image_str_to_jpg_bytes(state
     if _coconut_match_to == "image,RGB,RGB":  #     case state:
         _coconut_case_check_0 = True  #     case state:
     if _coconut_case_check_0:  #     case state:
-        return [(lambda i: to_image_bytes(i, "jpeg"), "jpg_bytes", "image to jpg bytes", 1)]  #             return [
+        return [(lambda i: to_image_bytes(i, "jpeg"), "jpg_bytes", "image to jpg bytes", 1), (lambda i: to_image_bytes(i, "png"), "png_bytes", "image to png bytes", 1)]  #             return [
     if not _coconut_case_check_0:  #                 (i -> to_image_bytes(i,"jpeg"),
         if _coconut_match_to == "jpg_bytes":  #                 (i -> to_image_bytes(i,"jpeg"),
             _coconut_case_check_0 = True  #                 (i -> to_image_bytes(i,"jpeg"),
         if _coconut_case_check_0:  #                 (i -> to_image_bytes(i,"jpeg"),
             return [(from_jpg_bytes, "image,RGB,RGB", "jpg bytes to Image", 1)]  #             return [
+    if not _coconut_case_check_0:  #                 (from_jpg_bytes,
+        if _coconut_match_to == "png_bytes":  #                 (from_jpg_bytes,
+            _coconut_case_check_0 = True  #                 (from_jpg_bytes,
+        if _coconut_case_check_0:  #                 (from_jpg_bytes,
+            return [(from_jpg_bytes, "image,RGB,RGB", "png bytes to Image")]  #             return [
