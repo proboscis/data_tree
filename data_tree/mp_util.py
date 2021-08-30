@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 import pickle
 import sys
 import time
@@ -6,24 +7,17 @@ from concurrent.futures import Future
 from contextlib import contextmanager
 from multiprocessing import Pipe, Process
 from queue import Empty
-from threading import Thread
 from typing import Iterable
 from uuid import uuid4
-import os
 
-import logzero
-from loguru import logger
+from data_tree.util import shared_npy_array_like
+
 # from logzero import logger
-from easydict import EasyDict as edict
 # logger = edict(
 #    info=print,
 #    warning=print,
 #    debug=print
 # )
-from six import reraise
-from snoop import snoop, pp
-
-from data_tree.util import shared_npy_array_like
 
 GLOBAL_OBJECTS = dict()
 
@@ -45,10 +39,29 @@ class GlobalHolder:
         return GLOBAL_OBJECTS[self.id]
 
 
+class GlobalProxy:
+    def __init__(self, holder: GlobalHolder):
+        self._holder = holder
+
+    def __call__(self, *args, **kwargs):
+        return self._holder.value(*args, **kwargs)
+
+    def __getitem__(self, item):
+        return self._holder.value[item]
+
+    def __getattr__(self, item):
+        if item == "_holder":
+            raise AttributeError()
+        return getattr(self._holder.value, item)
+
+
 def get_global_holder(data: object) -> GlobalHolder:
     id = str(uuid4())
     GLOBAL_OBJECTS[id] = data
     return GlobalHolder(id)
+
+def get_global_proxy(data:object)->GlobalProxy:
+    return GlobalProxy(get_global_holder(data))
 
 
 SUCCESS = "success"
@@ -224,7 +237,7 @@ class SequentialTaskParallel:
             logger.info("finished yielder")
 
 
-def _worker2(self, worker_id,worker_gen_args):
+def _worker2(self, worker_id, worker_gen_args):
     f = self.worker_generator(*worker_gen_args)
     # a worker dies silently?
     task_count = 0
@@ -320,7 +333,7 @@ class SequentialTaskParallel2:
                  worker_gen_args,
                  num_worker=8,
                  max_pending_result=100,
-                 mp = multiprocessing
+                 mp=multiprocessing
                  ):
         self.worker_gen_args = worker_gen_args
         self.worker_generator = worker_generator
@@ -407,7 +420,8 @@ class SequentialTaskParallel2:
                 time.sleep(0.1)
             logger.info(f"monitoring thread stopped")
 
-        workers = [self.mp.Process(target=_worker2, args=(self.self_object, i,self.worker_gen_args), daemon=True) for i in
+        workers = [self.mp.Process(target=_worker2, args=(self.self_object, i, self.worker_gen_args), daemon=True) for i
+                   in
                    range(self.num_worker)]
         for w in workers:
             w.start()
@@ -446,7 +460,7 @@ class SequentialTaskParallel2:
         sorter_thread.start()
         self.sorter_thread = sorter_thread
 
-        #bar = tqdm()
+        # bar = tqdm()
         try:
             while not self.termination_signal.is_set():
                 if waiting_index not in self.results:
@@ -462,7 +476,7 @@ class SequentialTaskParallel2:
                 with self.lock:
                     del self.results[waiting_index]
                     self.finished_pending.value -= 1
-                #bar.update(1)
+                # bar.update(1)
                 yield result
                 # logger.info(f"yielder yielded:{waiting_index}")
                 waiting_index += 1
@@ -475,7 +489,7 @@ class SequentialTaskParallel2:
             # logger.info("finished yielder")
 
     @contextmanager
-    def managed_start(self,debug=False):
+    def managed_start(self, debug=False):
         yield self.start(debug=debug)
         # the code is not reaching here.
         logger.info(f"stopping workers")
@@ -493,7 +507,6 @@ class SequentialTaskParallel2:
             self.monitor_termination_signal.set()
             self.monitor_thread.join()
         logger.info(f"monitoring thread is stopped")
-
 
 
 class SharedBufferPool:
@@ -681,13 +694,9 @@ class SequentialNumpyTaskParallel:
         self.termination_signal.set()
 
 
-
-
-import queue
 from threading import Thread
 # mp.set_start_method("spawn",force=True)
 from loguru import logger
-import numpy as np
 
 
 def _mp_worker(f, in_queue, res_dict):

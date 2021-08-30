@@ -4,7 +4,7 @@ from pprintpp import pformat
 from collections import OrderedDict
 from data_tree.coconut.monad import try_monad,Try,Success,Failure
 import dill # for pickling inner lambda...
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 from loguru import logger
 from itertools import chain
 from os.path import expanduser

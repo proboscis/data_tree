@@ -27,7 +27,7 @@ from sklearn.preprocessing import MinMaxScaler
 from snoop import snoop
 from tqdm.autonotebook import tqdm
 
-from archpainter.experiments.util import Lazy
+#from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
 from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
@@ -700,6 +700,38 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
     def split(self, ratio):
         left = int(self.total * ratio)
         return self[0:left], self[left:]
+
+    @snoop
+    def split_n(self,n:int)->"Series[Series]":
+        """
+        splits this series in to n sub groups.
+        grouping will be done by evenly distributing the number of items in each group so
+        if 298 items are split into 3 then the distribution will be like so:
+        g1: 100
+        g2: 99
+        g3: 99
+        :param n:
+        :return:
+        """
+        div = self.total // n
+        mod = self.total % n
+        i = 0
+        res = []
+        while i < self.total:
+            if mod != 0:
+                l = div + 1
+                mod -= 1
+            else:
+                l = div
+            res.append(self[i:i+l])
+            i += l
+        iters = self.from_iterable(res)
+        assert iters is not None
+        for group in iters:
+            assert group.total != 0
+        return iters
+
+
 
     def split3(self, train_amount, valid_amount):
         return [self[start:end] for start, end in Series.split3_indices(train_amount, valid_amount, self.total)]

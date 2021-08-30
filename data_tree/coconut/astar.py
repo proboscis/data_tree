@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x90690b43
+# __coconut_hash__ = 0xc1026a69
 
 # Compiled with Coconut version 1.5.0 [Fish License]
 
@@ -28,7 +28,7 @@ from data_tree.coconut.monad import Try  # from data_tree.coconut.monad import t
 from data_tree.coconut.monad import Success  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 from data_tree.coconut.monad import Failure  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 import dill  # for pickling inner lambda...  # import dill # for pickling inner lambda...
-from tqdm.autonotebook import tqdm  # from tqdm.autonotebook import tqdm
+from tqdm import tqdm  # from tqdm import tqdm
 from loguru import logger  # from loguru import logger
 from itertools import chain  # from itertools import chain
 from os.path import expanduser  # from os.path import expanduser
