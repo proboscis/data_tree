@@ -12,3 +12,4 @@ def try_monad(f):
             import traceback
             return Failure(e,traceback.format_exc())
     return _inner
+

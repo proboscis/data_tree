@@ -1,24 +1,20 @@
 import abc
-from collections import defaultdict
-from functools import lru_cache
-from hashlib import sha1
-import base64
-from typing import List
-
-import yaml
 import os
 import re
-
-from IPython import embed
-from filelock import FileLock
-from snoop import snoop
-from tabulate import tabulate
-
-from data_tree.util import ensure_path_exists, scantree, Pickled, scantree_filtered
-from loguru import logger
-from tqdm.autonotebook import tqdm
 import socket
+from collections import defaultdict
+from hashlib import sha1
+from typing import List
+
+import cloudpickle
 import yaml
+from loguru import logger
+from tabulate import tabulate
+from tqdm.autonotebook import tqdm
+
+from data_tree.checks import check_picklable
+from data_tree.picklable_file_lock import PicklableFileLock
+from data_tree.util import scantree, Pickled, scantree_filtered
 
 
 class DBProvider:
@@ -53,11 +49,28 @@ class FileStorageManager(DBProvider):
         self.tgt_dirs = [os.path.expanduser(p) for p in tgt_dirs]
         logger.debug(f"expanded scan targets:{self.tgt_dirs}")
         logger.info(f"scan targets expanded:{tgt_dirs}")
-        self.scan_lock = FileLock(os.path.join(self.db_path, f"scan_lock.lock"))
+        self.scan_lock_path = os.path.join(self.db_path, f"scan_lock.lock")
+        self.scan_lock = PicklableFileLock(self.scan_lock_path)
 
         self.scan_cache = Pickled(os.path.join(self.db_path, f"scan_cache_{socket.gethostname()}.pkl"), self._scan)
         self.info_cache = Pickled(os.path.join(self.db_path, f"info_cache_{socket.gethostname()}.pkl"),
                                   self.gather_info)
+
+    def __getstate__(self):
+        res = dict(
+            db_path=self.db_path,
+            tgt_dirs=self.tgt_dirs,
+            scan_cache=self.scan_cache,
+            info_cache=self.info_cache,
+            scan_lock_path=self.scan_lock_path
+        )
+        # check_picklable(res)
+        return res
+
+    def __setstate__(self, state):
+        state["scan_lock"] = PicklableFileLock(state["scan_lock_path"])
+        for k, v in state.items():
+            setattr(self, k, v)
 
     def gather_info(self):
         logger.warning(f"waiting for scan_lock")
@@ -67,7 +80,8 @@ class FileStorageManager(DBProvider):
                 if p.name.endswith(".yaml"):
                     _hash = os.path.splitext(os.path.basename(p))[0]
                     with open(p, "r") as f:
-                        info[_hash] = yaml.load(f)
+                        info[_hash] = yaml.load(f,yaml.SafeLoader)
+                    logger.debug(f"loaded info yaml {_hash}:{info[_hash]}")
 
             # additionaly look for a scanned candidates for __info__.yaml
             for _hash, paths in self.scan_cache.value.items():
@@ -75,7 +89,7 @@ class FileStorageManager(DBProvider):
                     info_file = os.path.join(p, "__info__.yaml")
                     if os.path.exists(info_file):
                         with open(info_file, "r") as f:
-                            info[_hash] = yaml.load(f)
+                            info[_hash] = yaml.load(f,yaml.SafeLoader)
             # now any directory with .-as132-. can be searched with conditions
             return info
 
@@ -98,7 +112,7 @@ class FileStorageManager(DBProvider):
                     try:
                         for p in tqdm(scantree_filtered(d, ignore_matched_dir, yield_dir=True),
                                       desc=f"searching dir:{d}"):
-                            logger.info(f'checking path:{p}')
+                            # logger.info(f'checking path:{p}')
                             yield p
                     except FileNotFoundError as fnfe:
                         logger.warning(f"{d} is not found and is ignored.")
@@ -107,13 +121,14 @@ class FileStorageManager(DBProvider):
                         raise e
 
             for p in paths():
-                logger.debug(p.path)
+                # logger.debug(p.path)
                 match = prog.fullmatch(p.name)
                 if match is not None:
                     if not os.path.basename(p.path).startswith("."):
                         if not p.path.endswith(".lock"):
                             candidates[match[1]].append(os.path.abspath(p.path))
-            logger.info(candidates)
+
+            logger.info(tabulate(candidates.items()))
             return candidates
 
     def find_matching(self, conditions):
@@ -133,13 +148,12 @@ class FileStorageManager(DBProvider):
                     if candidates:
                         return candidates[0]
 
-    #@lru_cache(maxsize=None)
+    # @lru_cache(maxsize=None)
     def find(self, **conditions) -> str:
         """
         :param conditions:
         :return: absolute path matching condition
         """
-        import inspect
         # curframe = inspect.currentframe()
         # calframe = inspect.getouterframes(curframe, 2)
 
@@ -162,6 +176,7 @@ class FileStorageManager(DBProvider):
             logger.debug(f"found path for {conditions} : {res}")
             assert "Users" not in res
             return res
+
     def clear(self):
         logger.warning(f"clearing all cache of storage manager")
         with self.scan_lock:
@@ -178,3 +193,7 @@ class FileStorageManager(DBProvider):
     def get_store_path_candidates(self, basename, **conditions) -> List[str]:
         name = self.get_filename(basename, **conditions)
         return [os.path.join(t, name) for t in self.tgt_dirs]
+
+
+class MockStorageManager():
+    pass

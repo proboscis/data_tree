@@ -14,8 +14,8 @@ from cytoolz import merge
 from loguru import logger
 from tqdm import tqdm
 
+#from data_tree.coconut.auto_data import AutoData
 from data_tree.coconut.auto_data import AutoData
-from archpainter.image_and_paths import ImagePaths
 from data_tree import series, auto
 from data_tree._series import Series
 from data_tree.mocks.images import dummy_images
@@ -249,7 +249,7 @@ class MappedImageStore(ImageStore):
 @dataclass
 class FileBasedImageStore(ImageStore):
     "uses file's base name as key."
-    image_paths: ImagePaths
+    image_paths: "ImagePaths"
 
     def __post_init__(self):
         paths = self.image_paths.paths()

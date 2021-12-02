@@ -12,7 +12,7 @@ from itertools import product
 from loguru import logger
 from collections import namedtuple
 import numpy as np
-
+from data_tree.auto_data.rules import AutoRuleBook
 # actually, this kind of pattern matches are too hard to write in pure python. what do I do???
 # wait for pep622,pep642, to be implemented in python 3.10
 
@@ -360,6 +360,7 @@ def map_state(states,i,new_state):
     return tuple(res)
 
 def intra_tuple_conversions(state):
+    from data_tree.auto_data.default_solvers import SOLVER
     case state:
         match AutoTuple(items):
             # I think I should only change a part of state.
@@ -382,6 +383,7 @@ def map_each(t,mappers):
     return tuple([f(item) for f,item in zip(mappers,t)])
 
 def smart_tuple_conversion(state,end):
+    from data_tree.auto_data.default_solvers import SOLVER
     case (state,end):
         match (AutoTuple(formats),t) if type(t) == tuple and len(formats) == len(t):
             cs = []
@@ -414,6 +416,7 @@ data AutoList(state):
 
 
 def unlist(items):
+    from data_tree.auto_data.default_solvers import SOLVER
     return SOLVER.new_auto_data([i.value for i in items],AutoList(items[0].format))
 
 def cast_ary_str_to_ary_type(state):
@@ -424,6 +427,7 @@ def cast_ary_str_to_ary_type(state):
             return [f"[{es}]"]
 
 def intra_list_conversions(state):
+    from data_tree.auto_data.default_solvers import SOLVER
     case state:
         match AutoList(AutoList(_)):
             return [] # dont dive into nested list too much
@@ -476,9 +480,10 @@ def tensor_to_list(state):
             ]
 
 def pil_convert(state):
+    from data_tree.auto_data.default_solvers import SOLVER
     case state:
         match {"type":"image",**kwargs}:
-            new_state = dict(**state)
+            #new_state = dict(**state)
             return [
                 (img -> mode -> SOLVER.new_auto_data(img.convert(mode),f"image,{mode},{mode}"),
                 "pil_convert",
@@ -670,63 +675,6 @@ def lll_is_rgb(state):
 
 
 
-DEFAULT_RULES = AutoImage.default_rules.copy() + [
-    AutoSolver.create_cast_rule(cast_imdef_to_dict,"cast_imdef_to_dict"),
-    AutoSolver.create_cast_rule(cast_imdef_str_to_imdef,"cast_imdef_str_to_imdef"),
-    AutoSolver.create_cast_rule(cast_imdef_to_imdef_str,"cast_imdef_to_imdef_str"),
-    AutoSolver.create_cast_rule(dict2imdef,"dict2imdef"),
-    AutoSolver.create_cast_rule(cast_ary_str_to_ary_type,"cast_ary_str_to_ary_type"),
-    AutoSolver.create_cast_rule(img_list_is_imgs,"img_list_is_imgs"),
-    AutoSolver.create_cast_rule(lll_is_rgb,"lll_is_rgb",cost=10),
-    AutoSolver.create_cast_rule(cast_tuple2auto_tuple,"tuple <--> auto_tuple"),
-    #AutoSolver.create_cast_rule(dict2visdomable),
-    AutoSolver.create_conversion_rule(any2widget),
-    AutoSolver.create_conversion_rule(rule_format),
-    AutoSolver.create_conversion_rule(rule_imgs2tile),
-    AutoSolver.create_conversion_rule(rule_batch_to_tiled),
-    AutoSolver.create_conversion_rule(rule_img2widget),
-    AutoSolver.create_conversion_rule(rule_numpy2img),
-    AutoSolver.create_conversion_rule(rule_image2gray),
-    AutoSolver.create_conversion_rule(rule_image_path_to_image),
-    AutoSolver.create_conversion_rule(rule_image_str_to_jpg_bytes),
-    #AutoSolver.create_conversion_rule(rule_image2lab),
-    #AutoSolver.create_conversion_rule(rule_rgba2laba),
-    #AutoSolver.create_conversion_rule(rule_lab_value_conversion),
-    AutoSolver.create_conversion_rule(intra_list_conversions),
-    AutoSolver.create_conversion_rule(numpys_to_numpy),
-    AutoSolver.create_conversion_rule(tensor_to_list),
-    AutoSolver.create_conversion_rule(pil_convert),
-    AutoSolver.create_conversion_rule(rgb_to_rgba),
-    AutoSolver.create_conversion_rule(repeat_ch),
-    AutoSolver.create_conversion_rule(torch_img_to_pixpix_input),
-    AutoSolver.create_conversion_rule(torch_img_to_vgg_prep),
-    #AutoSolver.create_conversion_rule(intra_tuple_conversions),
-    AutoSolver.create_conversion_rule(rule_to_spectrum),
-    AutoSolver.create_conversion_rule(auto_tuple2widget),
-    AutoSolver.create_alias_rule("numpy_rgb","numpy,uint8,HWC,RGB,0_255"),
-    AutoSolver.create_alias_rule("numpy_rgba","numpy,uint8,HWC,RGBA,0_255"),
-]
-
-SMART_RULES =[
-    AutoSolver.create_smart_conversion_rule(smart_tuple_conversion),
-]
-
-try:
-    import wandb
-    def img_to_wandb_img(state):
-        case state:
-            match ImageDef(PILImage(_,_),_):
-                return [(
-                    img->wandb.Image(img),
-                    "wandb.Image",
-                    "image to wandb image",
-                    1
-                )]
-    DEFAULT_RULES.append(AutoSolver.create_conversion_rule(img_to_wandb_img))
-    logger.warning(f"added wandb related conversions")
-except Exception as e:
-    logger.warning(f"could not add wandb related conversions since wandb could not be imported")
-
 
 def tuple_distance(x,y):
     assert len(x) == len(y),"cannot compare two tuples with different length"
@@ -735,6 +683,7 @@ def tuple_distance(x,y):
 
 @memoize()
 def state_distance(x,y):
+    from data_tree.auto_data.default_solvers import SOLVER
     conversion = SOLVER.solver.search_direct(x,y,silent=True)
     d = len(conversion.edges)
     #logger.info(f"heuristic conversion:{conversion}")
@@ -804,14 +753,3 @@ def debug(conv):
         embed()
         raise RuntimeError("exit")
 
-
-SOLVER = AutoSolver(
-    rules=DEFAULT_RULES.copy(),
-    smart_rules=SMART_RULES.copy(),
-    heuristics=tuple_widget_heuristics,
-    edge_cutter=tuple_edge_cutter,
-    debug_hook=debug
-    )
-def solver_getter():
-    return SOLVER
-auto_img = format->value->AutoData(value,format,solver_getter)

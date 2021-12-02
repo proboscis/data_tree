@@ -11,7 +11,7 @@ from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
-from archpainter.wandb_util.artifact_logger import ArtifactMetadata, ArtifactIdentifier
+from archpainter.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
 from archpainter.wandb_util.path_artifact import ManagedPathArtifactLogger, ManagedPathArtifactLoader
 from data_tree import auto, series
 from data_tree.format_converter import FormatConverter
@@ -256,7 +256,8 @@ class MultiLmdbImageStoreArtifactGetter:
 
     def get(self, idt: ArtifactIdentifier):
         root = self.managed_path_artifact_loader.get_path_identifier(idt)
-        lmdb_paths = os.listdir(root)
+        lmdb_paths = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root,d))]
+        assert lmdb_paths,f"lmdb_paths is empty! wtf?? {os.listdir(root)}"
         lmdbs = [LmdbImageStore(os.path.join(root, p), sort_image_store_keys=self.sort_image_store_keys) for p in
                  tqdm(lmdb_paths, desc='loading multi lmdb artifact')]
         return MergedImageStore(lmdbs, sort_image_store_keys=self.sort_image_store_keys)

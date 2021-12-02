@@ -1,14 +1,11 @@
 from data_tree.coconut.auto_data import AutoData
 from data_tree.coconut.convert import ch_splitter
 from loguru import logger
-#import matplotlib
-#matplotlib.use('Qt5Agg')
 
 
 class AutoImage(AutoData):
     def __init__(self, value, format, solver_getter):
         super().__init__(value, format, solver_getter)
-        # TODO add some assertions
 
     def histogram(self):
         from matplotlib import pyplot as plt

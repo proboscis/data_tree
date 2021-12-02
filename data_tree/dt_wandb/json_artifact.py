@@ -2,16 +2,18 @@ import abc
 import json
 from dataclasses import dataclass
 from glob import glob
-from typing import Union, Any
+from typing import Union
 
 import pandas
 import wandb
 
 from archpainter.wandb_util import random_artifact_file_path
-from archpainter.wandb_util.artifact_logger import ArtifactLogger, ArtifactIdentifier, ArtifactMetadata
+from archpainter.wandb_util.artifact_logger import ArtifactLogger
+from archpainter.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
 from archpainter.wandb_util.artifact_wrapper import RemoteArtifactFactory
 from archpainter.wandb_util.local_artifact import LocalArtifact
 from data_tree.util import ensure_path_exists
+from data_tree.injected import Injected
 
 
 @dataclass
@@ -46,7 +48,7 @@ class TableArtifactLogger:
     artifact_logger: ArtifactLogger
     """for use of image visualizations"""
 
-    def log(self, metadata: ArtifactMetadata, data: pandas.DataFrame)->LocalArtifact:
+    def log(self, metadata: ArtifactMetadata, data: pandas.DataFrame) -> LocalArtifact:
         table = wandb.Table(dataframe=data)
         return self.artifact_logger.save_artifact2(
             target=table,
@@ -101,6 +103,13 @@ def __init__impl(self, json_artifact_loader: JsonArtifactLoader):
     self.data = json_artifact_loader.load_identifier(self.identifier)
 
 
+def get_json_artifact(
+        json_artifact_loader: JsonArtifactLoader,
+        identifier: ArtifactIdentifier
+):
+    return json_artifact_loader.load_identifier(identifier)
+
+
 def __getitem__impl(self, item):
     return self.data[item]
 
@@ -117,7 +126,7 @@ def items_impl(self):
     yield from self.data.items()
 
 
-def json_artifact(
+def json_artifact_deprecated(
         artifact_identifier: Union[ArtifactIdentifier, str]
 ):
     artifact_identifier = ensure_artifact_identifier(artifact_identifier)
@@ -133,6 +142,13 @@ def json_artifact(
                       "identifier": artifact_identifier,
                   })
     return _class
+
+
+def json_artifact(
+        artifact_identifier: Union[ArtifactIdentifier, str]
+):
+    artifact_identifier = ensure_artifact_identifier(artifact_identifier)
+    return Injected.bind(get_json_artifact, identifier=lambda:artifact_identifier)
 
 
 def ensure_artifact_identifier(identifier: Union[ArtifactIdentifier, str]):
