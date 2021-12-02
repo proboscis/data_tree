@@ -990,7 +990,7 @@ def AutoImage.tile_image(self,w=1024,h=1024,max_image=100,padding=1):
     return AutoImage(make_grid(imgs,nrow,padding=1),f"numpy,uint8,HWC,{ch},0_255")
 
 img_to_shifting_grids = img->make_grids(*img.image_size)|> shifting_grids
-def auto_to_3res(img:"AutoImage",cx,cy,r=256)->"AutoImage":
+def auto_to_3res(img,cx,cy,r=256)->"AutoImage":
     img = img.to("image,L,L")
     #img = img.resize((2048,2048))
     chs = [crop_square(img,cx,cy,_r).resize((r,r)) for _r in [r*4,r*2,r]]

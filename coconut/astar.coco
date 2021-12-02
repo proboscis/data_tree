@@ -277,18 +277,40 @@ class AStarSolver:
         rules: List[Rule]
         Rule: (state)->List[(converter:(data)->data,new_state,cost,conversion_name)]
         """
-        from lru import LRU
         self.rules = rules if rules is not None else []
         self.smart_rules = smart_rules if smart_rules is not None else []
         self.heuristics = heuristics
         self.edge_cutter = edge_cutter
+        logger.debug(f"using autodata search cache at {cache_path}")
+        self.debug_hook = debug_hook
+        self.cache_path=cache_path
+        self._init_non_picklable()
+
+    def _init_non_picklable(self):
+        from lru import LRU
         self.neighbors_memo = LRU(MAX_MEMO) # you cannot pickle a lru.LRU object, thus you cannot pickle this class for multiprocessing.
         self.search_memo = LRU(MAX_MEMO)
         self.smart_neighbors_memo = LRU(MAX_MEMO)
-        logger.debug(f"using autodata search cache at {cache_path}")
-        self.direct_search_cache = DefaultShelveCache(lambda key:[(e.src,e.dst) for e in self._search_direct(key)],cache_path)
+        self.direct_search_cache = DefaultShelveCache(lambda key:[(e.src,e.dst) for e in self._search_direct(key)],self.cache_path)
         self.direct_search_memo = LRU(MAX_MEMO)
-        self.debug_hook = debug_hook
+
+    def __getstate__(self):
+        return dict(
+            rules = self.rules,
+            smart_rules=self.smart_rules,
+            heuristics = self.heuristics,
+            edge_cutter=self.edge_cutter,
+            debug_hook=self.debug_hook,
+            cache_path=self.cache_path
+        )
+    def __setstate__(self,state):
+        self.rules = state["rules"]
+        self.smart_rules = state["smart_rules"]
+        self.heuristics=state["heuristics"]
+        self.edge_cutter=state["edge_cutter"]
+        self.debug_hook=state["debug_hook"]
+        self.cache_path=state["cache_path"]
+        self._init_non_picklable()
 
     def neighbors(self,node):
         #logger.info(f"trying to get neighbors")
@@ -403,3 +425,4 @@ class AStarSolver:
             except Exception as e:
                 pass
         raise NoRouteException(f"no route found from {start} to any of {ends}")
+

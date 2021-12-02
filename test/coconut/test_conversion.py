@@ -1,20 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x74d980cc
+# __coconut_hash__ = 0x92ef372d
 
-# Compiled with Coconut version 1.5.0 [Fish License]
+# Compiled with Coconut version 1.6.0 [Vocational Guidance Counsellor]
 
 # Coconut Header: -------------------------------------------------------------
 
 from __future__ import generator_stop
-import sys as _coconut_sys, os.path as _coconut_os_path
-_coconut_file_path = _coconut_os_path.dirname(_coconut_os_path.abspath(__file__))
+import sys as _coconut_sys, os as _coconut_os
+_coconut_file_dir = _coconut_os.path.dirname(_coconut_os.path.abspath(__file__))
 _coconut_cached_module = _coconut_sys.modules.get("__coconut__")
-if _coconut_cached_module is not None and _coconut_os_path.dirname(_coconut_cached_module.__file__) != _coconut_file_path:
+if _coconut_cached_module is not None and _coconut_os.path.dirname(_coconut_cached_module.__file__) != _coconut_file_dir:
     del _coconut_sys.modules["__coconut__"]
-_coconut_sys.path.insert(0, _coconut_file_path)
+_coconut_sys.path.insert(0, _coconut_file_dir)
+_coconut_module_name = _coconut_os.path.splitext(_coconut_os.path.basename(_coconut_file_dir))[0]
+if _coconut_module_name and _coconut_module_name[0].isalpha() and all(c.isalpha() or c.isdigit() for c in _coconut_module_name) and "__init__.py" in _coconut_os.listdir(_coconut_file_dir):
+    _coconut_full_module_name = str(_coconut_module_name + ".__coconut__")
+    import __coconut__ as _coconut__coconut__
+    _coconut__coconut__.__name__ = _coconut_full_module_name
+    for _coconut_v in vars(_coconut__coconut__).values():
+        if getattr(_coconut_v, "__module__", None) == "__coconut__":
+            try:
+                _coconut_v.__module__ = _coconut_full_module_name
+            except AttributeError:
+                _coconut_v_type = type(_coconut_v)
+                if getattr(_coconut_v_type, "__module__", None) == "__coconut__":
+                    _coconut_v_type.__module__ = _coconut_full_module_name
+    _coconut_sys.modules[_coconut_full_module_name] = _coconut__coconut__
 from __coconut__ import *
-from __coconut__ import _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable
+from __coconut__ import _coconut_call_set_names, _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable, _coconut_self_match_types, _coconut_dict_merge, _coconut_exec
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
@@ -35,52 +49,54 @@ from data_tree.coconut.convert import _edges  # from data_tree.coconut.convert i
 from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import AStarSolver
 start = str_to_img_def("numpy,float32,HWC,RGB,0_1")  # start = str_to_img_def("numpy,float32,HWC,RGB,0_1")
 end = str_to_img_def("torch,uint8,BHWC,RGB,0_255")  # end = str_to_img_def("torch,uint8,BHWC,RGB,0_255")
-class END(_coconut.collections.namedtuple("END", ""), ImageDef):  # data END from ImageDef
+class END(_coconut.collections.namedtuple("END", ()), ImageDef):  # data END from ImageDef
     __slots__ = ()  # data END from ImageDef
     __ne__ = _coconut.object.__ne__  # data END from ImageDef
     def __eq__(self, other):  # data END from ImageDef
         return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data END from ImageDef
     def __hash__(self):  # data END from ImageDef
         return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data END from ImageDef
-
-class DUMMY(_coconut.collections.namedtuple("DUMMY", ""), ImageDef):  # data DUMMY from ImageDef
+    __match_args__ = ()  # data END from ImageDef
+_coconut_call_set_names(END)  # data DUMMY from ImageDef
+class DUMMY(_coconut.collections.namedtuple("DUMMY", ()), ImageDef):  # data DUMMY from ImageDef
     __slots__ = ()  # data DUMMY from ImageDef
     __ne__ = _coconut.object.__ne__  # data DUMMY from ImageDef
     def __eq__(self, other):  # data DUMMY from ImageDef
         return self.__class__ is other.__class__ and _coconut.tuple.__eq__(self, other)  # data DUMMY from ImageDef
     def __hash__(self):  # data DUMMY from ImageDef
         return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data DUMMY from ImageDef
-
+    __match_args__ = ()  # data DUMMY from ImageDef
+_coconut_call_set_names(DUMMY)  # def dummy_rule(imdef):
 def dummy_rule(imdef):  # def dummy_rule(imdef):
-    return [(lambda a: a, end, 1, "dummy")]  #     return [(a->a,end,1,"dummy")]
+    return ([(lambda a: a, end, 1, "dummy"), ])  #     return [(a->a,end,1,"dummy")]
 
 def dummy_rule2(node):  # def dummy_rule2(node):
     paths = []  #     paths = []
-    _coconut_match_to = node  #     case node:
-    _coconut_case_check_0 = False  #     case node:
-    if (_coconut.isinstance(_coconut_match_to, DUMMY)) and (_coconut.len(_coconut_match_to) == 0):  #     case node:
-        _coconut_case_check_0 = True  #     case node:
-    if _coconut_case_check_0:  #     case node:
-        paths += [(lambda a: END, END(), 1, "to_end")]  #             paths += [(a->END,END(),1,"to_end")]
-    if not _coconut_case_check_0:  #         match _ is ImageDef:
-        if _coconut.isinstance(_coconut_match_to, ImageDef):  #         match _ is ImageDef:
-            _coconut_case_check_0 = True  #         match _ is ImageDef:
-        if _coconut_case_check_0:  #         match _ is ImageDef:
-            paths += [(lambda a: DUMMY, DUMMY(), 1, "to_dummy")]  #             paths += [(a->DUMMY,DUMMY(),1,"to_dummy")]
+    _coconut_case_match_to_0 = node  #     case node:
+    _coconut_case_match_check_0 = False  #     case node:
+    if (_coconut.isinstance(_coconut_case_match_to_0, DUMMY)) and (_coconut.len(_coconut_case_match_to_0) == 0):  #     case node:
+        _coconut_case_match_check_0 = True  #     case node:
+    if _coconut_case_match_check_0:  #     case node:
+        paths += [(lambda a: END, END(), 1, "to_end"), ]  #             paths += [(a->END,END(),1,"to_end")]
+    if not _coconut_case_match_check_0:  #         match _ is ImageDef:
+        if _coconut.isinstance(_coconut_case_match_to_0, ImageDef):  #         match _ is ImageDef:
+            _coconut_case_match_check_0 = True  #         match _ is ImageDef:
+        if _coconut_case_match_check_0:  #         match _ is ImageDef:
+            paths += [(lambda a: DUMMY, DUMMY(), 1, "to_dummy"), ]  #             paths += [(a->DUMMY,DUMMY(),1,"to_dummy")]
 
-    return paths  #     return paths
+    return (paths)  #     return paths
 
 def test_something():  # def test_something():
     def neighbors(node):  #     def neighbors(node):
-        return [(lambda a: a + "a", node + "a", 1, "add_a")]  #         return [(a->a+"a",node + "a",1,"add_a")]
+        return ([(lambda a: a + "a", node + "a", 1, "add_a"), ])  #         return [(a->a+"a",node + "a",1,"add_a")]
     def matcher(node):  #     def matcher(node):
-        return node == "aaa"  #         return node == "aaa"
+        return (node == "aaa")  #         return node == "aaa"
     def heuristics(node):  #     def heuristics(node):
-        return 0  #         return 0
+        return (0)  #         return 0
     (log_conversion)(astar(start="a", matcher=matcher, neighbors=neighbors, heuristics=heuristics).result)  #     astar(
 
 def imdef_neighbors(imdef):  # def imdef_neighbors(imdef):
-    return [(e.f, e.b, e.cost, e.name) for e in _edges(imdef)]  #     return [(e.f,e.b,e.cost,e.name) for e in _edges(imdef)]
+    return ([(e.f, e.b, e.cost, e.name) for e in _edges(imdef)])  #     return [(e.f,e.b,e.cost,e.name) for e in _edges(imdef)]
 
 def test_new_astar():  # def test_new_astar():
     (log_conversion)(astar(start=start, matcher=lambda d: d == end, neighbors=imdef_neighbors, heuristics=lambda a: 0).result)  #     astar(
@@ -94,7 +110,7 @@ def log_conversion(converter):  # def log_conversion(converter):
 def test_astar_solver():  # def test_astar_solver():
 
 
-    solver = AStarSolver(rules=[imdef_neighbors])  #     solver=AStarSolver(
+    solver = AStarSolver(rules=[imdef_neighbors, ])  #     solver=AStarSolver(
     (log_conversion)(solver.search_direct(start, end))  #     solver.search_direct(start,end) |> log_conversion
 
 
@@ -136,6 +152,9 @@ def test_omni_converter():  # def test_omni_converter():
     from data_tree.coconut.auto_data import AutoData  #     from data_tree.coconut.auto_data import AutoData
     x = np.ones((100, 100, 3), dtype="float32")  #     x = np.ones((100,100,3),dtype="float32")
     auto_x = auto_img("numpy,float32,HW,L,0_1")(x)  # type: AutoData  #     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
+    if "__annotations__" not in _coconut.locals():  #     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
+        __annotations__ = {}  #     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
+    __annotations__["auto_x"] = 'AutoData'  #     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
     assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()  #     assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()
     assert (auto_x.to(v_range="0_255") == 255).all()  #     assert (auto_x.to(v_range="0_255") == 255).all()
     _x = auto_x.to(dtype="uint8", v_range="0_255")  #     _x = auto_x.to(dtype="uint8",v_range="0_255")

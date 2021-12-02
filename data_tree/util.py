@@ -7,18 +7,23 @@ from queue import Queue, Full
 from threading import Thread
 from typing import Callable
 
+import dill
 import numpy as np
 import pandas as pd
-from IPython import embed
+import cloudpickle
 from cytoolz import memoize
 from easydict import EasyDict as edict
 from filelock import FileLock
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
+from snoop import snoop
 from tqdm.autonotebook import tqdm
 
 # from data_tree._series import Series
+from data_tree.checks import check_picklable
+from data_tree.get_callee import get_callee
+from data_tree.picklable_file_lock import PicklableFileLock
 
 WARN_SLOW_PREFETCH = False
 import pickle
@@ -26,9 +31,9 @@ import pickle
 
 # logger.remove()
 # logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
-
 def load_or_save(path, proc, backend=pickle):
     try:
+        logger.info(f"opening file at:{path}")
         with open(path, "rb") as f:
             # logger.info(f"using backend:{backend}")
             logger.info(f"pid:|{os.getpid()}|loading cache at {path}")
@@ -48,6 +53,7 @@ def load_or_save(path, proc, backend=pickle):
                 backend.dump(res, f)
         except Exception as e:
             logger.warning(f"failed to cache proc result at {path}. check the filesystem is writable.")
+        logger.info(f"resolved cache load failure.")
         return res
 
 
@@ -308,17 +314,40 @@ class Pickled(PickledTrait):
         self._value = None
         self.path = path
         self.proc = proc
-        self.lock = FileLock(self.path + ".lock")
-        ensure_path_exists(self.lock.lock_file)
+        self.lock = PicklableFileLock(self.path + ".lock")
+        ensure_path_exists(self.lock.lock.lock_file)
         self.backend = backend
+
+    def __getstate__(self):
+        state = dict(
+            path=self.path,
+            proc=self.proc, # I think this is preventing pickling.. but it is a must to pickle this.
+            backend="pickle" if self.backend == pickle else None
+        )
+        # at this point self.proc requires recursive pickling
+        return state
+
+    def __setstate__(self, state):
+        self.loaded = False
+        self._value = None
+        self.path = state["path"]
+        self.proc = state["proc"]
+        self.lock = PicklableFileLock(self.path + ".lock")
+        self.backend = pickle if state["backend"] == "pickle" else None
 
     @property
     def value(self):
+        import threading
+        # callee = get_callee()
+        # logger.info(f"cache value access from {callee}")
+        # logger.info(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.lock_file}")
         with self.lock:
+            # logger.info(f"{threading.current_thread().name}:aqquired lock:{self.lock.lock_file}")
             if not self.loaded:
                 self._value = load_or_save(self.path, self.proc, backend=self.backend)
                 self.loaded = True
-            return self._value
+        # logger.info(f"{threading.current_thread().name}:released lock:{self.lock.lock_file}")
+        return self._value
 
     def clear(self):
         with self.lock:
@@ -335,7 +364,6 @@ class Pickled(PickledTrait):
 
     def map(self, f):
         return MappedPickled(self, f)
-
 
 
 class MappedPickled(PickledTrait):

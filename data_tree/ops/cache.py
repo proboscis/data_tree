@@ -24,7 +24,7 @@ from data_tree import auto
 from data_tree._series import SourcedSeries, NumpySeries, MappedSeries, Series
 from data_tree.coconut.astar import Conversion
 from data_tree.indexer import IdentityIndexer, Indexer
-from data_tree.resource import ContextResource
+from data_tree.custom_resource import ContextResource
 from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_generator
 
 

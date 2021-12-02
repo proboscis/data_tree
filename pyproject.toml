@@ -5,7 +5,7 @@ description = ""
 authors = ["Kento Masui"]
 
 [tool.poetry.dependencies]
-python = "^3.6.9"
+python = "^3.8"
 h5py = "*"
 tqdm = "*"
 frozendict = "*"
@@ -33,7 +33,8 @@ filelock = "*"
 makefun = "^1.11.3"
 dill = "^0.3.4"
 tabulate = "^0.8.9"
-torchvision = "^0.10.0"
+torchvision = "*"
+Expression = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
 

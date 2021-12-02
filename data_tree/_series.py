@@ -11,7 +11,7 @@ from functools import partial
 from hashlib import sha1
 from multiprocessing.dummy import Pool
 from random import randint
-from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar, Generic, Generator, Iterator
+from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar, Generic, Generator, Iterator, Dict
 
 import h5py
 
@@ -29,10 +29,10 @@ from tqdm.autonotebook import tqdm
 
 #from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
-from data_tree.coconut.visualization import infer_widget
+#from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2, get_global_holder
-from data_tree.resource import Resource
+from data_tree.custom_resource import Resource
 from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled
 
 
@@ -994,6 +994,15 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
     def random(self):
         i = randint(0, self.total - 1)
         return self[i]
+
+    def to_dict_of_series(self,keys:List[str])->Dict[str,"Series"]:
+        return {k:self.map(lambda item:item[k]) for k in keys}
+
+    @staticmethod
+    def to_series_of_dict(src:Dict[str,"Series"]):
+        keys = list(src.keys())
+        indexed = list(enumerate(keys))
+        return Series.zip(*[src[k] for k in keys]).map(lambda t:{k:t[i] for i,k in indexed})
 
 
 #    def zip_with_index(self):

@@ -11,7 +11,7 @@ from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
-from archpainter.wandb_util.artifact_logger import ArtifactMetadata, ArtifactIdentifier
+from archpainter.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
 from archpainter.wandb_util.path_artifact import ManagedPathArtifactLogger, ManagedPathArtifactLoader
 from data_tree import auto
 from data_tree.image_store import ImageStore, ImageStoreCreator

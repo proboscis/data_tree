@@ -5,7 +5,7 @@ from typing import NamedTuple
 import yaml
 from loguru import logger
 
-from data_tree.resource import fopen
+from data_tree.custom_resource import fopen
 from data_tree.util import ensure_path_exists, dict_hash
 
 

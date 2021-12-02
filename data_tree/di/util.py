@@ -1,33 +1,31 @@
 import abc
 import inspect
-from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, field, replace
+from functools import wraps
 from itertools import chain
-from types import FunctionType
-from typing import Union, Type, TypeVar, Callable
+from typing import Union, Type, TypeVar, Callable, Dict, Any
 
 import pinject
-from IPython import embed
 from cytoolz import merge
+from expression.collections import Map
 from loguru import logger
 from makefun import create_function, wraps
+from pampy import match
 from pinject import BindingSpec
-from pinject.object_graph import ObjectGraph
 from pinject.scoping import SingletonScope
-from pprintpp import pformat
+from returns.result import safe
 
-from injected import Injected
+from data_tree.checks import check_picklable
+from data_tree.di.design import Bind, FunctionProvider, ProviderTrait, InjectedProvider, PinjectConfigure, \
+    PinjectProvider, ensure_self_arg, PinjectBind
+from data_tree.di.graph import ExtendedObjectGraph
+from data_tree.injected import Injected
 
 prototype = pinject.provides(in_scope=pinject.PROTOTYPE)
 # is it possible to create a binding class which also has an ability to dynamically add..?
 # yes. actually.
 T = TypeVar("T")
-
-
-class TraversableBinding(BindingSpec):
-    def traversed(self):
-        return Design.gather_spec(self)
 
 
 def inject_proto(all_except=None, arg_names=None):
@@ -55,35 +53,6 @@ def method_to_function(method):
     return create_function(signature, impl)
 
 
-def ensure_self_arg(func):
-    """
-    adds a self arg in to func signature if not present
-    :param func:
-    :return:
-    """
-    argspec = inspect.getfullargspec(func)
-    if argspec.args and argspec.args[0] == "self":
-        return func
-    assert "self" not in argspec.args, f"{argspec.args}"
-    # source = inspect.getsource(func)
-    module = inspect.getmodule(func)
-    try:
-        lines, ln = inspect.getsourcelines(func)
-        fname = f"""{module.__name__.replace(".", "_")}_ln_{ln}_{func.__name__}"""
-    except OSError as ose:
-        fname = f"""{module.__name__.replace(".", "_")}_{func.__name__}"""
-
-    signature = f"""{fname}({" ,".join(["self"] + (argspec.args or []) + (argspec.varargs or []))})"""
-
-    # logger.error(source)
-
-    def impl(self, *args, **kwargs):
-        return func(*args, **kwargs)  # gets multiple values for self
-
-    assert len(argspec.kwonlyargs) == 0, "providing method cannot have any kwonly args"
-    return create_function(signature, impl)
-
-
 def none_provider(func):
     argspec = inspect.getfullargspec(func)
     signature = f"""none_provider({" ,".join((argspec.args or []) + (argspec.varargs or []))})"""
@@ -96,63 +65,20 @@ def none_provider(func):
     return create_function(signature, impl)
 
 
-class ExtendedObjectGraph:
-    """
-    an object graph which can also provide instances based on its name not only from class object.
-    """
-
-    def __init__(self, design: "Design", src: ObjectGraph):
-        self.design = design
-        self.src = src
-
-    def provide(self, target: Union[str, Type[T], Injected[T]]) -> Union[object, T]:
-        if isinstance(target, str):
-            code = compile(f"""def __init__(self,{target}):self.res={target}""", "<string>", "exec")
-            fn = FunctionType(code.co_consts[0], globals(), "__init__")
-            Request = type("Request", (object,), dict(__init__=fn))
-            return self.src.provide(Request).res
-        elif isinstance(target, type):
-            return self.src.provide(target)
-        elif isinstance(target, Injected):
-            deps = target.dependencies()
-            if 'self' in deps:
-                deps.remove('self')
-            signature = f"""__init__(self,{','.join(deps)})"""
-
-            def impl(self,**kwargs):
-                self.data = target.get_provider()(**kwargs)
-
-            __init__ = create_function(signature, func_impl=impl)
-            Request = type("Request", (object,), dict(__init__=__init__))
-            return self.src.provide(Request).data
-        else:
-            raise TypeError(f"target must be either class or a string")
-
-    def run(self, f):
-        argspec = inspect.getfullargspec(f)
-        # logger.info(self)
-        assert argspec.varargs is None
-        args = [self.provide(k) for k in argspec.args]
-        return f(*args)
-
-    def __repr__(self):
-        return f"ExtendedObjectGraph of a design:\n{self.design}"
-
-
 class DesignBindContext:
     def __init__(self, src: "Design", key: str):
         self.src = src
         self.key = key
 
     def to_class(self, cls: type, **kwargs):
-        return self.src.bind_immutable(self.key, to_class=cls, **kwargs)
+        return self.src.bind_imm(self.key, to_class=cls, **kwargs)
 
     def to_instance(self, instance, **kwargs):
-        return self.src.bind_immutable(self.key, to_instance=instance, **kwargs)
+        return self.src.bind_imm(self.key, to_instance=instance, **kwargs)
 
     def to_provider(self, provider, all_except=None, arg_names=None, in_scope=None):
-        return self.src.bind_provider_immutable(self.key, provider, all_except=all_except, arg_names=arg_names,
-                                                in_scope=in_scope)
+        return self.src.bind_provider_imm(self.key, provider, all_except=all_except, arg_names=arg_names,
+                                          in_scope=in_scope)
 
 
 def extract_argnames(func):
@@ -172,22 +98,292 @@ T = TypeVar("T")
 
 @dataclass
 class Design:
+    # TODO implement __getstate__ and __setstate__ with dill! so that this can be pickled.
+    # basically a State/Free Monad on Pinject's BindingSpec
     """
     This is an injection binding class which can be used to compose configures and providers.
     """
-    # TODO remove bind_inplace feature
-    providers: dict = field(default_factory=dict)
-    configures: dict = field(default_factory=dict)
+    bindings: Dict[str, Bind] = field(default_factory=dict)
     multi_binds: dict = field(default_factory=dict)
     modules: list = field(default_factory=list)
     classes: list = field(default_factory=list)
 
-    def __post_init__(self):
-        assert isinstance(self.multi_binds, dict)
+    def __getstate__(self):
+        res = dict(
+            bindings=self.bindings,
+            multi_binds=self.multi_binds,
+            modules=[m.__name__ for m in self.modules],
+            classes=self.classes,
+        )
+        check_picklable(self.bindings)
+        return res
+
+    def __setstate__(self, state):
+        mods = state["modules"]
+        import importlib
+        mods = [importlib.import_module(
+            name=m
+        ) for m in mods]
+        state["modules"] = mods
+        for k, v in state.items():
+            setattr(self, k, v)
+
+    def __add__(self, other: Union["Design", BindingSpec, Dict[str, Bind]]):
+        other = self._ensure_dbc(other)
+        return self.merged(other)
+
+    def bind(self, key: str) -> DesignBindContext:
+        return DesignBindContext(self, key)
+
+    def _ensure_dbc(self, other: Union["Design", BindingSpec, Dict[str, Bind]]):
+        return match(other,
+                     BindingSpec, lambda o: Design.gather_spec(o),
+                     Design, lambda d: d,
+                     Dict[str, Bind], lambda d: Design(d)
+                     )
+
+    def _merge_multi_binds(self, src, dst):
+        src = Map.of(**src)
+        dst = Map.of(**dst)
+        keys = src.keys() | dst.keys()
+        multi = {k: (
+                src.try_find(k).default_value(set()) | dst.try_find(k).default_value(set())
+        ) for k in keys}
+        return multi
+
+    def merged(self, other: "Design"):
+        """creates another instance with merged bindings. does not modify self"""
+        # logger.debug(f"merging:\n\t{self} to \n\t{other}")
+        assert isinstance(other, Design), f"merge target is not a Design. type:{type(other)}:{other}"
+
+        res = Design(
+            bindings=merge(self.bindings, other.bindings),
+            multi_binds=self._merge_multi_binds(self.multi_binds, other.multi_binds),
+            modules=list(set(self.modules) | set(other.modules)),
+            classes=list(set(self.classes) | set(other.classes)),
+        )
+        return res
+
+    def bind_provider_imm(self, key, f, all_except=None, arg_names=None, in_scope=None):
+        bind = match(f,
+                     Injected, lambda i: Design({key: InjectedProvider(i)}),
+                     ProviderTrait, lambda pt: Design({key: pt}),
+                     callable, lambda c: Design(
+                {key: PinjectProviderBind(f, all_except=all_except, arg_names=arg_names, in_scope=in_scope)})
+                     )
+        res = self + bind
+        return res
+
+    def bind_imm(self, key, **kwargs):
+        from pampy import _
+        return self + match(kwargs,
+                            {"to_class": Injected}, lambda injected: Design(bindings={key: InjectedProvider(injected)}),
+                            _, Design(bindings={key: PinjectBind(kwargs)})
+                            )
+
+    def bind_instance(self, **kwargs):
+        x = self
+        for k, v in kwargs.items():
+            x = x.bind(k).to_instance(v)
+        return x
+
+    def bind_provider(self, **kwargs):
+        x = self
+        for k, v in kwargs.items():
+            # logger.info(f"binding provider:{k}=>{v}")
+            x = x.bind(k).to_provider(v)
+        return x
+
+    def bind_class(self, **kwargs):
+        x = self
+        for k, v in kwargs.items():
+            x = x.bind(k).to_class(v)
+        return x
+
+    def to_graph(self, modules=None, classes=None) -> ExtendedObjectGraph:
+        modules = self.modules + (modules or [])
+        classes = self.classes + (classes or [])
+        # logger.info(f"to_graph:\n\t{pformat(modules)}\n\t{pformat(classes)}")
+        return ExtendedObjectGraph(
+            self,
+            pinject.new_object_graph(
+                modules=modules,
+                binding_specs=[self.to_binding_spec()],
+                classes=classes
+            ))
+
+    def run(self, f, modules=None, classes=None):
+        return self.to_graph(modules, classes).run(f)
+
+    def provide(self, target: Union[str, Type[T]], modules=None, classes=None) -> T:
+        """
+        :param target: provided name
+        :param modules: modules to use for graph construction
+        :return:
+        """
+        return self.to_graph(modules=modules, classes=classes).provide(target)
+
+    @staticmethod
+    def gather_spec(b: BindingSpec) -> "Design":
+        assert isinstance(b, BindingSpec)
+        dep_spec = Design()
+        for dep in b.dependencies() or []:
+            spec = Design.gather_spec(dep)
+            # logger.debug(f"dependency:{spec}")
+            dep_spec += spec
+        spec = Design()
+
+        if hasattr(b, "configure"):
+            @safe
+            def accumulate():
+                def binder(key, **kwargs):
+                    nonlocal spec
+                    spec = spec.bind_imm(key, **kwargs)
+
+                # logger.debug(f"configuring binder:{b}")
+                b.configure(binder)
+
+            accumulate()
+        for item in dir(b):
+            if item.startswith("provide"):
+                method = getattr(b, item)
+                if callable(method):
+                    # logger.debug(f"binding from spec:{item}")
+                    k = item.replace("provide_", "")
+                    spec = spec + Design({k: DirectPinjectProvider(getattr(b, item))})
+                    assert k in spec
+        res = dep_spec + spec
+        debug = res.to_binding_spec()
+        for item in dir(b):
+            if item.startswith("provide"):  # and callable(getattr(b,item)):
+                k = item.replace("provide_", "")
+                # how the hell a function is not callable
+                # ok the item is PinjectProvider, not function.
+                # how can BindingSpec have an attribute as PinjectProvider?
+                assert k in res, f"{k} not in res. key in spec?={k in spec},obj:{getattr(b, item)},callable:{callable(getattr(b, item))}"
+                assert item in dir(debug)
+        return res
+
+    @staticmethod
+    def traverse_specs(*bindings: BindingSpec):
+        spec = Design()
+        for b in bindings:
+            spec = spec + b
+        # logger.debug(f"traversed binding:\n\t{spec}")
+        return spec
+
+    def copy(self):
+        return self.__class__(
+            bindings=self.bindings.copy(),
+            multi_binds=copy(self.multi_binds),
+            modules=copy(self.modules),
+            classes=copy(self.classes),
+        )
+
+    def map_value(self, src_key, f):
+        """
+        :param src_key:
+        :param f:
+        :return: Design
+        """
+        mapped_binding = self.bindings[src_key].map(f)
+        return self + Design({src_key: mapped_binding})
+
+    def keys(self):
+        return self.bindings.keys()
+
+    def unbind(self, key) -> "Design":
+        if key in self.bindings:
+            copied = self.bindings.copy()
+            del copied[key]
+            return replace(self,
+                           bindings=copied
+                           )
+
+    def __contains__(self, item):
+        return item in self.bindings
+
+    def __getitem__(self, item):
+        return self.bindings[item]
+
+    def __str__(self):
+        import tabulate
+        binds = tabulate.tabulate(sorted(list(self.bindings.items())))
+        multis = tabulate.tabulate(sorted(list(self.multi_binds.items())))
+        return binds + "\n" + multis
+
+    def __repr__(self):
+        return str(self)
+
+    def to_str_dict(self):
+        res = dict()
+        from pampy import _
+        for k, v in self.bindings.items():
+            res[k] = match(v,
+                           FunctionProvider, lambda fp: fp.f.__name__,
+                           InjectedProvider, lambda i: str(i),
+                           PinjectBind({'to_class': _}), lambda cls: str(cls),
+                           PinjectBind({'to_instance': _}), lambda ins: str(ins),
+                           _, lambda any: str(any)
+                           )
+        return res
+
+    def to_binding_spec(self):
+        """Generate a BindingSpec class for pinject and returns its instance."""
+
+        design = self
+        # what if there exists a binding for the same key for multi_binding?
+        # do we overwrite? or aggregate?
+        # aggregation is safer I think.
+        for k, providers in self.multi_binds.items():
+            # assert k not in self.bindings,f"multi binding key overwrapping with normal binding key,{k}"
+            if len(providers) == 0:
+                design = design.bind_instance(**{k: set()})
+            else:
+                design = self._add_multi_binding(design, k, providers)
+        bindings = Map.of(**design.bindings).map(lambda k, v: v.to_pinject_binding(k))
+        configures = bindings.filter(lambda k, v: isinstance(v, PinjectConfigure))
+        providers = bindings.filter(lambda k, v: isinstance(v, PinjectProvider)).map(
+            lambda k, v: self._ensure_provider_name(k, v.method)
+        )
+
+        def configure(self, bind):
+            for c, v in dict(configures).items():
+                # logger.info(f"bind :{v.kwargs}")
+                bind(c, **v.kwargs)
+
+        DynamicBinding = type("DynamicBinding", (BindingSpec,),
+                              {
+                                  "configure": configure,
+                                  **{f"provide_{k}": v for k, v in providers.items()},
+                              })
+
+        return DynamicBinding()
+
+    def _ensure_provider_name(self, k, method):
+        """set appropriate name for provider function to be recognized by pinject"""
+        name = f"provide_{k}"
+        if not method.__name__ == name:
+            # there are cases where you cannot directly set __name__ attribute.
+            # and sometimes pinject.inject decorator is already applied so wrapping that again is not appropriate
+            # so, the solution is to first try setting __name__ and then try wrapping if failed.
+            try:
+                method.__name__ = name
+                return method
+            except AttributeError as ae:
+                logger.warning(f"somehow failed to assign new name to a provider function. trying to wrap.")
+
+                def _wrapper(self, *args, **kwargs):
+                    return method(*args, **kwargs)
+
+                _wrapper.__name__ = name
+                _wrapper.__signature__ = inspect.signature(method)
+                return _wrapper
+        return method
 
     def multi_bind_provider(self, **kwargs):
         """:cvar adds a provider to specified key so that result of calling multiple providers will be
-        aggreageted and provided as a list.
+        aggregated and provided as a list.
         """
         return self + Design(
             multi_binds={
@@ -204,29 +400,7 @@ class Design:
             }
         )
 
-    def to_binding_spec(self):
-        """Generate a BindingSpec class for pinject and returns its instance."""
-
-        design = self
-        for k, providers in self.multi_binds.items():
-            if len(providers) == 0:
-                design = design.bind_instance(**{k: []})
-            else:
-                design = self.add_multi_binding(design, k, providers)
-        configures = design.configures
-
-        def configure(self, bind):
-            for c, v in configures.items():
-                bind(c, **v)
-
-        DynamicBinding = type("DynamicBinding", (BindingSpec,),
-                              {
-                                  "configure": configure,
-                                  **{f"provide_{k}": v for k, v in design.providers.items()}
-                              })
-        return DynamicBinding()
-
-    def add_multi_binding(self, design, k, providers):
+    def _add_multi_binding(self, design, k, providers):
         deps = [get_class_aware_args(f) for f in providers]
         dep_set = set(chain(*deps))
         if "self" in dep_set:
@@ -255,417 +429,16 @@ class Design:
         design = design.bind_provider(**binding)
         return design
 
-    def __add__(self, other: Union["Design", BindingSpec]):
-        other = self._ensure_dbc(other)
-        return self.merged(other)
 
-    def bind(self, key: str) -> DesignBindContext:
-        return DesignBindContext(self, key)
+@dataclass
+class DirectPinjectProvider(Bind):
+    method: Callable
 
-    def update(self, *others: Union["Design", BindingSpec]):
-        """adds bindings from others. into this instance. inplace operation"""
-        for o in others:
-            self.merge_inplace(o)
+    def to_pinject_binding(self, key: str) -> Union[PinjectConfigure, PinjectProvider]:
+        return PinjectProvider(self.method)
 
-    def _ensure_dbc(self, other: Union["Design", BindingSpec]):
-        if isinstance(other, BindingSpec):
-            other = Design.gather_spec(other)
-        return other
-
-    def merged(self, other: "Design"):
-        """creates another instance with merged bindings. does not modify self"""
-        # logger.debug(f"merging:\n\t{self} to \n\t{other}")
-        assert isinstance(other, Design), f"merge target is not a Design. type:{type(other)}:{other}"
-        res = Design(
-            providers=self.providers.copy(),
-            configures=self.configures.copy(),
-            multi_binds=self.multi_binds.copy(),
-            modules=list(set(self.modules) | set(other.modules)),
-            classes=list(set(self.classes) | set(other.classes)),
-        )
-        for k, v in other.providers.items():
-            if k in res.configures:
-                # logger.warning(f"override configure\n\t:{k}->{self.configures[k]} to {v}")
-                del res.configures[k]
-            if k in res.providers:
-                pass
-                # logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
-            res.providers[k] = v
-        for k, v in other.configures.items():
-            if k in res.configures:
-                pass
-                # logger.warning(f"override configure\n\t:{k}->{self.configures[k]} to {v}")
-            if k in res.providers:
-                # logger.warning(f"override provider\n\t:{k}->{self.providers[k]} to {v}")
-                del res.providers[k]
-            res.configures[k] = v
-        for k, v in other.multi_binds.items():
-            res.multi_binds[k] = (res.multi_binds.get(k) or set()) | v
-
-        # logger.debug(f"merged:\n\t{res}")
-        return res
-
-    def merge_inplace(self, other: "Union[Design,BindingSpec]"):
-        other = self._ensure_dbc(other)
-        merged = self.merged(other)
-        self.providers = merged.providers
-        self.configures = merged.configures
-        self.modules = merged.modules
-        self.classes = merged.classes
-        self.multi_binds = merged.multi_binds
-        return self
-
-    def bind_provider_inplace(self, key, f, all_except=None, arg_names=None, in_scope=None):
-        updates = self._bind_provider_updates(key, f, all_except=all_except, arg_names=arg_names, in_scope=None)
-        return self.merge_inplace(updates)
-
-    def _bind_provider_updates(self, key, f, all_except=None, arg_names=None, in_scope=None):
-        argspec = inspect.getfullargspec(f)
-        if f.__name__ == "<lambda>":
-            f.__name__ = "_lambda_"
-        # so first you need to convert a method in to function
-        if "__name__" not in dir(f):
-            f = method_to_function(f)
-        # now ensure the function has self arg
-        f = ensure_self_arg(f)
-
-        @wraps(f)  # called 78 times
-        def wrapper(*args, **kwargs):
-            return f(*args, **kwargs)
-
-        wrapper.__name__ = f"provide_{key}"
-        if all_except is not None or arg_names is not None:
-            wrapper = inject_proto(all_except=all_except, arg_names=arg_names)(wrapper)
-        if in_scope is not None:
-            wrapper = pinject.provides(in_scope=in_scope)(wrapper)
-        new_argspec = inspect.getfullargspec(wrapper)
-        # logger.debug(f"set_provider:{wrapper} \n\t {new_argspec}")
-        if "self" not in new_argspec.args:
-            embed()
-            raise RuntimeError("self must be insided signature for provider")
-        return Design(
-            providers={key: wrapper},
-            configures=dict(),
-            modules=[]
-        )
-
-    def bind_provider_immutable(self, key, f, all_except=None, arg_names=None, in_scope=None):
-        return self + self._bind_provider_updates(key, f, all_except=all_except, arg_names=arg_names, in_scope=in_scope)
-
-    def _bind_updates(self, key, **kwargs):
-        _override = Design(
-            configures={key: kwargs},
-        )
-        return _override
-
-    def bind_inplace(self, key, **kwargs):
-        """
-        :param key:
-        :param kwargs: to_instance or to_class, and annotated_with
-        :return:
-        """
-        return self.merge_inplace(self._bind_updates(key, **kwargs))
-
-    def bind_immutable(self, key, **kwargs):
-        return self + self._bind_updates(key, **kwargs)
-
-    def batch_bind_inplace(self, **kwargs):
-        x = self
-        for k, p in kwargs.items():
-            x.bind_inplace(k, **p)
-        return x
-
-    def bind_instance(self, **kwargs):
-        x = self
-        for k, v in kwargs.items():
-            x = x.bind(k).to_instance(v)
-        return x
-
-    def bind_auto(self,**kwargs):
-        x = self
-        for k,v in kwargs.items():
-            match v:
-                case type():
-                    x = x.bind(k).to_class(v)
-                case Callable():
-                    x = x.bind(k).to_instance(v)
-                case Injected():
-                    x = x.bind(k).to_provider(v.get_provider())
-                case _:
-                    x = x.bind(k).to_instance(v)
-
-
-    def bind_provider(self, **kwargs):
-        x = self
-        for k, v in kwargs.items():
-            x = x.bind(k).to_provider(v)
-        return x
-
-    def bind_class(self, **kwargs):
-        x = self
-        for k, v in kwargs.items():
-            x = x.bind(k).to_class(v)
-        return x
-
-    def to_graph(self, modules=None, classes=None) -> ExtendedObjectGraph:
-        modules = self.modules + (modules or [])
-        classes = self.classes + (classes or [])
-        # logger.info(f"to_graph:\n\t{pformat(modules)}\n\t{pformat(classes)}")
-        return ExtendedObjectGraph(
-            self,
-            pinject.new_object_graph(
-                modules=modules, binding_specs=[self.to_binding_spec()],
-                classes=classes
-            ))
-
-    def run(self, f, modules=None, classes=None):
-        return self.to_graph(modules, classes).run(f)
-
-    def provide(self, target: Union[str, Type[T]], modules=None, classes=None) -> T:
-        """
-        :param target: provided name
-        :param modules: modules to use for graph construction
-        :return:
-        """
-        return self.to_graph(modules=modules, classes=classes).provide(target)
-
-    @staticmethod
-    def gather_spec(b: BindingSpec) -> "Design":
-        assert isinstance(b, BindingSpec)
-        dep_spec = Design()
-        for dep in b.dependencies() or []:
-            spec = Design.gather_spec(dep)
-            # logger.debug(f"dependency:{spec}")
-            dep_spec = dep_spec.merged(spec)
-        spec = Design()
-
-        def binder(key, **kwargs):
-            spec.configures[key] = kwargs
-
-        if hasattr(b, "configure"):
-            try:
-                b.configure(binder)
-            except NotImplementedError as nie:
-                pass
-        for item in dir(b):
-            if item.startswith("provide") and callable(getattr(b, item)):
-                spec.providers[item.replace("provide_", "")] = getattr(b, item)
-        res = dep_spec.merged(spec)
-        return res
-
-    @staticmethod
-    def traverse_specs(*bindings: BindingSpec):
-        spec = Design()
-        for b in bindings:
-            spec = spec + b
-        # logger.debug(f"traversed binding:\n\t{spec}")
-        return spec
-
-    def set_module(self, modules):
-        self.modules = modules
-
-    def set_classes(self, classes):
-        self.classes = classes
-
-    def as_provider(self, f):
-        self.bind_provider_inplace(f.__name__, ensure_self_arg(f))
-        return f
-
-    def extend_provider_inplace(self, src_key, new_name, provider):
-        """
-        :param src_key: key to hook for input
-        :param new_name: name to provide old values
-        :param provider: def provider(self,deps)...
-        example:
-        spec.extend_provider_inplace("generator","old_generator",lambda self,old_generator:wrap(old_generator))
-        :return: None
-        """
-        if src_key in self.providers:
-            tmp = self.providers[src_key]
-            self.bind_provider_inplace(src_key, provider)
-            self.bind_provider_inplace(new_name, tmp)
-        if src_key in self.configures:
-            tmp = self.configures[src_key]
-            del self.configures[src_key]
-            self.bind_provider_inplace(src_key, provider)
-            self.configures[new_name] = tmp
-
-    def _gen_name(self, name):
-        used_names = set(self.providers.keys()) | set(self.configures.keys())
-        new_name = f"__generated_{name}"
-        i = 0
-        while new_name in used_names:
-            new_name = f"{new_name}_{i}"
-        return new_name
-
-    def copy(self):
-        return self.__class__(
-            providers=copy(self.providers),
-            configures=copy(self.configures),
-            multi_binds=copy(self.multi_binds),
-            modules=copy(self.modules),
-            classes=copy(self.classes),
-        )
-
-    def map_value(self, src_key, f):
-        copied = self.copy()
-        copied.map_value_inplace(src_key=src_key, f=f)
-        return copied
-
-    def map_value_with_provider(self, src_key, dependencies, f):
-        copied = self.copy()
-        copied.map_value_inplace_with_provider(src_key, dependencies, f)
-        return copied
-
-    def map_value_inplace_with_provider(self, src_key, dependencies, f):
-        """
-        :param src_key: target value to map in pinject graph
-        :param dependencies: list of keys to depend on other than src_key
-        :param f: must expect single arg which is a list
-        :return:
-        """
-        # first make f kwarg based function
-        f_signature = f"mapper_with_dependencies(src,{','.join(dependencies)})"
-
-        def f_impl(src, **kwargs):
-            return f([src, *[kwargs[k] for k in dependencies]])
-
-        new_f = create_function(f_signature, f_impl)
-
-        def convert_provider(src_provider):
-            src_provider = method_to_function(src_provider)
-            logger.info(f"converting provider to use additional dependencies")
-            src_deps = extract_argnames(src_provider)
-            src_deps.remove("self")  # assuming that a src provider always have self.(which is true)
-            combined = list(set(src_deps) | set(dependencies))
-            src_indices = [combined.index(k) for k in src_deps]
-            mapped_indices = [combined.index(k) for k in dependencies]
-            signature = f"signature_for_provider(self,{','.join(combined)})"
-            logger.info(f"mapping provier with dependency, signature:\n\t {signature}")
-
-            def impl_for_provider(self, **args):
-                src_args = {k: args[k] for k in src_deps}
-                logger.debug(f"src_args:{src_args.keys()}")
-                mapped_args = {k: args[k] for k in dependencies}
-                logger.debug(f"mapped_args:{mapped_args.keys()}")
-                return new_f(src_provider(self, **src_args), **mapped_args)
-
-            provider = create_function(signature, impl_for_provider)
-            return provider
-
-        if src_key in self.configures:
-            tmp = self.configures[src_key]
-            del self.configures[src_key]
-            if "to_class" in tmp:
-                provider = convert_provider(method_to_function(tmp["to_class"]))
-            else:
-                signature = f"provide_{src_key}(self,{','.join(dependencies)})"
-
-                def impl_for_instance(self, **kwargs):
-                    return new_f(tmp["to_instance"], **kwargs)
-
-                logger.info(f"instance binding mapping with dependencies:\n\t{signature}")
-                provider = create_function(signature, impl_for_instance)
-
-        elif src_key in self.providers:
-            src_provider = self.providers[src_key]
-            provider = convert_provider(src_provider)
-        else:
-            raise RuntimeError(f"unknown situation in mapping")
-
-        self.bind_provider_inplace(src_key, provider)
-
-    def map_value_inplace(self, src_key, f):
-        """
-        inplace mapping of a provider
-        :param src_key:
-        :param f:
-        :return: self
-        """
-
-        def map_wrap(src):
-            @wraps(src)
-            def wrapper(*args, **kwargs):
-                return f(src(*args, **kwargs))
-
-            return wrapper
-
-        # new_name = self._gen_name(src_key)
-        if src_key in self.providers:
-            tmp = self.providers[src_key]
-            if "__name__" not in dir(tmp):
-                tmp = method_to_function(tmp)
-            wrapped = map_wrap(tmp)
-            argspec = inspect.getfullargspec(wrapped)
-            assert "self" in argspec.args
-            self.bind_provider_inplace(src_key, wrapped)
-        elif src_key in self.configures:
-            # delete binding and add a provider mapped with f
-            tmp = self.configures[src_key]
-            del self.configures[src_key]
-            if "to_class" in tmp:
-                provider = method_to_function(tmp["to_class"])
-            else:
-                signature = f"provide_{src_key}(self)"
-
-                def impl(self):
-                    return tmp["to_instance"]
-
-                provider = create_function(signature, impl)
-            self.bind_provider_inplace(src_key, map_wrap(provider))
-        else:
-            raise KeyError(f"no provider to map:{src_key}")
-        return self
-
-    def keys(self):
-        return self.providers.keys() | self.configures.keys()
-
-    def unbind(self, key) -> "Design":
-        if key in self.providers:
-            copied = self.providers.copy()
-            del copied[key]
-            return replace(self,
-                           providers=copied
-                           )
-        if key in self.configures:
-            copied = self.configures.copy()
-            del copied[key]
-            return replace(self,
-                           configures=copied
-                           )
-
-    def __contains__(self, item):
-        return item in self.providers or item in self.configures
-
-    def __getitem__(self, item):
-        return {**self.providers, **self.configures}[item]
-
-    def __str__(self):
-        import tabulate
-        provs = tabulate.tabulate(sorted(list(self.providers.items())))
-        confs = tabulate.tabulate(sorted(list(self.configures.items())))
-        multis = tabulate.tabulate(sorted(list(self.multi_binds.items())))
-        return provs + "\n" + confs + "\n" + multis
-
-    def __repr__(self):
-        return str(self)
-
-    def path_through(self, design: "Design", keys):
-        """beware of using this as modifications after this point makes no sense to the given design"""
-        for k in keys:
-            design = design.bind(f"provide_{k}").to_provider()
-        return design
-
-    def to_str_dict(self):
-        res = dict()
-        for k, v in self.providers.items():
-            res[k] = v.__name__
-        for k, v in self.configures.items():
-            if "to_instance" in v:
-                res[k] = v["to_instance"]
-            elif "to_class" in v:
-                res[k] = v["to_class"]
-        return res
+    def __hash__(self):
+        return hash(self.method)
 
 
 # mapping is another layer of complication.
@@ -674,14 +447,14 @@ class Design:
 # calling to_design converts all lazy mapping into providers
 # so if anything is missing then fails.
 
-class DynamicSpec(BindingSpec):
+class DynamicSpec(BindingSpec, metaclass=abc.ABCMeta):
     def __init__(self):
         container = Design()
-        self.dynamic_configure(container)
+        container = self.dynamic_configure(container)
         self._dependencies = [container.to_binding_spec()]
 
     @abc.abstractmethod
-    def dynamic_configure(self, binder: Design):
+    def dynamic_configure(self, binder: Design) -> Design:
         pass
 
     def configure(self, bind):
@@ -707,3 +480,83 @@ def patch_pinject_singleton_scope():
 
 
 patch_pinject_singleton_scope()
+
+
+def _get_external_type_name(thing):
+    """patch pinject's _get_external_type_name to accept pickled function"""
+    qualifier = thing.__qualname__
+    name = qualifier.rsplit('.', 1)[0]
+    if hasattr(inspect.getmodule(thing), name):
+        cls = getattr(inspect.getmodule(thing), name)
+        if isinstance(cls, type):
+            return cls.__name__
+
+    res = inspect.getmodule(thing)  # .__name__
+    if res is None:
+        return "unknown_module"
+    return res.__name__
+
+
+def patch_pinject_get_external_type_name():
+    import pinject.locations
+    logger.warning(f"patching pinject's _get_external_type_name to accept pickled function")
+    pinject.locations._get_external_type_name = _get_external_type_name
+
+
+patch_pinject_get_external_type_name()
+
+
+# patch_pinject_singleton_scope()
+@dataclass
+class PinjectProviderBind(Bind):
+    """use this to keep things picklable"""
+    f: Callable
+    all_except: Any
+    arg_names: Any
+    in_scope: Any
+
+    def __post_init__(self):
+        if self.f.__name__ == "<lambda>":
+            self.f.__name__ = "_lambda_"
+        self._fname = self.f.__name__
+        assert self._fname is not None, f"provided function has no name.:{self.f}"
+        self._signature = inspect.signature(self.f)
+
+    def provider_for_binding_spec(self, key: str):
+        # so first you need to convert a method in to function
+        f = self.f
+        if "__name__" not in dir(f):
+            f = method_to_function(f)
+        # now ensure the function has self arg
+        f = ensure_self_arg(f, fname=self._fname)
+
+        @wraps(f)  # called 78 times
+        def wrapper(*args, **kwargs):
+            return f(*args, **kwargs)
+
+        wrapper.__name__ = f"provide_{key}"
+        all_except = self.all_except
+        arg_names = self.arg_names
+        in_scope = self.in_scope
+        if all_except is not None or arg_names is not None:
+            wrapper = inject_proto(all_except=all_except, arg_names=arg_names)(wrapper)
+        if in_scope is not None:
+            wrapper = pinject.provides(in_scope=in_scope)(wrapper)
+        return wrapper
+
+    def to_pinject_binding(self, key: str) -> Union[PinjectConfigure, PinjectProvider]:
+        return PinjectProvider(self.provider_for_binding_spec(key))
+
+    def __getstate__(self):
+        return dict(
+            f=self.f,
+            all_except=self.all_except,
+            arg_names=self.arg_names,
+            in_scope=self.in_scope,
+            _fname=self._fname,
+            _signature=self._signature
+        )
+
+    def __setstate__(self, state):
+        for k, v in state.items():
+            setattr(self, k, v)
