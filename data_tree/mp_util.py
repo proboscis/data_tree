@@ -9,7 +9,7 @@ from multiprocessing import Pipe, Process
 from queue import Empty
 from typing import Iterable
 from uuid import uuid4
-
+import multiprocessing as mp
 from data_tree.util import shared_npy_array_like
 
 # from logzero import logger

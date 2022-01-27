@@ -1,7 +1,7 @@
 import numpy as np
 
 from data_tree import auto_image
-from data_tree.auto_data.auto_image import AutoImage
+from omni_cv_rules.legacy.auto_image import AutoImage
 
 
 def dummy_images(n=9) -> AutoImage:

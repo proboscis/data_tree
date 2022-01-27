@@ -1,3 +1,4 @@
+import abc
 import io
 import os
 from contextlib import contextmanager
@@ -11,15 +12,16 @@ from PIL import Image
 from loguru import logger
 from tqdm import tqdm
 
-from archpainter.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
-from archpainter.wandb_util.path_artifact import ManagedPathArtifactLogger, ManagedPathArtifactLoader
 from data_tree import auto, series
+from data_tree.dt_wandb.json_artifact import JsonArtifactLoader
 from data_tree.format_converter import FormatConverter
 from data_tree.image_store import ImageStoreCreator, convert_images_to_bytes_mp, ImageStore, MillionImageFileCreator, \
     MergedImageStore
 from data_tree.lmdb_util import LmdbCreator
 from data_tree.storage_manager import FileStorageManager
 from data_tree.util import ensure_path_exists, Pickled
+from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier
+from data_tree.wandb_util.path_artifact import ManagedPathArtifactLoader, ManagedPathArtifactLogger
 
 
 @dataclass
@@ -67,6 +69,12 @@ class MultiLmdbImageStoreCreator:
             )
 
 
+class IImageStoreArtifactCreator(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def create(self, metadata: ArtifactMetadata, key_image_pairs, total=None):
+        pass
+
+
 @dataclass
 class MultiLmdbImageStoreArtifactCreator:
     multi_lmdb_image_store_creator: MultiLmdbImageStoreCreator
@@ -77,7 +85,7 @@ class MultiLmdbImageStoreArtifactCreator:
                key_image_pairs: Iterable[Tuple[str, PIL.Image.Image]],
                format_converter: FormatConverter = FormatConverter('png'),
                bar=None,
-               max_size_per_lmdb: int = 2 ** 24,
+               max_size_per_lmdb: int = 2 ** 34,
                total=None
                ):
         return self.create_from_bytes(
@@ -92,7 +100,7 @@ class MultiLmdbImageStoreArtifactCreator:
                           metadata: ArtifactMetadata,
                           key_bytes_pairs: Iterable[Tuple[str, bytes]],
                           bar=None,
-                          max_size_per_lmdb: int = 2 ** 24,
+                          max_size_per_lmdb: int = 2 ** 34,
                           total=None
                           ):
         dst_path = self.managed_path_artifact_logger.log_artifact_path(metadata)
@@ -104,6 +112,15 @@ class MultiLmdbImageStoreArtifactCreator:
             total=total
         )
         return dst_path
+
+
+@dataclass
+class MultiLmdbImageStoreArtifactCreatorTwo(IImageStoreArtifactCreator):
+    multi_lmdb_image_store_artifact_creator: MultiLmdbImageStoreArtifactCreator
+
+    def create(self, metadata: ArtifactMetadata, key_image_pairs, total=None):
+        return self.multi_lmdb_image_store_artifact_creator.create(metadata, key_image_pairs=key_image_pairs,
+                                                                   total=total)
 
 
 @dataclass
@@ -256,11 +273,32 @@ class MultiLmdbImageStoreArtifactGetter:
 
     def get(self, idt: ArtifactIdentifier):
         root = self.managed_path_artifact_loader.get_path_identifier(idt)
-        lmdb_paths = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root,d))]
-        assert lmdb_paths,f"lmdb_paths is empty! wtf?? {os.listdir(root)}"
+        lmdb_paths = [d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d))]
+        assert lmdb_paths, f"lmdb_paths is empty! wtf?? {os.listdir(root)}"
         lmdbs = [LmdbImageStore(os.path.join(root, p), sort_image_store_keys=self.sort_image_store_keys) for p in
                  tqdm(lmdb_paths, desc='loading multi lmdb artifact')]
         return MergedImageStore(lmdbs, sort_image_store_keys=self.sort_image_store_keys)
+
+
+@dataclass
+class MultiLmdbImageStoreArtifact(ImageStore):
+    identifier: ArtifactIdentifier
+    multi_lmdb_image_store_artifact_getter: MultiLmdbImageStoreArtifactGetter
+
+    def __post_init__(self):
+        self._cache = None
+
+    @property
+    def cache(self):
+        if self._cache is None:
+            self._cache = self.multi_lmdb_image_store_artifact_getter.get(self.identifier)
+        return self._cache
+
+    def keys(self) -> List[str]:
+        return self.cache.keys()
+
+    def __getitem__(self, item):
+        return self.cache.__getitem__(item)
 
 
 @dataclass

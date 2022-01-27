@@ -1,5 +1,6 @@
 import abc
 import os
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 from hashlib import sha1
@@ -7,21 +8,16 @@ from queue import Queue, Full
 from threading import Thread
 from typing import Callable
 
-import dill
 import numpy as np
 import pandas as pd
-import cloudpickle
 from cytoolz import memoize
 from easydict import EasyDict as edict
-from filelock import FileLock
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
-from snoop import snoop
 from tqdm.autonotebook import tqdm
 
 # from data_tree._series import Series
-from data_tree.checks import check_picklable
 from data_tree.get_callee import get_callee
 from data_tree.picklable_file_lock import PicklableFileLock
 
@@ -52,7 +48,8 @@ def load_or_save(path, proc, backend=pickle):
                 logger.info(f"caching at {path}")
                 backend.dump(res, f)
         except Exception as e:
-            logger.warning(f"failed to cache proc result at {path}. check the filesystem is writable.")
+            logger.error(f"failed to cache:{e}")
+            logger.error(f"failed to cache proc result at {path}. check the filesystem is writable.")
         logger.info(f"resolved cache load failure.")
         return res
 
@@ -205,67 +202,6 @@ def sorted_frozendict(_dict):
     return frozendict(sorted(_dict.items(), key=lambda item: item[0]))
 
 
-class ShelvedCache:
-    """
-    a cache that uses shelve and memory as backend
-    """
-
-    def __init__(self, path):
-        import filelock
-        self.path = path
-        self.lock = filelock.FileLock(path + ".lock")
-        self.mem_cache = dict()
-
-    def get_cache(self):
-        import shelve
-        return shelve.open(self.path, writeback=True)
-
-    def __contains__(self, key):
-        with self.lock, self.get_cache() as db:
-            key = pickle.dumps(key, 0).decode()
-            if key in self.mem_cache:
-                return True
-            else:
-                return key in db
-
-    def __setitem__(self, key, value):
-        with self.lock, self.get_cache() as db:
-            key = pickle.dumps(key, 0).decode()
-            self.mem_cache[key] = value
-            db[key] = value
-            db.sync()
-
-    def __getitem__(self, key):
-        with self.lock:
-            key = pickle.dumps(key, 0).decode()
-            if key in self.mem_cache:
-                return self.mem_cache[key]
-            else:
-                with self.get_cache() as db:
-                    if key in db:
-                        try:
-                            res = db[key]
-                            self.mem_cache[key] = res
-                        except Exception as e:
-                            logger.warning(f"failed to load from shelve.key={key}")
-                            return self.__missing__(key)
-                        return res
-                    else:
-                        return self.__missing__(key)
-
-    def __missing__(self, key):
-        raise KeyError(key)
-
-    def items(self):
-        with self.lock, self.get_cache() as db:
-            for k, v in db.items():
-                yield pickle.loads(k.encode()), v
-
-    def clear(self):
-        with self.lock:
-            os.remove(self.path + ".db")
-
-
 class DefaultDict(dict):
     def __init__(self, f):
         super().__init__()
@@ -276,23 +212,6 @@ class DefaultDict(dict):
         res = self.f(key)
         self[key] = res
         return res
-
-
-class DefaultShelveCache(ShelvedCache):
-    def __init__(self, f, path):
-        super().__init__(path)
-        self.f = f
-
-    @logger.catch
-    def __missing__(self, key):
-        with self.lock:
-            jsonkey = pickle.loads(key.encode())
-            res = self.f(jsonkey)
-            try:
-                self[jsonkey] = res
-            except Exception as e:
-                logger.error(f"cannot save data \n\t{res} to key \n\t{key} of shelve.")
-            return res
 
 
 class PickledTrait:
@@ -337,16 +256,15 @@ class Pickled(PickledTrait):
 
     @property
     def value(self):
-        import threading
-        # callee = get_callee()
-        # logger.info(f"cache value access from {callee}")
-        # logger.info(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.lock_file}")
+        callee = get_callee()
+        logger.info(f"cache value access from {callee}")
+        logger.info(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.path}")
         with self.lock:
-            # logger.info(f"{threading.current_thread().name}:aqquired lock:{self.lock.lock_file}")
+            logger.info(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
             if not self.loaded:
                 self._value = load_or_save(self.path, self.proc, backend=self.backend)
                 self.loaded = True
-        # logger.info(f"{threading.current_thread().name}:released lock:{self.lock.lock_file}")
+        logger.info(f"{threading.current_thread().name}:released lock:{self.lock.path}")
         return self._value
 
     def clear(self):

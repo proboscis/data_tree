@@ -6,7 +6,7 @@ authors = ["Kento Masui"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-h5py = "*"
+h5py = "*" # h5py
 tqdm = "*"
 frozendict = "*"
 tblib = "*"
@@ -14,12 +14,9 @@ bqplot = "*"
 pyvis = "*"
 lazy-object-proxy = "*"
 retry = "*"
-pprintpp = "*"
 loguru = "*"
-lru-dict = "*"
 PyYAML = "*"
 easydict = "*"
-torch = "*"
 #scikit-learn = "*"
 #scikit-image = "*"
 lazy = "*"
@@ -33,11 +30,50 @@ filelock = "*"
 makefun = "^1.11.3"
 dill = "^0.3.4"
 tabulate = "^0.8.9"
-torchvision = "*"
 Expression = "^1.1.0"
-
+[tool.poetry.extras]
+torch = ["torch","torchvision"]
 [tool.poetry.dev-dependencies]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.0.0","setuptools","numpy","cython"]
 build-backend = "poetry.core.masonry.api"
+[proboscis]
+name="data_tree"
+[proboscis.conda_dependencies]
+pandas = "*"
+h5py = "*" # h5py
+numpy = "*"
+matplotlib = "*"
+pytorch = "*"
+scikit-image ="*"
+[proboscis.pypi_dependencies]
+Expression = "^1.1.0"
+logzero = "*"
+lru-dict = "*"
+pprintpp = "*"
+
+# I found having many deps in conda ends up with conflicts.
+
+cytoolz = "*"
+frozendict = "*"
+tqdm = "*"
+tblib = "*"
+bqplot = "*"
+pyvis = "*"
+lazy-object-proxy = "*"
+retry = "*"
+loguru = "*"
+PyYAML = "*"
+easydict = "*"
+lazy = "*"
+pinject = "*"
+filelock = "*"
+makefun = "^1.11.3"
+dill = "^0.3.4"
+tabulate = "^0.8.9"
+wandb = "*"
+returns="*"
+cloudpickle = "*"
+[proboscis.local_dependencies]
+data_tree = "../omni-converter"

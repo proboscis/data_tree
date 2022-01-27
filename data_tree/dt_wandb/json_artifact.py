@@ -7,13 +7,13 @@ from typing import Union
 import pandas
 import wandb
 
-from archpainter.wandb_util import random_artifact_file_path
-from archpainter.wandb_util.artifact_logger import ArtifactLogger
-from archpainter.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
-from archpainter.wandb_util.artifact_wrapper import RemoteArtifactFactory
-from archpainter.wandb_util.local_artifact import LocalArtifact
 from data_tree.util import ensure_path_exists
-from data_tree.injected import Injected
+from data_tree.wandb_util import random_artifact_file_path
+from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier
+from data_tree.wandb_util.artifact_logger import ArtifactLogger
+from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory
+from data_tree.wandb_util.local_artifact import LocalArtifact
+from pinject_design.di.injected import Injected
 
 
 @dataclass

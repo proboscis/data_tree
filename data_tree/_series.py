@@ -30,6 +30,7 @@ from tqdm.autonotebook import tqdm
 #from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
 #from data_tree.coconut.visualization import infer_widget
+from data_tree.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2, get_global_holder
 from data_tree.custom_resource import Resource
@@ -1027,7 +1028,8 @@ class IntMapSeries(Series[T]):
         pass
 
     def _get_slice(self, _slice) -> Iterable[T]:
-        return [self.data[(i)] for i in self.indices[_slice]]
+
+        return [self.data[int(i)] for i in self.indices[_slice]]
 
     def _get_indices(self, indices) -> Iterable[T]:
         return [self.data[int(i)] for i in self.indices[indices]]

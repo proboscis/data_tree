@@ -1,8 +1,8 @@
 from loguru import logger
 
 import archpainter.experiments.config.root_cfg
-from data_tree.di.util import Design
-from data_tree.di import util
+from pinject_design.di.util import Design
+from pinject_design.di import util
 from data_tree import di
 class A:pass
 class B:pass

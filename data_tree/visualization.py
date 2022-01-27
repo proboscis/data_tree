@@ -1,9 +1,9 @@
-from data_tree._series import Trace
-from ipywidgets import interactive, Widget
-from PIL import Image
-from ipywidgets import Image as WImage
 import numpy as np
-from loguru import logger
+from ipywidgets import interactive
+from numpy import array
+
+from data_tree._series import Trace
+
 
 def show_trace(trace: Trace):
     trace.metadata

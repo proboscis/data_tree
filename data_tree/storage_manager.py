@@ -12,7 +12,6 @@ from loguru import logger
 from tabulate import tabulate
 from tqdm.autonotebook import tqdm
 
-from data_tree.checks import check_picklable
 from data_tree.picklable_file_lock import PicklableFileLock
 from data_tree.util import scantree, Pickled, scantree_filtered
 
@@ -174,7 +173,6 @@ class FileStorageManager(DBProvider):
                 raise RuntimeError(
                     f"no matching path for {conditions}. please make sure a file like {candidate} exists.")
             logger.debug(f"found path for {conditions} : {res}")
-            assert "Users" not in res
             return res
 
     def clear(self):
