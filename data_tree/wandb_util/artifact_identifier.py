@@ -6,6 +6,7 @@ from loguru import logger
 
 @dataclass
 class ArtifactIdentifier:
+    # TODO make this hold user,project
     name: str
     type: str
     version:str  = field(default='latest')

@@ -1,22 +1,22 @@
 import numpy as np
 
-from data_tree import auto_image
-from omni_cv_rules.legacy.auto_image import AutoImage
+from omni_converter import auto
+from omni_converter.auto_data.auto_v2 import IAutoData
 
 
-def dummy_images(n=9) -> AutoImage:
+def dummy_images(n=9) -> IAutoData:
     """
     :return:AutoImage(["image,RGB,RGB"])
     """
-    imgs = auto_image("numpy,int32,BHWC,RGB,None")(np.random.random((n, 256, 256, 3))).convert(
+    imgs = auto("numpy,int32,BHWC,RGB,None", np.random.random((n, 256, 256, 3))).convert(
         "[image,RGB,RGB]")
     return imgs
 
 
-def dummy_filled_images(n=9,color=(0,0,0))->AutoImage:
+def dummy_filled_images(n=9, color=(0, 0, 0)) -> IAutoData:
     """
     :return:AutoImage(["image,RGB,RGB"])
     """
-    imgs = auto_image("numpy,int32,BHWC,RGB,0_1")(np.zeros(n * 256 * 256 * 3).reshape((n, 256, 256, 3)))
+    imgs = auto("numpy,int32,BHWC,RGB,0_1", np.zeros(n * 256 * 256 * 3).reshape((n, 256, 256, 3)))
     imgs.value[:] = color
     return imgs.convert("[image,RGB,RGB]")

@@ -90,7 +90,7 @@ class ZMQ_Client:
             raise ZMQRemoteException(res.exception, res.trace)
         logger.debug(f"result:{res}")
         socket.close()
-        return res.result
+        return res
 
     def _send_image(self, img: Image):
         raise RuntimeError(f"dont use this now.")

@@ -1,8 +1,7 @@
 from typing import Callable, Any
 
 from omni_converter.auto_data.auto_v2 import RuledData
-from omni_converter.solver.rules import IAutoRuleBook, AutoRuleBook
-from omni_cv_rules.legacy.auto_image import AutoImage
+from omni_converter.solver.rules import AutoRuleBook
 
 
 def managed_cache(root_dir):
@@ -20,22 +19,19 @@ def unlist_auto(items):
     return unlist(items)
 
 
-def auto(format) -> Callable[[Any], AutoImage]:
+def auto(format) -> Callable[[Any], RuledData]:
     return auto_img(format)
 
 
-def resolve_format(value, format_resolution_rule: IAutoRuleBook):
+def resolve_format(value, format_resolution_rule: AutoRuleBook):
     from omni_converter.auto_data.auto_v2 import AutoData2
     return AutoData2(value=value, format=value).with_rules(format_resolution_rule).to("format")
 
 
 def ruled(value,
+          rules: AutoRuleBook,
           format=None,
-          rules: IAutoRuleBook = None,
-          format_resolution_rule: IAutoRuleBook = None) -> "RuledData":
-    if rules is None:
-        from omni_converter.auto_data.default_rules import DEFAULT_RULES
-        rules = DEFAULT_RULES
+          format_resolution_rule: AutoRuleBook = None) -> "RuledData":
     if format_resolution_rule is None:
         from omni_converter.auto_data.format_resolution import FORMAT_RESOLUTION_RULES
         format_resolution_rule = FORMAT_RESOLUTION_RULES
@@ -46,41 +42,18 @@ def ruled(value,
     return AutoData2(value=value, format=format).with_rules(rules)
 
 
-def auto_image(format):
+def auto_image(format)->RuledData:
     return get_cv_ruled(format)
-    # def _gen_ai(value):
-    #     return AutoImage(value, format, solver_getter)
-    #
-    # return _gen_ai
 
 
 def auto_img(codec):
     return get_cv_ruled(codec)
-    # def _l(img):
-    #     return AutoImage(img, codec, solver_getter)
-    #
-    # return _l
-
-GLOBAL_RULEBOOK = AutoRuleBook()
-GLOBAL_RULE = None
-def update_global_rule():
-    from omni_converter.auto_data.solver import DEFAULT_ASTAR_DESIGN
-    from omni_cv_rules.rulebook import non_recursive_rules
-    from omni_cv_rules.rulebook import recursive_rules
-    d = DEFAULT_ASTAR_DESIGN.bind_instance(
-        non_recursive_rules=non_recursive_rules+GLOBAL_RULEBOOK,
-        recursive_rules=recursive_rules
-    )
-    global GLOBAL_RULE
-    GLOBAL_RULE = d.provide("rulebook")
-update_global_rule()
-
 
 
 def get_cv_ruled(format):
     # every time the solver is recreated.
-
+    from omni_converter import auto as auto_v2
     def _l(value) -> RuledData:
-        return ruled(value=value, format=format, rules=GLOBAL_RULE)
+        return auto_v2(value=value, format=format)
 
     return _l

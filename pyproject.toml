@@ -31,6 +31,8 @@ makefun = "^1.11.3"
 dill = "^0.3.4"
 tabulate = "^0.8.9"
 Expression = "^1.1.0"
+py-omni-converter = "*"
+omni-cv-rules = "*"
 [tool.poetry.extras]
 torch = ["torch","torchvision"]
 [tool.poetry.dev-dependencies]
@@ -76,4 +78,4 @@ wandb = "*"
 returns="*"
 cloudpickle = "*"
 [proboscis.local_dependencies]
-data_tree = "../omni-converter"
+#data_tree = "../omni-converter"

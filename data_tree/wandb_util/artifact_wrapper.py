@@ -94,6 +94,13 @@ class RemoteArtifactFactory:
             wandb_artifact_getter=self.wandb_artifact_getter,
             wandb_download_dir=self.wandb_download_dir
         )
+    def from_identifier_object(self,idt:ArtifactIdentifier):
+        return RemoteArtifact(
+            identifier=idt.identifier_str(),
+            type=idt.type,
+            wandb_artifact_getter=self.wandb_artifact_getter,
+            wandb_download_dir=self.wandb_download_dir
+        )
 
 
 @dataclass
