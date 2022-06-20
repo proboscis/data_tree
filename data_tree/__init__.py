@@ -1,7 +1,9 @@
 from typing import Callable, Any
 
+from omni_converter import AutoDataFactory
 from omni_converter.auto_data.auto_v2 import RuledData, IAutoData
 from omni_converter.solver.rules import AutoRuleBook
+from omni_cv_rules.rulebook import CV_RULEBOOK
 
 
 def managed_cache(root_dir):
@@ -19,8 +21,8 @@ def unlist_auto(items):
     return unlist(items)
 
 
-def auto(format) -> Callable[[Any], RuledData]:
-    return auto_img(format)
+# def auto(format) -> Callable[[Any], RuledData]:
+#    return auto_img(format)
 
 
 def resolve_format(value, format_resolution_rule: AutoRuleBook):
@@ -40,20 +42,3 @@ def ruled(value,
         format = resolve_format(value, format_resolution_rule)
     from omni_converter.auto_data.auto_v2 import AutoData2
     return AutoData2(value=value, format=format).with_rules(rules)
-
-
-def auto_image(format):
-    return get_cv_ruled(format)
-
-
-def auto_img(codec):
-    return get_cv_ruled(codec)
-
-
-def get_cv_ruled(format)->IAutoData:
-    # every time the solver is recreated.
-    from omni_converter import auto as auto_v2
-    def _l(value) -> RuledData:
-        return auto_v2(value=value, format=format)
-
-    return _l

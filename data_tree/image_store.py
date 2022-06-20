@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from multiprocessing import Pool, Semaphore
 from multiprocessing.shared_memory import SharedMemory
 from threading import Thread
-from typing import List, Callable, Tuple, Generic, Iterable, TypeVar, NamedTuple
+from typing import List, Callable, Tuple, Iterable, TypeVar, NamedTuple, Dict
 
 import PIL
 import h5py
@@ -14,10 +14,11 @@ from cytoolz import merge
 from loguru import logger
 from tqdm import tqdm
 
-#from data_tree.coconut.auto_data import AutoData
+# from data_tree.coconut.auto_data import AutoData
 from data_tree.coconut.auto_data import AutoData
-from data_tree import series, auto
 from data_tree._series import Series
+from data_tree import series
+from data_tree.key_value_store import JustKVS
 from data_tree.mocks.images import dummy_images
 from data_tree.mp_util import GlobalHolder, get_global_holder, SequentialTaskParallel2
 
@@ -30,13 +31,6 @@ class ImageStorePair(NamedTuple):
     image: PIL.Image.Image
 
 
-def _img_tensor_loader(t: Tuple[GlobalHolder, str]) -> Tuple[str, AutoData]:
-    store_holder, key = t
-    store = store_holder.value
-    img = auto("image,RGB,RGB")(store[key].convert("RGB")).convert("torch,uint8,HWC,RGB,0_255")  # using torch for mp
-    return key, img
-
-
 def image_to_shared_bytes_name(img: PIL.Image.Image) -> SharedMemory:
     """
     shared memories are not supposed to be created on child process.
@@ -45,7 +39,7 @@ def image_to_shared_bytes_name(img: PIL.Image.Image) -> SharedMemory:
     :param img:
     :return:
     """
-    png = auto("image,RGB,RGB")(img.convert("RGB")).to('png_bytes')
+    png = auto("image,RGB,RGB", img.convert("RGB")).to('png_bytes')
     return png
     # shm = SharedMemory(create=True,size=len(png))
     # shm.buf[:] = png
@@ -122,10 +116,9 @@ class ImageStore(metaclass=abc.ABCMeta):
 
         producer = Thread(target=enqueue)
         producer.start()
-
         with seq_task.managed_start() as res:
             for key, png in tqdm(res, desc='loading with mp seq task paralell'):
-                img = auto("png_bytes")(png)
+                img = auto("png_bytes", png)
                 # shm.unlink()
                 yield key, img
         # shm.close()
@@ -142,6 +135,34 @@ class ImageStore(metaclass=abc.ABCMeta):
                 yield key, png
                 sem.release()
 
+    def split(self, n: int) -> Series["ImageStore"]:
+        return series(self.keys()).split_n(n).map(lambda subset: self.subset(subset))
+
+
+@dataclass
+class RamImageStore(ImageStore):
+    images: Dict[str, PIL.Image.Image]
+
+    def __getitem__(self, item):
+        return self.images[item]
+
+    def keys(self) -> List[str]:
+        return list(self.images.keys())
+
+    def __repr__(self):
+        return f"RamImageStore:(size={len(self.images)})"
+
+
+@dataclass
+class LambdaImageStore(ImageStore):
+    src_keys: List[str]
+    get_item: Callable[[str], PIL.Image.Image]
+
+    def keys(self) -> List[str]:
+        return self.src_keys
+
+    def __getitem__(self, item):
+        return self.get_item(item)
 
 
 class KeyMappedImageStore(ImageStore):
@@ -167,59 +188,6 @@ class SourcedImageStore(ImageStore):
 
     def __getitem__(self, item):
         return self.src()[item]
-
-
-class KeyValueStore(Generic[T], metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def keys(self) -> List[str]:
-        pass
-
-    @abc.abstractmethod
-    def __getitem__(self, item):
-        pass
-
-    def map(self, f: Callable[[T], U]) -> "MappedKVS[U]":
-        return MappedKVS(self, f)
-
-    def __call__(self, item):
-        return self[item]
-
-    def sorted_items(self) -> Series[Tuple[str, T]]:
-        """
-        sorted series of tuple[key,img]
-        :return:
-        """
-        return series(self.keys()).sorted().map(lambda k: (k, self[k]))
-
-    def sorted_values(self) -> Series[T]:
-        return series(self.keys()).sorted().map(self)
-
-
-@dataclass
-class JustKVS(KeyValueStore):
-    _keys: Callable
-    _getitem: Callable
-
-    def keys(self) -> List[str]:
-        return self.keys()
-
-    def __getitem__(self, item):
-        return self._getitem(item)
-
-    def __call__(self, key):
-        return self[key]
-
-
-@dataclass
-class MappedKVS(KeyValueStore):
-    src: KeyValueStore[T]
-    mapping: Callable
-
-    def keys(self) -> List[str]:
-        return self.src.keys()
-
-    def __getitem__(self, item):
-        return self.mapping(self.src[item])
 
 
 @dataclass
@@ -260,7 +228,7 @@ class FileBasedImageStore(ImageStore):
         return list(self.key_to_path.keys())
 
     def __getitem__(self, item):
-        return auto("image_path")(self.key_to_path[item]).to("image,RGB,RGB")
+        return auto("image_path", self.key_to_path[item]).to("image,RGB,RGB")
 
 
 class MillionImageFileCreator(metaclass=abc.ABCMeta):
@@ -275,10 +243,17 @@ class ImageStoreCreator(metaclass=abc.ABCMeta):
         pass
 
 
-def convert_images_to_bytes_mp(pairs: Iterable[Tuple[str, PIL.Image.Image]], format_converter):
-    with Pool() as pool:
-        converted = pool.imap_unordered(format_converter, pairs)
-        yield from converted
+def convert_images_to_bytes_mp(pairs: Iterable[Tuple[str, PIL.Image.Image]], format_converter: Callable):
+    import pathos
+    with pathos.pools.ProcessPool() as pool:
+        # do not ever use multiprocessing again. use pathos!
+        # you will always endup with pickling errors!!!!
+        # when using ParallelPool, the mapping function must be hashable...
+        assert isinstance(format_converter, Callable), f"format_convert must be Callable:{format_converter}"
+        for item in pool.uimap(format_converter, pairs):
+            # somehow the data is None.
+            assert item is not None
+            yield item
 
 
 @dataclass
@@ -319,4 +294,3 @@ class MockImageStore(ImageStore):
 
     def __getitem__(self, item):
         return self.imgs[item]
-

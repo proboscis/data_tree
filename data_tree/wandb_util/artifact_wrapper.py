@@ -1,10 +1,27 @@
+import time
 from dataclasses import dataclass
+from typing import Callable
 
 import wandb
 from loguru import logger
 
 from data_tree.wandb_util.artifact_getter import WandbArtifactGetter, PublicWandbArtifactGetter
 from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
+
+
+def retry_n_times(proc: Callable, n: int):
+    count = 0
+    sleep_time = 1
+    while count < n:
+        try:
+            res = proc()
+            return res
+        except Exception as e:
+            logger.error(f"procedure failed with error({type(e)}):{e}, retrying! {count}/{n}")
+            time.sleep(sleep_time)
+            sleep_time *= 2
+            sleep_time = min(30,sleep_time)
+            count += 1
 
 
 @dataclass
@@ -29,7 +46,7 @@ class RemoteArtifact:
             self.identifier,
             type=self.type
         )
-        return self._art.download(path)
+        return retry_n_times(lambda: self._art.download(path), 25)
 
     def get_path(self, name):
         return self._art.get_path(name)
@@ -94,7 +111,8 @@ class RemoteArtifactFactory:
             wandb_artifact_getter=self.wandb_artifact_getter,
             wandb_download_dir=self.wandb_download_dir
         )
-    def from_identifier_object(self,idt:ArtifactIdentifier):
+
+    def from_identifier_object(self, idt: ArtifactIdentifier):
         return RemoteArtifact(
             identifier=idt.identifier_str(),
             type=idt.type,
@@ -121,7 +139,7 @@ class RemoteArtifactMetadata:
 
     def to_artifact_identifier(self) -> ArtifactIdentifier:
         # name already contains version so..
-        name = self.name.replace(f":{self.version}","")
+        name = self.name.replace(f":{self.version}", "")
         return ArtifactIdentifier(name=name, type=self.type, version=self.version)
 
     @property
@@ -146,7 +164,7 @@ class RemoteArtifactMetadataFactory:
     remote_artifact_factory: RemoteArtifactFactory
     wandb_artifact_getter: WandbArtifactGetter
 
-    def get(self, artifact: wandb.Artifact):
+    def get(self, artifact: wandb.Artifact)->RemoteArtifactMetadata:
         return RemoteArtifactMetadata(artifact, self.remote_artifact_factory)
 
     def get2(self, idt: ArtifactIdentifier):

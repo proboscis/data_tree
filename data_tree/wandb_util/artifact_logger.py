@@ -11,9 +11,18 @@ from data_tree.wandb_util.local_artifact import LocalArtifact
 
 
 @dataclass
+class LoggableArtifact:
+    metadata: ArtifactMetadata
+    file_or_dirs: Union[str, List[str]]
+
+
+@dataclass
 class ArtifactLogger:
     wandb: wandb
     wandb_artifact_getter: WandbArtifactGetter
+
+    def save_artifact(self, art: LoggableArtifact):
+        return self.save2(art.file_or_dirs, art.metadata)
 
     def save2(self, file_or_dirs: Union[str, List[str]], metadata: ArtifactMetadata):
         if metadata.identifier.version is None:
@@ -24,7 +33,7 @@ class ArtifactLogger:
             aliases = []
         aliases += metadata.aliases
         return self.save(name=metadata.identifier.name, file_or_dirs=file_or_dirs, description=metadata.description,
-                         aliases=aliases, type=metadata.identifier.type,metadata=metadata.metadata)
+                         aliases=aliases, type=metadata.identifier.type, metadata=metadata.metadata)
 
     def save(self, name, type,
              file_or_dirs: Union[str, List[str]],
@@ -42,7 +51,7 @@ class ArtifactLogger:
             else:
                 logger.info(f"adding artifact from file:{p}")
                 art.add_file(p)
-        logger.info(f"logging artifact...:{aliases}")
+        logger.info(f"logging artifact...:{name}:{aliases}")
         self.wandb.log_artifact(art, aliases=aliases)
         logger.info(f"logging artifact...done.")
         return LocalArtifact(self.wandb, art)
@@ -81,5 +90,3 @@ class ArtifactLogger:
         art.add(target, target_name)
         self.wandb.log_artifact(art, aliases=artifact_metadata.aliases)
         return LocalArtifact(self.wandb, art)
-
-

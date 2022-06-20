@@ -10,7 +10,7 @@ import cloudpickle
 import yaml
 from loguru import logger
 from tabulate import tabulate
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 
 from data_tree.picklable_file_lock import PicklableFileLock
 from data_tree.util import scantree, Pickled, scantree_filtered

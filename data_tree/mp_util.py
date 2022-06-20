@@ -24,7 +24,7 @@ GLOBAL_OBJECTS = dict()
 from tblib import pickling_support
 
 pickling_support.install()
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 
 
 class GlobalHolder:

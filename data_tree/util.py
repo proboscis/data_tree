@@ -15,9 +15,10 @@ from easydict import EasyDict as edict
 from frozendict import frozendict
 from lazy import lazy
 from loguru import logger
-from tqdm.autonotebook import tqdm
 
 # from data_tree._series import Series
+from tqdm import tqdm
+
 from data_tree.get_callee import get_callee
 from data_tree.picklable_file_lock import PicklableFileLock
 
@@ -25,19 +26,46 @@ WARN_SLOW_PREFETCH = False
 import pickle
 
 
+
 # logger.remove()
 # logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
-def load_or_save(path, proc, backend=pickle):
+def load_or_save_with_lock(path, proc, reader_lock: threading.RLock, writer_lock: threading.RLock, backend=pickle):
+    # we need to share a reader counter across processes. but can we?
     try:
-        logger.info(f"opening file at:{path}")
+        with open(path, "rb") as f:
+            return backend.load(f) # this takes a lot of time.
+    except Exception as e:
+        logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
+        # ok, loading failed. we need to recalc.
+        with writer_lock: # wait for someone to complete writing
+            # at this point the cache is ready
+            pass
+
+        res = proc()
+        try:
+            ensure_path_exists(path)
+            with open(path, "wb") as f:
+                logger.info(f"caching at {path}")
+                backend.dump(res, f) # actually now we can release the lock
+        except Exception as e:
+            logger.error(f"failed to cache:{e}")
+            logger.error(f"failed to cache proc result at {path}. check the filesystem is writable.")
+        logger.info(f"resolved cache load failure.")
+        return res
+
+
+def load_or_save(path, proc, backend=pickle):
+
+    try:
+        #logger.debug(f"opening file at:{path}")
         with open(path, "rb") as f:
             # logger.info(f"using backend:{backend}")
-            logger.info(f"pid:|{os.getpid()}|loading cache at {path}")
+            #logger.debug(f"pid:|{os.getpid()}|loading cache at {path}")
             start = datetime.now()
             res = backend.load(f)
             end = datetime.now()
             dt = end - start
-            logger.info(f"loading cache at {path} took {dt.total_seconds():.2f} seconds")
+            #logger.debug(f"loading cache at {path} took {dt.total_seconds():.2f} seconds")
             return res
     except Exception as e:
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
@@ -46,7 +74,7 @@ def load_or_save(path, proc, backend=pickle):
             ensure_path_exists(path)
             with open(path, "wb") as f:
                 logger.info(f"caching at {path}")
-                backend.dump(res, f)
+                backend.dump(res, f) # actually now we can release the lock
         except Exception as e:
             logger.error(f"failed to cache:{e}")
             logger.error(f"failed to cache proc result at {path}. check the filesystem is writable.")
@@ -257,14 +285,14 @@ class Pickled(PickledTrait):
     @property
     def value(self):
         callee = get_callee()
-        logger.info(f"cache value access from {callee}")
-        logger.info(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.path}")
+        #logger.debug(f"cache value access from {callee}")
+        #logger.debug(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.path}")
         with self.lock:
-            logger.info(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
+            logger.debug(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
             if not self.loaded:
                 self._value = load_or_save(self.path, self.proc, backend=self.backend)
                 self.loaded = True
-        logger.info(f"{threading.current_thread().name}:released lock:{self.lock.path}")
+        #logger.debug(f"{threading.current_thread().name}:released lock:{self.lock.path}")
         return self._value
 
     def clear(self):

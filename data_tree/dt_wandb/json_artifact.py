@@ -6,6 +6,7 @@ from typing import Union
 
 import pandas
 import wandb
+from loguru import logger
 
 from data_tree.util import ensure_path_exists
 from data_tree.wandb_util import random_artifact_file_path
@@ -19,7 +20,7 @@ from pinject_design.di.injected import Injected
 @dataclass
 class JsonArtifactLogger:
     artifact_logger: ArtifactLogger
-    wandb: wandb
+    wandb:"wandb"
 
     def log(self, name: str, type: str, obj: Union[list, dict], description=None, metadata=None,
             aliases=None) -> LocalArtifact:
@@ -34,7 +35,8 @@ class JsonArtifactLogger:
         ))
 
     def log2(self, obj: Union[dict, list], metadata: ArtifactMetadata) -> LocalArtifact:
-        path = random_artifact_file_path("json")
+        logger.info(f"calling log_artifact")
+        path = random_artifact_file_path("json",self.wandb)
         ensure_path_exists(path)
         with open(path, "w") as f:
             json.dump(obj, f)
@@ -43,12 +45,18 @@ class JsonArtifactLogger:
         return art
 
 
+
 @dataclass
 class TableArtifactLogger:
     artifact_logger: ArtifactLogger
     """for use of image visualizations"""
 
     def log(self, metadata: ArtifactMetadata, data: pandas.DataFrame) -> LocalArtifact:
+        """
+        :param metadata:
+        :param data: PIL.Image needs to be converted to wandb.Image
+        :return:
+        """
         table = wandb.Table(dataframe=data)
         return self.artifact_logger.save_artifact2(
             target=table,
@@ -64,9 +72,13 @@ class JsonArtifactLoader:
     def load(self, identifier, type):
         art = self.remote_artifact_factory.from_identifier(identifier=identifier, type=type)
         downloaded = art.download()
-        jp = glob(f"{downloaded}/*.json")[0]
-        with open(jp, "r") as f:
-            data = json.load(f)
+        try:
+            jp = glob(f"{downloaded}/*.json")[0]
+            with open(jp, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            logger.error(f"cannot find a json file downloaded at {downloaded}.")
+            raise e
         return data
 
     def metadata(self, identifier, type):

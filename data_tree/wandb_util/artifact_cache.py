@@ -9,6 +9,7 @@ from typing import Callable, Generic, TypeVar, List
 
 import jsonpickle
 import torch
+import cloudpickle
 from cytoolz import valmap
 from loguru import logger
 from wandb.apis.public import ArtifactType
@@ -68,6 +69,10 @@ class PickleRead(FileRead[T]):
         with open(file, 'rb') as f:
             return pickle.load(f)
 
+class CloudPickleRead(FileRead[T]):
+    def read(self, file: str) -> T:
+        with open(file, 'rb') as f:
+            return cloudpickle.load(f)
 
 class TorchRead(FileRead[T]):
     def read(self, file: str) -> T:
@@ -104,6 +109,10 @@ PickleArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead
                                                            extension=Injected.pure("pkl"),
                                                            file_read=PickleRead
                                                            )
+CloudPickleArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead,
+                                                           extension=Injected.pure("pkl"),
+                                                           file_read=CloudPickleRead
+                                                           )
 TorchArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead,
                                                           extension=Injected.pure("pth"),
                                                           file_read=TorchRead
@@ -125,13 +134,24 @@ class PublicPickleArtifactRead(ArtifactRead):
 @dataclass
 class PickleArtifactWrite(ArtifactWrite):
     artifact_logger: ArtifactLogger
+    wandb:"wandb"
 
     def write(self, data: T, meta: ArtifactMetadata):
-        path = random_artifact_file_path("pkl")
+        path = random_artifact_file_path("pkl",self.wandb)
         with open(path, "wb") as f:
             pickle.dump(data, f)
         self.artifact_logger.save2(path, meta)
 
+@dataclass
+class CloudPickleArtifactWrite(ArtifactWrite):
+    artifact_logger: ArtifactLogger
+    wandb:"wandb"
+
+    def write(self, data: T, meta: ArtifactMetadata):
+        path = random_artifact_file_path("pkl",self.wandb)
+        with open(path, "wb") as f:
+            cloudpickle.dump(data, f)
+        self.artifact_logger.save2(path, meta)
 
 @dataclass
 class JsonArtifactCache(IRead):
@@ -373,10 +393,13 @@ class JsonArtifactCache2(IRead):
                 self._value = self.f()
                 self.json_artifact_write.write(self._value, self.meta)
         return self._value
-
+class IArtifactCacheFactory(abc.ABC):
+    @abc.abstractmethod
+    def get(self,meta:ArtifactMetadata)->ReadFacory:
+        pass
 
 @dataclass
-class ArtifactCacheFactory:
+class ArtifactCacheFactory(IArtifactCacheFactory):
     read: ArtifactRead
     write: ArtifactWrite
 
@@ -419,7 +442,7 @@ class PickleArtifactMemoFactory:
 
 
 @dataclass
-class PickleArtifactCacheFactory:
+class PickleArtifactCacheFactory(IArtifactCacheFactory):
     pickle_artifact_read: PickleArtifactRead
     pickle_artifact_write: PickleArtifactWrite
 
@@ -429,12 +452,12 @@ class PickleArtifactCacheFactory:
             write=self.pickle_artifact_write
         )
 
-    def get(self, meta: ArtifactMetadata):
-        self.factory.get(meta)
+    def get(self, meta: ArtifactMetadata)->ReadFacory:
+        return self.factory.get(meta)
 
 
 @dataclass
-class JsonArtifactCacheFactory:
+class JsonArtifactCacheFactory(IArtifactCacheFactory):
     json_artifact_logger: JsonArtifactLogger
     json_artifact_loader: JsonArtifactLoader
 
@@ -459,3 +482,6 @@ class ReadableRemoteArtifact:
 
     def load(self):
         self.read.read(self.identifier)
+
+def read_pickle_artifact(idt:ArtifactIdentifier):
+    return PickleArtifactRead.map(lambda reader:reader.read(idt))

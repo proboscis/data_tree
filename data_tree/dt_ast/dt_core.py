@@ -1,8 +1,10 @@
 import abc
 from abc import ABC, ABCMeta
 from dataclasses import dataclass, field
-from typing import Tuple, Dict, Any, Callable
+from typing import Tuple, Dict, Any, Callable, Iterable
 
+from distributed.profile import identifier
+from frozendict import frozendict
 from loguru import logger
 from pampy import match_dict
 from snoop import snoop
@@ -15,38 +17,59 @@ class Expr: pass
 #    return Call(self, args, kwargs)
 
 
-@dataclass
+@dataclass(frozen=True)
 class Call(Expr):
     func: Expr
     args: Tuple[Expr] = field(default_factory=tuple)
     kwargs: Dict[str, Expr] = field(default_factory=dict)
+    def __hash__(self):
+        return hash(hash(self.func) + hash(self.args) + hash(frozendict(self.kwargs)))
 
 
-@dataclass
+
+@dataclass(frozen=True)
 class Attr(Expr):
     data: Expr
     attr_name: str  # static access so no ast involved
 
 
-@dataclass
+@dataclass(frozen=True)
 class Object(Expr):
     """
     Use this to construct an AST and then compile it for any use.
     """
     data: Any  # holds user data
+    def __hash__(self):
+        return hash(id(self.data))
+
+    def __repr__(self):
+        return f"Object({str(self.data)[:20]})".replace("\n","").replace(" ","")
 
 
-@dataclass
+@dataclass(frozen=True)
 class TupleExpr(Expr):
     items: Tuple[Expr]
 
 
-@dataclass
+@dataclass(frozen=True)
 class DictExpr(Expr):
     data: Dict[str, Expr]
 
 
+@dataclass(frozen=True)
+class Symbol(Expr):
+    identifier: str
+
+
+@dataclass(frozen=True)
+class Assign(Expr):
+    tgt: Symbol
+    src: Expr
+
+
+
 class AstExpr(metaclass=ABCMeta):
+    # TODO give an id upon call.
     def __call__(self, *args, **kwargs):
         args = [(
             AstExpr.object(arg) if not isinstance(arg, AstExpr) else arg)
@@ -70,12 +93,36 @@ class AstExpr(metaclass=ABCMeta):
         return AstObject(data)
 
     @staticmethod
-    def tuple(items):
+    def tuple(items:Iterable["AstExpr"]):
         return AstTuple(tuple(items))
 
     @staticmethod
     def macro(f):
         return AstMacro(f)
+
+    @staticmethod
+    def symbol(name:str):
+        return AstSymbol(name)
+
+    # def map(self, f: Callable[[Any], Any]):
+    #     raise NotImplementedError()
+    #     return AstMap(self, f)
+    #
+    # def flatmap(self, f: Callable[[Any], "AstExpr"]):
+    #     raise NotImplementedError()
+    #     return AstFlatMap(self, f)
+
+
+@dataclass
+class AstFlatMap(AstExpr):
+    src: AstExpr
+    f: Callable
+
+
+@dataclass
+class AstMap(AstExpr):
+    src: AstExpr
+    f: Callable
 
 
 @dataclass
@@ -113,6 +160,23 @@ class AstCall(AstExpr):
 
     def __setstate__(self, state):
         self.func, self.args, self.kwargs = state
+
+
+@dataclass
+class AstSymbol(AstExpr):
+    identifier: str
+
+    def to_ast(self) -> Expr:
+        return Symbol(self.identifier)
+
+
+@dataclass
+class AstAssign(AstExpr):
+    tgt: AstSymbol
+    src: AstExpr
+
+    def to_ast(self) -> Expr:
+        return Assign(self.tgt.to_ast(), self.src.to_ast())
 
 
 @dataclass
@@ -165,8 +229,8 @@ class AstDict(AstExpr):
 class AstMacro(AstExpr):
     macro: Callable[[AstExpr], AstExpr]
 
-    def __call__(self, *args, **kwargs):
-        return AstMacroCall(self.macro, AstTuple(args), AstDict(kwargs))
+    def __call__(self, *args, **kwargs)->AstExpr:
+        return AstMacroCall(self.macro, AstTuple(args), AstDict(kwargs)).expand()
 
     def to_ast(self) -> Expr:
         raise RuntimeError("macro needs to be called before converting into ast")
@@ -219,7 +283,7 @@ def replace_object_in_ast(ast, pattern, replacer) -> AstExpr:
                 tuple(_replace(item) for item in call.args),
                 {k: _replace(v) for k, v in call.kwargs.items()}
             ),
-                     AstMacroCall, lambda amc:_replace(amc.expand()),
+                     AstMacroCall, lambda amc: _replace(amc.expand()),
                      AstObject, lambda ao: ao
                      )
 

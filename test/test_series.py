@@ -2,7 +2,7 @@
 import numpy as np
 from loguru import logger
 
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 
 from data_tree._series import Series
 

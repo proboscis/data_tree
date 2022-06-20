@@ -28,6 +28,11 @@ class ManagedPathArtifactLogger:
         return path
 
     def log_artifact_path(self, metadata: ArtifactMetadata):
+        """
+        returns a managed path for storing huge data
+        :param metadata:
+        :return:
+        """
         conds = dict(
             name=metadata.identifier.name,
             type=metadata.identifier.type,
@@ -36,6 +41,7 @@ class ManagedPathArtifactLogger:
         )
         return self.log_path(conditions=conds, name=metadata.identifier.name, type=metadata.identifier.type,
                              description=metadata.description, metadata=metadata.metadata, aliases=metadata.aliases)
+
 
 
 @dataclass

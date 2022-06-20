@@ -1,10 +1,9 @@
 import numpy as np
 
-from omni_converter import auto
 from omni_converter.auto_data.auto_v2 import IAutoData
+from archpainter.rulebook import legacy_auto as auto
 
-
-def dummy_images(n=9) -> IAutoData:
+def dummy_images(n=9,auto=auto) -> IAutoData:
     """
     :return:AutoImage(["image,RGB,RGB"])
     """
@@ -13,7 +12,7 @@ def dummy_images(n=9) -> IAutoData:
     return imgs
 
 
-def dummy_filled_images(n=9, color=(0, 0, 0)) -> IAutoData:
+def dummy_filled_images(n=9, color=(0, 0, 0),auto=auto) -> IAutoData:
     """
     :return:AutoImage(["image,RGB,RGB"])
     """

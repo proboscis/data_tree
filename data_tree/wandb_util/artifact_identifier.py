@@ -9,13 +9,16 @@ class ArtifactIdentifier:
     # TODO make this hold user,project
     name: str
     type: str
-    version:str  = field(default='latest')
+    version: str = field(default='latest')
 
     def identifier_str(self) -> str:
         return f"{self.name}:{self.version if self.version is not None else 'latest'}"
 
     def exists(self, wandb):
         return artifact_exists(self, wandb)
+    def __hash__(self):
+        return hash(self.name) * hash(self.type) * hash(self.version)
+
 
 
 @dataclass
@@ -24,6 +27,9 @@ class ArtifactMetadata:
     description: Union[str, None] = field(default=None)
     metadata: Union[dict, None] = field(default=None)
     aliases: Union[list] = field(default_factory=list)
+
+    def __hash__(self):
+        return hash(self.identifier) * hash(self.metadata)
 
 
 def artifact_exists(art: ArtifactIdentifier, wandb) -> bool:

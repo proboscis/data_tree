@@ -17,18 +17,21 @@ class WandbRunFinder:
     wandb_user: str
 
     def __post_init__(self):
-        self.run = wandb.run
-        self.api = wandb.Api()
+        self.api = wandb.Api(timeout=60)
+        self.project = self.wandb.run.project
 
     def find_by_query_and_name(self, query: dict = None) -> List[Run]:
+        logger.info(f"looking for runs..{query}")
         query = merge(
             {"config.name": self.name},
             query or dict()
         )
-        return self.api.runs(f"{self.wandb_user}/{self.run.project}", query)
+        res= self.api.runs(f"{self.wandb_user}/{self.project}", query)
+        logger.info(f"found runs:{res}")
+        return res
 
     def find_by_query(self, query: dict = None) -> Runs:
-        return self.api.runs(f"{self.wandb_user}/{self.run.project}", query)
+        return self.api.runs(f"{self.wandb_user}/{self.project}", query)
 
     def find_by_job_type(self, job_type: str) -> Runs:
         return self.find_by_query(
@@ -36,8 +39,10 @@ class WandbRunFinder:
         )
 
     def find_by_tags(self, tags: List[str]) -> List[Run]:
+        if isinstance(tags,str):
+            tags = [tags]
         query = {"tags": {"$in": tags}}
-        return list(self.api.runs(f"{self.wandb_user}/{self.run.project}", query))
+        return list(self.api.runs(f"{self.wandb_user}/{self.project}", query))
 
     def find_by_job_type_and_name(self, job_type: str) -> List[Run]:
         query = {"jobType": job_type}

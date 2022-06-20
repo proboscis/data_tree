@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x92ef372d
+# __coconut_hash__ = 0x111512c1
 
 # Compiled with Coconut version 1.6.0 [Vocational Guidance Counsellor]
 
@@ -66,7 +66,8 @@ class DUMMY(_coconut.collections.namedtuple("DUMMY", ()), ImageDef):  # data DUM
     def __hash__(self):  # data DUMMY from ImageDef
         return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data DUMMY from ImageDef
     __match_args__ = ()  # data DUMMY from ImageDef
-_coconut_call_set_names(DUMMY)  # def dummy_rule(imdef):
+_coconut_call_set_names(DUMMY)  # from archpainter.rulebook import legacy_auto as auto
+from archpainter.rulebook import legacy_auto as auto  # from archpainter.rulebook import legacy_auto as auto
 def dummy_rule(imdef):  # def dummy_rule(imdef):
     return ([(lambda a: a, end, 1, "dummy"), ])  #     return [(a->a,end,1,"dummy")]
 
@@ -168,14 +169,12 @@ def test_omni_converter():  # def test_omni_converter():
 #assert format == n_format,f"{format} != {n_format}"
 
 def test_tuple_conversion():  # def test_tuple_conversion():
-    from data_tree import auto  #     from data_tree import auto
     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     logger.info(auto(("image,RGB,RGB", "image,RGB,RGB"))((None, None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))  #     logger.info(auto(("image,RGB,RGB","image,RGB,RGB"))((None,None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))
 
 def test_rgb_to_yuv():  # def test_rgb_to_yuv():
-    from data_tree import auto  #     from data_tree import auto
     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     from archpainter.experiments.rgba2xyz_mod.instances import pix2pix_rgb_batch  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     from archpainter.experiments.rgba2xyz_mod.instances import TORCH_XYZ_BATCH  #     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH

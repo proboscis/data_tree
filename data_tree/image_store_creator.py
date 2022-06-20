@@ -1,39 +1,20 @@
 import gc
 import io
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Iterable, Tuple, List
 
 import PIL
 import h5py
 import numpy as np
 from PIL import Image
-from loguru import logger
 from tqdm import tqdm
 
-from data_tree import auto
 from data_tree.image_store import ImageStore, ImageStoreCreator
+from data_tree.periodic import PeriodicReopen
 from data_tree.util import ensure_path_exists
 from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier
 from data_tree.wandb_util.path_artifact import ManagedPathArtifactLogger, ManagedPathArtifactLoader
-
-
-@dataclass
-class PeriodicReopen:
-    tgt_path: str
-    f: h5py.File = field(default=None)
-
-    def open(self) -> h5py.File:
-        if self.f is None:
-            self.f = h5py.File(self.tgt_path, 'a')
-        return self.f
-
-    def close(self):
-        logger.info(f"closing hdf5")
-        f = self.open()
-        f.flush()
-        f.close()
-        self.f = None
 
 
 @dataclass
@@ -87,6 +68,7 @@ class Hdf5ImageStoreCreator(ImageStoreCreator):
     hdf5_output_artifact_metadata: ArtifactMetadata
 
     def create(self, key_image_pairs: Iterable[Tuple[str, PIL.Image.Image]], total=None):
+        from data_tree import auto
         def gen():
             for k, img in key_image_pairs:
                 png_bytes = auto("image,RGB,RGB")(img).to('png_bytes')

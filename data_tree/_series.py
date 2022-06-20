@@ -25,7 +25,7 @@ from loguru import logger
 from pyvis.network import Network
 from sklearn.preprocessing import MinMaxScaler
 from snoop import snoop
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 
 #from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
@@ -234,7 +234,7 @@ class MetadataUpdater:
 
 
 T = TypeVar("T")
-
+U = TypeVar("U")
 
 class _StarMapHelper:
     def __init__(self, f):
@@ -353,7 +353,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
     def indexed(self, indexer: Indexer):
         return Indexed(self, indexer)
 
-    def map(self, f, batch_f=None):
+    def map(self, f:Callable[[T],U], batch_f=None)->"Series[U]":
         return MappedSeries(self, f, batch_f)
 
     def star_map(self, f):
@@ -702,7 +702,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         left = int(self.total * ratio)
         return self[0:left], self[left:]
 
-    @snoop
+    #@snoop
     def split_n(self,n:int)->"Series[Series]":
         """
         splits this series in to n sub groups.

@@ -3,6 +3,7 @@ import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from pprint import pformat
 from typing import List, Callable
 
 from loguru import logger
@@ -28,6 +29,7 @@ class FileTimeCache:
 
         self.wrapped = wrapped
         self.pkled = Pickled(self.cache_path, self.wrapped)
+        #logger.warning(f"file time cache targets:{pformat(sorted(self.target_files))}")
 
     def modified_times(self):
         return [os.path.getmtime(str(p)) for p in tqdm(self.target_files, desc="examining modified times...")]

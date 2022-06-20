@@ -4,7 +4,7 @@ from glob import glob
 import torch
 from filelock import FileLock
 
-from data_tree.wandb_util import random_artifact_file_path
+from data_tree.wandb_util import random_artifact_file_path, RandomArtifactPathProvider
 from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier
 from data_tree.wandb_util.artifact_logger import ArtifactLogger
 from data_tree.util import ensure_path_exists
@@ -14,9 +14,10 @@ from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory
 @dataclass
 class TorchArtifactLogger:
     artifact_logger: ArtifactLogger
+    random_artifact_path_provider: RandomArtifactPathProvider
 
     def log(self, name: str, type: str, obj: object, description=None, metadata=None, aliases=None) -> "LocalArtifact":
-        path = random_artifact_file_path("pth")
+        path = self.random_artifact_path_provider.random_artifact_file_path("pth")
         ensure_path_exists(path)
         torch.save(obj, path)
         return self.artifact_logger.save(

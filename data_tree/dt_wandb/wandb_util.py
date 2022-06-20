@@ -20,3 +20,4 @@ class WandbSavedImage:
         return img
     def __hash__(self):
         return hash(tuple(self.info.items()))
+

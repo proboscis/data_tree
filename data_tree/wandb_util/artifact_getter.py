@@ -28,7 +28,7 @@ class WandbArtifactGetter:
                           type: str,
                           metadata: dict = None,
                           description: str = None):
-        return self.wandb.Artifact(name, type, metadata=metadata, description=description)
+        return wandb.Artifact(name, type, metadata=metadata, description=description)
 
 @dataclass
 class PublicWandbArtifactGetter:

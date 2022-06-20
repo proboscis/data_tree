@@ -92,6 +92,8 @@ class ZMQ_Client:
         socket.close()
         return res
 
+
+
     def _send_image(self, img: Image):
         raise RuntimeError(f"dont use this now.")
         byte_arr = io.BytesIO()

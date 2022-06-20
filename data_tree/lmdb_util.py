@@ -3,9 +3,10 @@ from dataclasses import dataclass
 from itertools import chain
 from queue import Queue
 from threading import Thread
-from typing import Tuple, Iterable, Union
+from typing import Tuple, Iterable, Union, Optional
 
 import lmdb as lmdb
+import ray
 from lmdb import MapFullError
 from loguru import logger
 from tqdm import tqdm
@@ -21,9 +22,23 @@ class DataStoreCreator(metaclass=abc.ABCMeta):
 class LmdbCreator(DataStoreCreator):
     lmdb_creator_write_map: bool  # True for linux os for using sparse files.
 
-    def create(self, key_data_pairs: Iterable[Tuple[str, bytes]], dst: str, size_in_bytes: int, total=None, bar=None) -> \
-            Union[
-                None, Iterable[Tuple[str, bytes]]]:
+    def create(self,
+               key_data_pairs: Iterable[Tuple[str, bytes]],
+               dst: str,
+               size_in_bytes: int,
+               total=None,
+               bar=None) -> \
+            Union[None, Iterable[Tuple[str, bytes]]]:
+        """
+        consumes given key data pairs until it consumes size_in_bytes.
+        then returns the unfinished iterator to be reused.
+        :param key_data_pairs:
+        :param dst:
+        :param size_in_bytes:
+        :param total:
+        :param bar:
+        :return:
+        """
         written_bytes = 0
 
         def continued(key, data):
@@ -44,14 +59,16 @@ class LmdbCreator(DataStoreCreator):
                         if (get_used_size(txn.stat()) + to_use) < size_in_bytes:
                             txn.put(key.encode(), data)
                         else:
-                            return continued(key, data)
+                            return continued(key, data)  # return unfinished iterator to be used again
                     except MapFullError as mfe:  # if you hit this you are done .
                         logger.error(
                             f'reached max size of a db. written={get_used_size(txn.stat())}, limit={size_in_bytes}')
                         raise mfe
 
 
+
 class ThreadedLmdbCreator(DataStoreCreator):
+
     def create(self, key_data_pairs: Iterable[Tuple[str, bytes]], dst: str, size_in_bytes):
         queue = Queue(maxsize=10000)
 
