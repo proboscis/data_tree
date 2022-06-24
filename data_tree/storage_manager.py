@@ -158,7 +158,7 @@ class FileStorageManager(DBProvider):
 
         # frame = calframe[1]
         # logger.debug(f'caller name: {frame.filename}, {frame.index}')
-
+        logger.info(f"looking for:{conditions}")
         with self.scan_lock:
             res = self.find_matching(conditions)
             if res is None or not os.path.exists(res):

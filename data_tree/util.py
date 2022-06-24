@@ -288,8 +288,8 @@ class Pickled(PickledTrait):
         #logger.debug(f"cache value access from {callee}")
         #logger.debug(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.path}")
         with self.lock:
-            logger.debug(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
             if not self.loaded:
+                #logger.debug(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
                 self._value = load_or_save(self.path, self.proc, backend=self.backend)
                 self.loaded = True
         #logger.debug(f"{threading.current_thread().name}:released lock:{self.lock.path}")
