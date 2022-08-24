@@ -1116,6 +1116,10 @@ class ZippedSeries(MultiSourcedSeries):
 
 
 class LambdaAdapter(Series):
+    def clone(self, parents):
+        return LambdaAdapter(self.slicer,self.total)
+
+
     @en_lazy
     def parents(self):
         return []

@@ -9,6 +9,7 @@ import h5py
 import numpy as np
 import ray
 from loguru import logger
+from ray.actor import ActorHandle
 
 from data_tree import series
 from data_tree._series import Series
@@ -21,6 +22,10 @@ U = TypeVar("U")
 
 
 class KeyValueStore(Generic[T], metaclass=abc.ABCMeta):
+    """
+    read only interface of a kvs
+    """
+
     @abc.abstractmethod
     def keys(self) -> List[str]:
         pass
@@ -45,6 +50,15 @@ class KeyValueStore(Generic[T], metaclass=abc.ABCMeta):
     def sorted_values(self) -> Series[T]:
         return series(self.keys()).sorted().map(self)
 
+    def __len__(self):
+        return len(self.keys())
+
+    def subset(self, keys):
+        return JustKVS(lambda: keys, lambda k: self[k])
+
+    def take(self, n):
+        return self.subset(self.keys()[:n])
+
 
 @dataclass
 class JustKVS(KeyValueStore):
@@ -52,13 +66,24 @@ class JustKVS(KeyValueStore):
     _getitem: Callable
 
     def keys(self) -> List[str]:
-        return self.keys()
+        return self._keys()
 
     def __getitem__(self, item):
         return self._getitem(item)
 
     def __call__(self, key):
         return self[key]
+
+
+@dataclass
+class RamKvs(KeyValueStore):
+    src: dict
+
+    def keys(self) -> List[str]:
+        return list(self.src.keys())
+
+    def __getitem__(self, item) -> T:
+        return self.src[item]
 
 
 @dataclass
@@ -216,3 +241,14 @@ class RemoteHdf5ArtifactKvsCreator:
 
     def __repr__(self):
         return f"{self.__class__.__name__}"
+
+
+@dataclass
+class RemoteKeyValueStoreWrapper(KeyValueStore):
+    src: ActorHandle  # handle of KeyValueStoreActor
+
+    def keys(self) -> List[str]:
+        return ray.get(self.src.keys.remote())
+
+    def __getitem__(self, item) -> T:
+        return ray.get(self.src.__getitem__.remote(item))

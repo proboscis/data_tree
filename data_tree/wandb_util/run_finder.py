@@ -8,6 +8,8 @@ from loguru import logger
 from wandb.apis.public import Run, Runs
 
 from data_tree.wandb_util import RunAndEpoch
+from data_tree.wandb_util.tabulation import tabulate_dicts
+from data_tree.wandb_util.run_ops import WandbRunOps
 
 
 @dataclass
@@ -26,9 +28,9 @@ class WandbRunFinder:
             {"config.name": self.name},
             query or dict()
         )
-        res= self.api.runs(f"{self.wandb_user}/{self.project}", query)
-        logger.info(f"found runs:{res}")
-        return res
+        res = self.api.runs(f"{self.wandb_user}/{self.project}", query)
+        logger.info(f"found runs:\n{tabulate_dicts([WandbRunOps(r).as_dict() for r in list(res)])}")
+        return list(res)
 
     def find_by_query(self, query: dict = None) -> Runs:
         return self.api.runs(f"{self.wandb_user}/{self.project}", query)

@@ -49,6 +49,7 @@ class LmdbCreator(DataStoreCreator):
 
         with lmdb.open(dst, writemap=self.lmdb_creator_write_map, map_size=size_in_bytes) as env:
             logger.warning(f"creating lmdb with map_size={size_in_bytes / 2 ** 30} GB")
+
             with env.begin(buffers=False, write=True) as txn:
                 bar = tqdm(desc=f"storing data to lmdb file:{dst}", total=total) if bar is None else bar
                 for i, (key, data) in enumerate(key_data_pairs):
@@ -64,7 +65,6 @@ class LmdbCreator(DataStoreCreator):
                         logger.error(
                             f'reached max size of a db. written={get_used_size(txn.stat())}, limit={size_in_bytes}')
                         raise mfe
-
 
 
 class ThreadedLmdbCreator(DataStoreCreator):

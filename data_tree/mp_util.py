@@ -10,6 +10,9 @@ from queue import Empty
 from typing import Iterable
 from uuid import uuid4
 import multiprocessing as mp
+
+from returns.result import safe, Result
+
 from data_tree.util import shared_npy_array_like
 
 # from logzero import logger
@@ -60,7 +63,8 @@ def get_global_holder(data: object) -> GlobalHolder:
     GLOBAL_OBJECTS[id] = data
     return GlobalHolder(id)
 
-def get_global_proxy(data:object)->GlobalProxy:
+
+def get_global_proxy(data: object) -> GlobalProxy:
     return GlobalProxy(get_global_holder(data))
 
 
@@ -279,7 +283,7 @@ def _worker2(self, worker_id, worker_gen_args):
                 try:
                     # logger.info(f"worker working on task {i}")
                     self.worker_states[worker_id] = "working on task"
-                    result = f(task)
+                    result = safe(f)(task)
                     self.worker_states[worker_id] = "putting result to queue"
                     # logger.info(f"worker trying to put result {i} to queue.")
                     self.result_queue.put((i, result))
@@ -333,7 +337,8 @@ class SequentialTaskParallel2:
                  worker_gen_args,
                  num_worker=8,
                  max_pending_result=100,
-                 mp=multiprocessing
+                 mp=multiprocessing,
+                 use_result_monad=False
                  ):
         self.worker_gen_args = worker_gen_args
         self.worker_generator = worker_generator
@@ -377,6 +382,7 @@ class SequentialTaskParallel2:
             uid=self.uid,
             TERMINATION_SIGNAL=self.TERMINATION_SIGNAL,
         )
+        self.use_result_monad = use_result_monad
 
     def enqueue(self, item):
         current_task_i = self.task_i
@@ -391,6 +397,10 @@ class SequentialTaskParallel2:
         # without a lock, you lose items..
         self.task_queue.put(task_item)
         # logger.debug(f"task put with index:{self.task_i}. before:{current_task_i}")
+
+    def enqueue_all(self, items):
+        for item in items:
+            self.enqueue(item)
 
     def enqueue_termination(self):
         self.enqueue(self.TERMINATION_SIGNAL)
@@ -468,7 +478,7 @@ class SequentialTaskParallel2:
                     continue
                 fut: Future = self.results[waiting_index]
                 # logger.info(f"yielder waiting for result {waiting_index}")
-                result = fut.result()
+                result: Result = fut.result()
                 if result == self.TERMINATION_SIGNAL:
                     # logger.info(f"stopping yielder")
                     self.termination_signal.set()
@@ -477,7 +487,10 @@ class SequentialTaskParallel2:
                     del self.results[waiting_index]
                     self.finished_pending.value -= 1
                 # bar.update(1)
-                yield result
+                if self.use_result_monad:
+                    yield result  # yield as is
+                else:
+                    yield result.unwrap()
                 # logger.info(f"yielder yielded:{waiting_index}")
                 waiting_index += 1
 
@@ -491,7 +504,11 @@ class SequentialTaskParallel2:
     @contextmanager
     def managed_start(self, debug=False):
         yield self.start(debug=debug)
+        self.close()
         # the code is not reaching here.
+
+    def close(self):
+        assert self.worker_start_signal.is_set()
         logger.info(f"stopping workers")
         self.termination_signal.set()
         if self.workers is not None:

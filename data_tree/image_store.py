@@ -81,12 +81,16 @@ class ImageStore(metaclass=abc.ABCMeta):
     def map(self, mapper: Callable[[PIL.Image.Image], PIL.Image.Image]) -> "MappedImageStore":
         return MappedImageStore(self, mapper)
 
-    def sorted_series(self) -> Series[ImageStorePair]:
+    def sorted_image_store_pairs(self) -> Series[ImageStorePair]:
         """
         sorted series of tuple[key,img]
         :return:
         """
         return series(self.keys()).sorted().map(lambda k: ImageStorePair(k, self[k]))
+
+    def sorted_pairs(self) -> Series[Tuple[str, PIL.Image.Image]]:
+        return series(self.keys()).sorted().map(lambda k: (k, self[k]))
+
 
     def to_kvs(self) -> "KeyValueStore":
         return JustKVS(
@@ -137,6 +141,13 @@ class ImageStore(metaclass=abc.ABCMeta):
 
     def split(self, n: int) -> Series["ImageStore"]:
         return series(self.keys()).split_n(n).map(lambda subset: self.subset(subset))
+
+    def take(self, n: int) -> "ImageStore":
+        return self.subset(self.keys()[:n])
+
+    def ram(self):
+        return RamImageStore({k:self[k] for k in self.keys()})
+
 
 
 @dataclass

@@ -51,7 +51,7 @@ class ArtifactLogger:
             else:
                 logger.info(f"adding artifact from file:{p}")
                 art.add_file(p)
-        logger.info(f"logging artifact...:{name}:{aliases}")
+        logger.info(f"logging artifact... name={name}/aliases={aliases}")
         self.wandb.log_artifact(art, aliases=aliases)
         logger.info(f"logging artifact...done.")
         return LocalArtifact(self.wandb, art)

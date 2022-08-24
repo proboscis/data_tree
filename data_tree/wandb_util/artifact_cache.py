@@ -1,26 +1,32 @@
 import abc
 import hashlib
+import os
 import pickle
 from abc import ABCMeta
 from dataclasses import dataclass
 from glob import glob
+from os import makedirs
 from pprint import pformat
 from typing import Callable, Generic, TypeVar, List
 
 import jsonpickle
-import torch
 import cloudpickle
 from cytoolz import valmap
 from loguru import logger
 from wandb.apis.public import ArtifactType
 
+from data_tree.disk_cache import StaticDiskCache
 from data_tree.dt_wandb.json_artifact import JsonArtifactLogger, JsonArtifactLoader
+from data_tree.key_value_cache import IKeyValueCache, LmdbHelper
+from data_tree.key_value_store import KeyValueStore
+from data_tree.wandb_util.file_read_write import FileRead, PickleRead, CloudPickleRead, TorchRead, Hdf5DataFrameRead, \
+    FileWrite, Hdf5DataFrameWrite
 from pinject_design.di.injected import Injected
-from data_tree.wandb_util import random_artifact_file_path
+from data_tree.wandb_util import random_artifact_file_path, random_artifact_tmp_dir, artifact_logger
 from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
 from data_tree.wandb_util.artifact_logger import ArtifactLogger
 from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory, PublicRemoteArtifactFactory, \
-    RemoteArtifactMetadataFactory, RemoteArtifactMetadata
+    RemoteArtifactMetadataFactory, RemoteArtifactMetadata, RemoteArtifact
 from data_tree.wandb_util.cache import IRead, ReadFacory, LambdaReadFacory
 
 T = TypeVar("T")
@@ -39,7 +45,16 @@ class ArtifactRead(Generic[T], metaclass=abc.ABCMeta):
         pass
 
 
-class ArtifactIo(ArtifactRead, ArtifactWrite, metaclass=ABCMeta): pass
+@dataclass
+class ArtifactIo(ArtifactRead, ArtifactWrite):
+    reader: ArtifactRead
+    writer: ArtifactWrite
+
+    def read(self, idt: ArtifactIdentifier) -> T:
+        return self.reader.read(idt)
+
+    def write(self, data: T, meta: ArtifactMetadata):
+        return self.writer.write(data, meta)
 
 
 @dataclass
@@ -58,26 +73,17 @@ class JsonArtifactWrite(ArtifactWrite):
         return self.json_artifact_logger.log2(data, meta)
 
 
-class FileRead(Generic[T], metaclass=abc.ABCMeta):
-    @abc.abstractmethod
-    def read(self, file: str) -> T:
-        pass
+@dataclass
+class GenericArtifactWrite(ArtifactWrite):
+    wandb: "wandb"
+    artifact_logger: ArtifactLogger
+    file_write: FileWrite
+    file_extension: str
 
-
-class PickleRead(FileRead[T]):
-    def read(self, file: str) -> T:
-        with open(file, 'rb') as f:
-            return pickle.load(f)
-
-class CloudPickleRead(FileRead[T]):
-    def read(self, file: str) -> T:
-        with open(file, 'rb') as f:
-            return cloudpickle.load(f)
-
-class TorchRead(FileRead[T]):
-    def read(self, file: str) -> T:
-        with open(file, 'rb') as f:
-            return torch.load(f)
+    def write(self, data: T, meta: ArtifactMetadata):
+        path = random_artifact_file_path(self.file_extension, self.wandb)
+        self.file_write.write(data, path)
+        self.artifact_logger.save2(path, meta)
 
 
 @dataclass
@@ -110,13 +116,21 @@ PickleArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead
                                                            file_read=PickleRead
                                                            )
 CloudPickleArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead,
-                                                           extension=Injected.pure("pkl"),
-                                                           file_read=CloudPickleRead
-                                                           )
+                                                                extension=Injected.pure("pkl"),
+                                                                file_read=CloudPickleRead
+                                                                )
 TorchArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead,
                                                           extension=Injected.pure("pth"),
                                                           file_read=TorchRead
                                                           )
+Hdf5DataFrameArtifactRead: Injected[ArtifactRead] = Injected.bind(ExtensionArtifactRead,
+                                                                  extension=Injected.pure("h5f"),
+                                                                  file_read=Hdf5DataFrameRead
+                                                                  )
+Hdf5DataFrameArtifactWrite: Injected[ArtifactWrite] = Injected.bind(GenericArtifactWrite,
+                                                                    file_extension=Injected.pure("h5f"),
+                                                                    file_write=Hdf5DataFrameWrite,
+                                                                    )
 
 
 @dataclass
@@ -134,24 +148,28 @@ class PublicPickleArtifactRead(ArtifactRead):
 @dataclass
 class PickleArtifactWrite(ArtifactWrite):
     artifact_logger: ArtifactLogger
-    wandb:"wandb"
+    wandb: "wandb"
 
     def write(self, data: T, meta: ArtifactMetadata):
-        path = random_artifact_file_path("pkl",self.wandb)
+        path = random_artifact_file_path("pkl", self.wandb)
+        logger.info(f"logging pickle artifact at {path}")
         with open(path, "wb") as f:
             pickle.dump(data, f)
+        logger.info(f"written file at {path}. size == {os.path.getsize(path)}")
         self.artifact_logger.save2(path, meta)
+
 
 @dataclass
 class CloudPickleArtifactWrite(ArtifactWrite):
     artifact_logger: ArtifactLogger
-    wandb:"wandb"
+    wandb: "wandb"
 
     def write(self, data: T, meta: ArtifactMetadata):
-        path = random_artifact_file_path("pkl",self.wandb)
+        path = random_artifact_file_path("pkl", self.wandb)
         with open(path, "wb") as f:
             cloudpickle.dump(data, f)
         self.artifact_logger.save2(path, meta)
+
 
 @dataclass
 class JsonArtifactCache(IRead):
@@ -206,7 +224,9 @@ class ArtifactCache:
                 self.write.write(self._value, self.meta)
         return self._value
 
+
 ARTIFACT_TYPE_MEMO = "memo"
+
 
 @dataclass
 class ArtifactMemo:
@@ -263,7 +283,7 @@ def get_memo_meta_hash(name, args, kwargs):
         metadata=dict(
             comment="args and kwargs are not saved due to large size",
             args_types=[type(i) for i in args],
-            kwargs_types=valmap(lambda v: type(v),kwargs)
+            kwargs_types=valmap(lambda v: type(v), kwargs)
         )
     )
     return meta, input_hash
@@ -393,10 +413,14 @@ class JsonArtifactCache2(IRead):
                 self._value = self.f()
                 self.json_artifact_write.write(self._value, self.meta)
         return self._value
+
+
+# data_tree/data_tree/wandb_util/artifact_cache.py
 class IArtifactCacheFactory(abc.ABC):
     @abc.abstractmethod
-    def get(self,meta:ArtifactMetadata)->ReadFacory:
+    def get(self, meta: ArtifactMetadata) -> ReadFacory:
         pass
+
 
 @dataclass
 class ArtifactCacheFactory(IArtifactCacheFactory):
@@ -452,7 +476,7 @@ class PickleArtifactCacheFactory(IArtifactCacheFactory):
             write=self.pickle_artifact_write
         )
 
-    def get(self, meta: ArtifactMetadata)->ReadFacory:
+    def get(self, meta: ArtifactMetadata) -> ReadFacory:
         return self.factory.get(meta)
 
 
@@ -483,5 +507,37 @@ class ReadableRemoteArtifact:
     def load(self):
         self.read.read(self.identifier)
 
-def read_pickle_artifact(idt:ArtifactIdentifier):
-    return PickleArtifactRead.map(lambda reader:reader.read(idt))
+
+def read_pickle_artifact(idt: ArtifactIdentifier):
+    return PickleArtifactRead.map(lambda reader: reader.read(idt))
+
+
+@dataclass
+class DiskCacheArtifactRead(ArtifactRead):
+    remote_artifact_factory: RemoteArtifactFactory
+
+    def read(self, idt: ArtifactIdentifier) -> StaticDiskCache:
+        ra = self.remote_artifact_factory.from_identifier_object(idt)
+        downloaded = ra.download()
+        return StaticDiskCache(downloaded)
+
+
+@dataclass
+class KeyValueCacheKvsAdapter(KeyValueStore):
+    src: IKeyValueCache
+
+    def keys(self) -> List[str]:
+        return self.src.keys()
+
+    def __getitem__(self, item) -> T:
+        return self.src[item]
+
+
+@dataclass
+class LmdbArtifactRead(ArtifactRead):
+    path_to_lmdb_kvs: Callable[[str], KeyValueStore]
+    remote_artifact_factory: RemoteArtifactFactory
+
+    def read(self, idt: ArtifactIdentifier) -> T:
+        path = self.remote_artifact_factory.from_identifier_object(idt).download()
+        return self.path_to_lmdb_kvs(path)

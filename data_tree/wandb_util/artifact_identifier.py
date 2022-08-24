@@ -16,9 +16,9 @@ class ArtifactIdentifier:
 
     def exists(self, wandb):
         return artifact_exists(self, wandb)
+
     def __hash__(self):
         return hash(self.name) * hash(self.type) * hash(self.version)
-
 
 
 @dataclass
@@ -40,3 +40,6 @@ def artifact_exists(art: ArtifactIdentifier, wandb) -> bool:
     except Exception as e:
         logger.warning(f"artifct:{art} does not exist?:{e}")
         return False
+
+
+ArtifactMetadataLike = Union[ArtifactMetadata, ArtifactIdentifier, str]

@@ -26,18 +26,17 @@ WARN_SLOW_PREFETCH = False
 import pickle
 
 
-
 # logger.remove()
 # logger.add(sys.stderr,format="<green>{time}</green><lvl>\t{level}</lvl>\t{thread.name}\t{process.name}\t| <lvl>{message}</lvl>")
 def load_or_save_with_lock(path, proc, reader_lock: threading.RLock, writer_lock: threading.RLock, backend=pickle):
     # we need to share a reader counter across processes. but can we?
     try:
         with open(path, "rb") as f:
-            return backend.load(f) # this takes a lot of time.
+            return backend.load(f)  # this takes a lot of time.
     except Exception as e:
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
         # ok, loading failed. we need to recalc.
-        with writer_lock: # wait for someone to complete writing
+        with writer_lock:  # wait for someone to complete writing
             # at this point the cache is ready
             pass
 
@@ -46,7 +45,7 @@ def load_or_save_with_lock(path, proc, reader_lock: threading.RLock, writer_lock
             ensure_path_exists(path)
             with open(path, "wb") as f:
                 logger.info(f"caching at {path}")
-                backend.dump(res, f) # actually now we can release the lock
+                backend.dump(res, f)  # actually now we can release the lock
         except Exception as e:
             logger.error(f"failed to cache:{e}")
             logger.error(f"failed to cache proc result at {path}. check the filesystem is writable.")
@@ -55,17 +54,16 @@ def load_or_save_with_lock(path, proc, reader_lock: threading.RLock, writer_lock
 
 
 def load_or_save(path, proc, backend=pickle):
-
     try:
-        #logger.debug(f"opening file at:{path}")
+        # logger.debug(f"opening file at:{path}")
         with open(path, "rb") as f:
             # logger.info(f"using backend:{backend}")
-            #logger.debug(f"pid:|{os.getpid()}|loading cache at {path}")
+            # logger.debug(f"pid:|{os.getpid()}|loading cache at {path}")
             start = datetime.now()
             res = backend.load(f)
             end = datetime.now()
             dt = end - start
-            #logger.debug(f"loading cache at {path} took {dt.total_seconds():.2f} seconds")
+            # logger.debug(f"loading cache at {path} took {dt.total_seconds():.2f} seconds")
             return res
     except Exception as e:
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
@@ -74,7 +72,7 @@ def load_or_save(path, proc, backend=pickle):
             ensure_path_exists(path)
             with open(path, "wb") as f:
                 logger.info(f"caching at {path}")
-                backend.dump(res, f) # actually now we can release the lock
+                backend.dump(res, f)  # actually now we can release the lock
         except Exception as e:
             logger.error(f"failed to cache:{e}")
             logger.error(f"failed to cache proc result at {path}. check the filesystem is writable.")
@@ -112,7 +110,7 @@ def ensure_path_exists(fileName):
     if not path.exists(parent) and parent:
         try:
             logger.info(f"making dirs for {fileName}")
-            makedirs(parent)
+            makedirs(parent, exist_ok=True)
         except FileExistsError as fee:
             pass
 
@@ -268,7 +266,7 @@ class Pickled(PickledTrait):
     def __getstate__(self):
         state = dict(
             path=self.path,
-            proc=self.proc, # I think this is preventing pickling.. but it is a must to pickle this.
+            proc=self.proc,  # I think this is preventing pickling.. but it is a must to pickle this.
             backend="pickle" if self.backend == pickle else None
         )
         # at this point self.proc requires recursive pickling
@@ -285,14 +283,14 @@ class Pickled(PickledTrait):
     @property
     def value(self):
         callee = get_callee()
-        #logger.debug(f"cache value access from {callee}")
-        #logger.debug(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.path}")
+        # logger.debug(f"cache value access from {callee}")
+        # logger.debug(f"{threading.current_thread().name}:trying to aqquire lock:{self.lock.path}")
         with self.lock:
             if not self.loaded:
-                #logger.debug(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
+                # logger.debug(f"{threading.current_thread().name}:aqquired lock:{self.lock.path}")
                 self._value = load_or_save(self.path, self.proc, backend=self.backend)
                 self.loaded = True
-        #logger.debug(f"{threading.current_thread().name}:released lock:{self.lock.path}")
+        # logger.debug(f"{threading.current_thread().name}:released lock:{self.lock.path}")
         return self._value
 
     def clear(self):
@@ -348,6 +346,21 @@ def scantree_filtered(path, ignore: Callable, yield_dir=False):
                 if not ignore(entry.path):
                     yield from scantree_filtered(entry.path, ignore=ignore,
                                                  yield_dir=yield_dir)  # see below for Python 2.x
+            else:
+                yield entry
+    except PermissionError as e:
+        logger.warning(f"permission error at {path}. ignoring...")
+
+
+def scantree_leafcut(path, to_go_deepr: Callable):
+    try:
+        for entry in os.scandir(path):
+            entry: os.DirEntry
+            if entry.is_dir(follow_symlinks=False):
+                yield entry
+                if to_go_deepr(entry.path):
+                    yield from scantree_leafcut(entry.path, to_go_deepr)
+
             else:
                 yield entry
     except PermissionError as e:

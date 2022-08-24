@@ -1,13 +1,19 @@
+import datetime
 import hashlib
+import os
 import pickle
 from abc import ABCMeta, abstractmethod, ABC
 from dataclasses import dataclass
 from typing import Generic, Callable
 
 from loguru import logger
+from pandas import Timedelta
 
+from data_tree import storage_manager
 from data_tree.image_store import T
+from data_tree.storage_manager import FileStorageManager
 from data_tree.util import Pickled
+from pinject_design.di.injected import Injected
 
 
 class IRead(Generic[T], metaclass=ABCMeta):
@@ -24,8 +30,9 @@ class ReadFacory(metaclass=ABCMeta):
 
 
 class ICache(Generic[T], ABC):
+    @property
     @abstractmethod
-    def value(self, f):
+    def value(self):
         pass
 
     @abstractmethod
@@ -35,57 +42,32 @@ class ICache(Generic[T], ABC):
 
 class ICacheFactory(ABC):
     @abstractmethod
-    def get(self, f) -> ICache:
+    def get(self, f, identifier) -> ICache:
         pass
-
-
-class KeyedCacheFactory(metaclass=ABCMeta):
-    @abstractmethod
-    def cache(self, key_obj, f: Callable[[], T], identifier: str) -> IRead[T]:
-        pass
-
-
-class PickledCacheFactory(KeyedCacheFactory):
-    def cache(self, key_obj, f: Callable[[], T], identifier: str) -> IRead[T]:
-        return PickledCache(key_obj, f, identifier)
 
 
 @dataclass
 class PickleCacheFactory(ICacheFactory):
-    pkl_path: str
+    pickle_cache_root_dir: str
 
-    def get(self, f) -> ICache:
-        return Pickled(self.pkl_path, proc=f)
+    def get(self, f, identifier: str) -> ICache:
+        return PickledCache(os.path.join(self.pickle_cache_root_dir, identifier) + ".pkl", f=f)
 
 
 @dataclass
-class PickledCache(IRead):
-    key_obj: object
+class PickledCache(ICache):
+    pkl_path: str
     f: Callable[[], T]
-    identifier: str
 
     def __post_init__(self):
-        self._hash = hashlib.md5(pickle.dumps(self.key_obj))
-
-        def proc():
-            data = self.f()
-            return dict(
-                data=data,
-                hash=self._hash,
-                key_obj=self.key_obj
-            )
-
-        self.cache = Pickled(path=self.identifier + ".cache.pkl", proc=proc)
+        self.cache = Pickled(path=self.pkl_path, proc=self.f)
 
     @property
     def value(self):
-        cached_hash = self.cache.value["hash"]
-        if cached_hash != self._hash:
-            logger.warning(
-                f"invalidating since cached key_obj == {self.cache.value['key_obj']}, while given key is {self.key_obj}")
-            self.cache.clear()
+        return self.cache.value
 
-        return self.cache.value["data"]
+    def clear(self):
+        return self.cache.clear()
 
 
 @dataclass
@@ -94,3 +76,41 @@ class LambdaReadFacory(ReadFacory):
 
     def get(self, f) -> IRead:
         return self.src_function(f)
+
+
+@dataclass
+class TimedCache(ICache):
+    cache: ICache
+    valid_duration: datetime.timedelta
+
+    @property
+    def value(self):
+        val, time = self.cache.value
+        now = datetime.datetime.now()
+        if now - time > self.valid_duration:
+            logger.warning(f"invalidating a cache:{self.cache} due to expiration:{self.valid_duration} ")
+            self.cache.clear()
+        return self.cache.value[0]
+
+    def clear(self):
+        self.cache.clear()
+
+
+@dataclass
+class TimedCacheFactory:
+    cache_factory: ICacheFactory
+
+    def get(self, f: Callable, identifier: str, duration: datetime.timedelta) -> ICache:
+        def proc():
+            res = f()
+            time = datetime.datetime.now()
+            return res, time
+
+        cache = self.cache_factory.get(proc, identifier)
+        return TimedCache(cache, duration)
+
+
+TimedPickleCacheFactory = Injected.bind(
+    TimedCacheFactory,
+    cache_factory=Injected.bind(PickleCacheFactory)
+)
