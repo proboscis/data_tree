@@ -150,6 +150,7 @@ class ImageStore(metaclass=abc.ABCMeta):
 
 
 
+
 @dataclass
 class RamImageStore(ImageStore):
     images: Dict[str, PIL.Image.Image]
@@ -174,6 +175,9 @@ class LambdaImageStore(ImageStore):
 
     def __getitem__(self, item):
         return self.get_item(item)
+
+    def __repr__(self):
+        return f"LambdaImageStore(n_src_keys={len(self.src_keys)},get_item={self.get_item})"
 
 
 class KeyMappedImageStore(ImageStore):

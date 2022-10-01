@@ -1,9 +1,5 @@
-from typing import Callable, Any
-
-from omni_converter import AutoDataFactory
-from omni_converter.auto_data.auto_v2 import RuledData, IAutoData
+from omni_converter.auto_data.auto_v2 import RuledData
 from omni_converter.solver.rules import AutoRuleBook
-from omni_cv_rules.rulebook import CV_RULEBOOK
 
 
 def managed_cache(root_dir):

@@ -30,11 +30,13 @@ from tqdm import tqdm
 #from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
 #from data_tree.coconut.visualization import infer_widget
-from data_tree.coconut.visualization import infer_widget
+#from data_tree.coconut.visualization import infer_widget
+from omni_cv_rules.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2, get_global_holder
 from data_tree.custom_resource import Resource
 from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled
+from omni_converter import IAutoData
 
 
 def en_numpy(data):
@@ -163,6 +165,8 @@ class Trace:
         elif isinstance(data, Trace):
             from ipywidgets import widgets
             viz = widgets.HTML(value=repr(data).replace("\n", "<br>"))
+        elif isinstance(data,IAutoData):
+            viz = data.to("widget")
         else:
             viz = infer_widget(data)
         return viz

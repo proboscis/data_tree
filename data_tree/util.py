@@ -1,10 +1,12 @@
 import abc
 import os
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from hashlib import sha1
-from queue import Queue, Full
+from multiprocessing import Manager, Process
+from queue import Queue, Full, Empty
 from threading import Thread
 from typing import Callable
 
@@ -397,9 +399,94 @@ def scan_image_paths(path):
 
     return series(gen())
 
+def scan_images_piped(path):
+    EXTS = {"jpg", "png", "gif", "jpeg"}
+    queue = Queue()
+    def gen():
+        for item in tqdm(scantree(path), desc=f"scanning {path} for images..."):
+            queue.put(item)
+        queue.put(None)
+
+    t= Thread(target=gen)
+    t.start()
+    while True:
+        item = queue.get()
+        if item is None:
+            break
+        else:
+            if item.name.split(".")[-1] in EXTS:
+                yield item.path
+    t.join()
+
+
+
+def scan_dir_mp(path, n_worker=8):
+    from loguru import logger
+    logger.info("Scanning directory with %d workers", n_worker)
+    manager = Manager()
+    target_dirs = manager.Queue()
+    finished = manager.Event()
+    results = manager.Queue()
+    worker_states = manager.dict()
+    target_dirs.put(path)
+
+    def worker(id):
+        while not finished.is_set():
+            try:
+                worker_states[id] = "waiting"
+                item: str = target_dirs.get(timeout=1)
+                worker_states[id] = "working"
+                for entry in os.scandir(item):
+                    if entry.is_dir():
+                        target_dirs.put(entry.path)
+                    else:
+                        results.put(entry.path)
+            except Empty:
+                continue
+        worker_states[id] = "finished"
+
+    workers = [Thread(target=worker, args=(i,)) for i in range(n_worker)]
+    for w in workers:
+        w.start()
+
+    def check_workers():
+        while True:
+            time.sleep(1)
+            if all([state == "waiting" for state in worker_states.values()]) and target_dirs.empty():
+                break
+        finished.set()
+
+    checker = Thread(target=check_workers)
+    checker.start()
+
+    bar=tqdm(desc=f"scanning {path} with {n_worker} threads...")
+
+    while not finished.is_set():
+        try:
+            item = results.get(timeout=1)
+            yield item
+            bar.update(1)
+        except Empty:
+            continue
+    bar.close()
+    for w in workers:
+        w.join()
+    checker.join()
+
+
+def scan_image_paths_mp(path, num_workers):
+    EXTS = {"jpg", "png", "gif", "jpeg"}
+    for item in scan_dir_mp(path, n_worker=num_workers):
+        if item.split(".")[-1] in EXTS:
+            yield item
+
 
 def scan_image_paths_cached(path, cache_path) -> "Series[str]":
     return Pickled(cache_path, lambda: scan_image_paths(path)).value
+def scan_image_paths_pipe_cached(path, cache_path) -> "Series[str]":
+    return Pickled(cache_path, lambda: list(scan_images_piped(path))).value
+def scan_image_paths_mp_cached(path, cache_path,n_worker=8) -> "Series[str]":
+    return Pickled(cache_path, lambda: list(scan_image_paths_mp(path,num_workers=n_worker))).value
 
 
 def scan_images_sorted(path):
