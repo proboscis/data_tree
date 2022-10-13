@@ -13,6 +13,7 @@ import multiprocessing as mp
 
 from returns.result import safe, Result
 
+from data_tree import logger
 from data_tree.util import shared_npy_array_like
 
 # from logzero import logger
@@ -713,7 +714,7 @@ class SequentialNumpyTaskParallel:
 
 from threading import Thread
 # mp.set_start_method("spawn",force=True)
-from loguru import logger
+
 
 
 def _mp_worker(f, in_queue, res_dict):

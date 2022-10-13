@@ -17,11 +17,13 @@ import numpy as np
 from PIL import Image
 from filelock import FileLock
 from lazy import lazy as en_lazy
-from loguru import logger
+
 from lru import LRU
 from tqdm import tqdm
 
 from archpainter.rulebook import legacy_auto as auto
+
+from data_tree import logger
 from data_tree._series import SourcedSeries, NumpySeries, MappedSeries, Series
 from data_tree.coconut.astar import Conversion
 from data_tree.indexer import IdentityIndexer, Indexer

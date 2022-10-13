@@ -1,9 +1,10 @@
 import os
 from typing import List
 
-from loguru import logger
+
 from tqdm import tqdm
 
+from data_tree import logger
 from data_tree.key_value_cache import IFileBasedCache
 from data_tree.util import Pickled
 

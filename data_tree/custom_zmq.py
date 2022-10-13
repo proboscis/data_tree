@@ -4,8 +4,8 @@ from threading import Thread
 
 import zmq
 from PIL import Image
-from loguru import logger
 
+from data_tree import logger
 from data_tree.coconut.monad import try_monad, Failure, Success
 
 

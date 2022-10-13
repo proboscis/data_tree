@@ -1,8 +1,12 @@
 import pytest
 from IPython import embed
-from loguru import logger
+
 import numpy as np
-def test_rgb_to_yuv():
+
+from data_tree import logger
+
+
+def test_rgb_to_yuv(archpainter=u):
     from archpainter.rulebook import legacy_auto as auto
     import numpy as np
     a_data = auto("numpy,uint8,HWC,RGB,0_255")(None)

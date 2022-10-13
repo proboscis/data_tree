@@ -6,8 +6,8 @@ from typing import Union
 
 import pandas
 import wandb
-from loguru import logger
 
+from data_tree import logger
 from data_tree.util import ensure_path_exists
 from data_tree.wandb_util import random_artifact_file_path
 from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier
@@ -35,6 +35,7 @@ class JsonArtifactLogger:
         ))
 
     def log2(self, obj: Union[dict, list], metadata: ArtifactMetadata) -> LocalArtifact:
+        from loguru import logger
         logger.info(f"calling log_artifact")
         path = random_artifact_file_path("json",self.wandb)
         ensure_path_exists(path)

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Union
 
-from loguru import logger
+from data_tree import logger
 
 
 @dataclass

@@ -16,7 +16,7 @@ from cytoolz import memoize
 from easydict import EasyDict as edict
 from frozendict import frozendict
 from lazy import lazy
-from loguru import logger
+
 
 # from data_tree._series import Series
 from tqdm import tqdm
@@ -36,6 +36,7 @@ def load_or_save_with_lock(path, proc, reader_lock: threading.RLock, writer_lock
         with open(path, "rb") as f:
             return backend.load(f)  # this takes a lot of time.
     except Exception as e:
+        from loguru import logger
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
         # ok, loading failed. we need to recalc.
         with writer_lock:  # wait for someone to complete writing
@@ -68,6 +69,7 @@ def load_or_save(path, proc, backend=pickle):
             # logger.debug(f"loading cache at {path} took {dt.total_seconds():.2f} seconds")
             return res
     except Exception as e:
+        from loguru import logger
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
         res = proc()
         try:
@@ -84,6 +86,7 @@ def load_or_save(path, proc, backend=pickle):
 
 def load_or_save_df(path, proc):
     try:
+        from loguru import logger
         logger.info(f"loading df cache at {path}")
         start = datetime.now()
         res = pd.read_hdf(path, key="cache")
@@ -92,6 +95,7 @@ def load_or_save_df(path, proc):
         logger.info(f"loading df cache at {path} took {dt.total_seconds():.2f} seconds")
         return res
     except Exception as e:
+        from loguru import logger
         logger.info(f"failed to load cache at {path} for {proc.__name__} (cause:{e})")
         df: pd.DataFrame = proc()
         logger.info(f"caching at {path}")
@@ -111,6 +115,7 @@ def ensure_path_exists(fileName):
     parent = os.path.dirname(fileName)
     if not path.exists(parent) and parent:
         try:
+            from loguru import logger
             logger.info(f"making dirs for {fileName}")
             makedirs(parent, exist_ok=True)
         except FileExistsError as fee:
@@ -126,6 +131,7 @@ def cached_ensure_path_exists(name):
 def cached_makedirs(dir):
     if not os.path.exists(dir) and dir:
         try:
+            from loguru import logger
             logger.info(f"making dirs for {dir}")
             os.makedirs(dir)
         except FileExistsError as fee:
@@ -138,6 +144,7 @@ def ensure_dir_exists(dirname):
     parent = os.path.dirname(dirname)
     if not path.exists(parent) and parent:
         try:
+            from loguru import logger
             logger.info(f"making dirs for {dirname}")
             makedirs(parent)
         except FileExistsError as fee:
@@ -179,9 +186,10 @@ def prefetch_generator(gen, n_prefetch=5, name=None):
             item_queue.put(END_TOKEN)
         except Exception as e:
             import traceback
+            from loguru import logger
             logger.error(f"exception in prefetch loader:{e}")
             logger.error(traceback.format_exc())
-
+    from loguru import logger
     t = Thread(target=loader)
     t.daemon = True
     t.start()
@@ -236,6 +244,7 @@ class DefaultDict(dict):
         self.f = f
 
     def __missing__(self, key):
+        from loguru import logger
         logger.debug(f"missing:{key}")
         res = self.f(key)
         self[key] = res
@@ -296,6 +305,7 @@ class Pickled(PickledTrait):
         return self._value
 
     def clear(self):
+        from loguru import logger
         with self.lock:
             try:
                 # this try has no effect at all?
@@ -327,6 +337,7 @@ class MappedPickled(PickledTrait):
 
 def scantree(path, yield_dir=False):
     """Recursively yield DirEntry objects for given directory."""
+    from loguru import logger
     try:
         for entry in os.scandir(path):
             if entry.is_dir(follow_symlinks=False):
@@ -340,6 +351,7 @@ def scantree(path, yield_dir=False):
 
 
 def scantree_filtered(path, ignore: Callable, yield_dir=False):
+    from loguru import logger
     try:
         for entry in os.scandir(path):
             if entry.is_dir(follow_symlinks=False):
@@ -355,6 +367,7 @@ def scantree_filtered(path, ignore: Callable, yield_dir=False):
 
 
 def scantree_leafcut(path, to_go_deepr: Callable):
+    from loguru import logger
     try:
         for entry in os.scandir(path):
             entry: os.DirEntry
@@ -573,6 +586,7 @@ def embed_qt(locals):
 
 
 def next_without_exception(iterator):
+    from loguru import logger
     try:
         return next(iterator)
     except StopIteration as e:

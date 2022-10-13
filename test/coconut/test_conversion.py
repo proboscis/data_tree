@@ -34,7 +34,7 @@ _coconut_sys.path.pop(0)
 # Compiled Coconut: -----------------------------------------------------------
 
 from data_tree.coconut.astar import astar  # from data_tree.coconut.astar import astar
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 import numpy as np  # import numpy as np
 import torch  # import torch
 from PIL import Image  # from PIL import Image

@@ -38,7 +38,7 @@ from pprintpp import pformat  # from pprintpp import pformat,pprint
 from pprintpp import pprint  # from pprintpp import pformat,pprint
 from PIL import Image  # from PIL import Image
 import PIL  # import PIL
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 import numpy as np  # import numpy as np
 import pandas as pd  # import pandas as pd
 from typing import Iterable  # from typing import Iterable
@@ -55,7 +55,7 @@ def img_to_widget(value):  # def img_to_widget(value):
 #img_to_widget = value ->widgets.Box([widgets.Image(value=value._repr_png_(),format="png")])
 
 from bqplot import pyplot as blt  # from bqplot import pyplot as blt
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 
 class DummyType(_coconut.collections.namedtuple("DummyType", ())):  # data DummyType
     __slots__ = ()  # data DummyType

@@ -2,10 +2,11 @@ import time
 from threading import Thread
 
 import rx
-from loguru import logger
+
 from rx.scheduler import NewThreadScheduler
 from rx.subject import Subject
 
+from data_tree import logger
 from data_tree.image_store_pkg.lmdb import subscribe_as_generator
 
 

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from archpainter.rulebook import legacy_auto as auto
 from data_tree.image_store import ImageStore
 from data_tree.image_store_creator import Hdf5BytesKvsCreator
 from data_tree.wandb_util.artifact_identifier import ArtifactMetadata

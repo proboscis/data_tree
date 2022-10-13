@@ -8,6 +8,9 @@
 
 from __future__ import generator_stop
 import sys as _coconut_sys, os as _coconut_os
+
+from data_tree import logger
+
 _coconut_file_dir = _coconut_os.path.dirname(_coconut_os.path.abspath(__file__))
 _coconut_cached_module = _coconut_sys.modules.get("__coconut__")
 if _coconut_cached_module is not None and _coconut_os.path.dirname(_coconut_cached_module.__file__) != _coconut_file_dir:
@@ -34,7 +37,7 @@ _coconut_sys.path.pop(0)
 # Compiled Coconut: -----------------------------------------------------------
 
 import heapq  # import heapq
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 from pprintpp import pformat  # from pprintpp import pformat
 from collections import OrderedDict  # from collections import OrderedDict
 from data_tree.coconut.monad import try_monad  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
@@ -43,7 +46,7 @@ from data_tree.coconut.monad import Success  # from data_tree.coconut.monad impo
 from data_tree.coconut.monad import Failure  # from data_tree.coconut.monad import try_monad,Try,Success,Failure
 import dill  # for pickling inner lambda...  # import dill # for pickling inner lambda...
 from tqdm import tqdm  # from tqdm import tqdm
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 from itertools import chain  # from itertools import chain
 from os.path import expanduser  # from os.path import expanduser
 from omni_converter.util import DefaultShelveCache

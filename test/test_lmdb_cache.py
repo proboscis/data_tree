@@ -1,4 +1,6 @@
-from loguru import logger
+from data_tree import logger
+
+
 class Dummy:pass
 import pickle
 import numpy as np

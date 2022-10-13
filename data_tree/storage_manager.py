@@ -8,10 +8,12 @@ from typing import List
 
 import cloudpickle
 import yaml
-from loguru import logger
+
+
 from tabulate import tabulate
 from tqdm import tqdm
 
+from data_tree import logger
 from data_tree.picklable_file_lock import PicklableFileLock
 from data_tree.util import scantree, Pickled, scantree_filtered
 
@@ -44,6 +46,7 @@ class FileStorageManager(DBProvider):
         """
         self.db_path = os.path.expanduser(db_path)
         os.makedirs(self.db_path, exist_ok=True)
+        from loguru import logger
         logger.info(f"scan targets:{tgt_dirs}")
         self.tgt_dirs = [os.path.expanduser(p) for p in tgt_dirs]
         logger.debug(f"expanded scan targets:{self.tgt_dirs}")

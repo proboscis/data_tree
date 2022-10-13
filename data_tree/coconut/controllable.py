@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# __coconut_hash__ = 0x8956139
+# __coconut_hash__ = 0x2792e5f6
 
 # Compiled with Coconut version 1.6.0 [Vocational Guidance Counsellor]
 
@@ -220,7 +220,7 @@ class ZippedCW(Sourced):  # class ZippedCW(Sourced):
 _coconut_call_set_names(ZippedCW)  # class VizCW(Sourced):
 class VizCW(Sourced):  # class VizCW(Sourced):
     def __init__(self, src, visualizer: '_coconut.typing.Callable[[object], "displayable"]'):  #     def __init__(self,src,visualizer:object->"displayable"):
-        self.src = src  #         self.src = src
+        self.value = src  #         self.value = src
         self.visualizer = visualizer  #         self.visualizer = visualizer
     @lazy  #     @lazy
     def value(self):  #     def value(self):

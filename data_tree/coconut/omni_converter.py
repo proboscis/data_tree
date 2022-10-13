@@ -8,6 +8,9 @@
 
 from __future__ import generator_stop
 import sys as _coconut_sys, os as _coconut_os
+
+from data_tree import logger
+
 _coconut_file_dir = _coconut_os.path.dirname(_coconut_os.path.abspath(__file__))
 _coconut_cached_module = _coconut_sys.modules.get("__coconut__")
 if _coconut_cached_module is not None and _coconut_os.path.dirname(_coconut_cached_module.__file__) != _coconut_file_dir:
@@ -38,7 +41,7 @@ from frozendict import frozendict  # from frozendict import frozendict
 from typing import Mapping  # from typing import Mapping
 from ipywidgets import Text  # from ipywidgets import Text
 import ipywidgets as widgets  # import ipywidgets as widgets
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 import numpy as np  # import numpy as np
 
 

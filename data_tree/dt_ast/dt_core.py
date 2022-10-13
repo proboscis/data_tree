@@ -5,9 +5,11 @@ from typing import Tuple, Dict, Any, Callable, Iterable
 
 from distributed.profile import identifier
 from frozendict import frozendict
-from loguru import logger
+
 from pampy import match_dict
 from snoop import snoop
+
+from data_tree import logger
 
 
 class Expr: pass

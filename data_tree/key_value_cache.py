@@ -7,10 +7,11 @@ from typing import List, Callable
 
 import lmdb
 from lmdb import MapFullError
-from loguru import logger
+
 from returns.result import safe
 from tqdm import tqdm
 
+from data_tree import logger
 from data_tree.serialization_protocol import ISerializationProtocol
 
 

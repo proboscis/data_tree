@@ -183,7 +183,7 @@ class ZippedCW(Sourced):
 
 class VizCW(Sourced):
     def __init__(self,src,visualizer:object->"displayable"):
-        self.src = src
+        self.value = src
         self.visualizer = visualizer
     @lazy
     def value(self):

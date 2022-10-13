@@ -6,9 +6,10 @@ from typing import Callable, Any, Iterator, cast
 
 import better_exceptions
 import zmq
-from loguru import logger
+
 from returns.result import Failure as RFailure
 
+from data_tree import logger
 from data_tree.custom_zmq import ZMQRemoteException
 
 

@@ -8,10 +8,10 @@ from typing import Generic, List, Callable, Tuple, Iterable, Any, TypeVar
 import h5py
 import numpy as np
 import ray
-from loguru import logger
+
 from ray.actor import ActorHandle
 
-from data_tree import series
+from data_tree import series, logger
 from data_tree._series import Series
 from data_tree.periodic import PeriodicReopenV2
 from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier

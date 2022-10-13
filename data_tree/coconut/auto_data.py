@@ -38,7 +38,7 @@ from typing import Callable  # from typing import Mapping, Callable
 from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import AStarSolver
 from IPython.display import display  # from IPython.display import display
 import dill  # to make the lambda functions picklable  # import dill # to make the lambda functions picklable
-from loguru import logger  # from loguru import logger
+  # from loguru import logger
 """
 What I want to achieve is to generate a class.
 I want to generate a AutoImage class form AutoData

@@ -1,6 +1,7 @@
 import numpy as np
-from data_tree import series
-from loguru import logger
+from data_tree import series, logger
+
+
 def test_hdf5_lock():
 
     s = series(np.arange(100))

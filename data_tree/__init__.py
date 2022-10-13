@@ -38,3 +38,34 @@ def ruled(value,
         format = resolve_format(value, format_resolution_rule)
     from omni_converter.auto_data.auto_v2 import AutoData2
     return AutoData2(value=value, format=format).with_rules(rules)
+
+
+class PicklableLogger:
+    def info(self, message):
+        self.logger.info(message)
+
+    def warning(self, message):
+        self.logger.warning(message)
+
+    def error(self, message):
+        self.logger.error(message)
+
+    def debug(self, message):
+        self.logger.debug(message)
+
+    def verbose(self, message):
+        self.logger.verbose(message)
+
+    def __getstate__(self):
+        return None
+
+    def __setstate__(self, state):
+        from loguru import logger
+        self.logger = logger
+
+    def __init__(self):
+        from loguru import logger
+        self.logger = logger
+
+
+logger = PicklableLogger()

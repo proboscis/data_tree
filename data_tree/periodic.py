@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import h5py
-from loguru import logger
+
+from data_tree import logger
 
 
 @dataclass

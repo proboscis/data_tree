@@ -4,9 +4,10 @@ from typing import List
 import numpy as np
 import wandb
 from cytoolz import merge
-from loguru import logger
+
 from wandb.apis.public import Run, Runs
 
+from data_tree import logger
 from data_tree.wandb_util import RunAndEpoch
 from data_tree.wandb_util.tabulation import tabulate_dicts
 from data_tree.wandb_util.run_ops import WandbRunOps

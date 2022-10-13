@@ -1,6 +1,6 @@
 import os
 
-from loguru import logger
+
 
 from omni_converter.util import DefaultShelveCache
 

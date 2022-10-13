@@ -21,12 +21,13 @@ from IPython import embed
 from frozendict import frozendict
 
 from lazy import lazy as en_lazy
-from loguru import logger
+
 from pyvis.network import Network
 from sklearn.preprocessing import MinMaxScaler
 from snoop import snoop
 from tqdm import tqdm
 
+from data_tree import logger
 #from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
 #from data_tree.coconut.visualization import infer_widget
@@ -204,6 +205,7 @@ class Trace:
             mask[show_mask] = True
         else:
             mask[skip_mask] = False
+        from IPython.display import display
 
         for i, t in enumerate(traces[:depth]):
             if mask[i]:
@@ -944,6 +946,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         return inner
 
     def _ipython_display_(self):
+        from IPython.display import display
         return display(self.widget())
 
     def replace(self, replacer):
@@ -1396,6 +1399,7 @@ class ScheduledSeries(IndexedSeries):
         waiting_thread.start()
         while True:
             if q.qsize() == 0:
+                from loguru import logger
                 logger.warning(f"preload queue is empty!")
             item = q.get()
             if item is DONE:
@@ -1430,6 +1434,7 @@ class TaggedSeries(IndexedSeries):
 class MetadataOpsSeries(IndexedSeries):
 
     def clone(self, parents):
+        from loguru import logger
         logger.info(f"cloning metadata ops")
         return MetadataOpsSeries(src=parents[0], operator=self.operator)
 

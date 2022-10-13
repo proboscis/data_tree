@@ -8,8 +8,10 @@ from typing import Tuple, Iterable, Union, Optional
 import lmdb as lmdb
 import ray
 from lmdb import MapFullError
-from loguru import logger
+
 from tqdm import tqdm
+
+from data_tree import logger
 
 
 class DataStoreCreator(metaclass=abc.ABCMeta):

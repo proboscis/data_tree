@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from typing import List
 
 from cytoolz import concat
-from loguru import logger
+
 from tqdm import tqdm
 
+from data_tree import logger
 from data_tree.wandb_util.artifact_wrapper import RemoteArtifactMetadataFactory, RemoteArtifactMetadata
 from data_tree.wandb_util.run_finder import WandbRunFinder
 from data_tree.wandb_util.run_ops import WandbRunOps

@@ -14,7 +14,7 @@ import lmdb
 import ray
 import rx
 from PIL import Image
-from loguru import logger
+
 from ray import ObjectRef
 from ray.actor import ActorHandle
 from rx import Observable
@@ -24,7 +24,7 @@ from rx.scheduler import ThreadPoolScheduler
 from rx.subject import Subject
 from tqdm import tqdm
 
-from data_tree import series, format_converter
+from data_tree import series, format_converter, logger
 
 from data_tree.dt_wandb.json_artifact import JsonArtifactLoader
 from data_tree.format_converter import FormatConverter

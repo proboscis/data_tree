@@ -5,8 +5,8 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 import wandb
-from loguru import logger
 
+from data_tree import logger
 from data_tree.wandb_util.artifact_finder import WandbArtifactFinder
 from data_tree.wandb_util.artifact_logger import ArtifactLogger
 from data_tree.util import Pickled

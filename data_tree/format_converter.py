@@ -2,9 +2,11 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
-from loguru import logger
+
 
 from archpainter.rulebook import legacy_auto as auto
+
+from data_tree import logger
 
 
 @dataclass

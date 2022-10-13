@@ -4,8 +4,8 @@ from typing import Callable
 
 import wandb
 from filelock import FileLock
-from loguru import logger
 
+from data_tree import logger
 from data_tree.util import ensure_path_exists
 from data_tree.wandb_util.artifact_getter import WandbArtifactGetter, PublicWandbArtifactGetter
 from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata

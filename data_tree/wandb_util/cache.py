@@ -6,10 +6,10 @@ from abc import ABCMeta, abstractmethod, ABC
 from dataclasses import dataclass
 from typing import Generic, Callable
 
-from loguru import logger
+
 from pandas import Timedelta
 
-from data_tree import storage_manager
+from data_tree import storage_manager, logger
 from data_tree.image_store import T
 from data_tree.storage_manager import FileStorageManager
 from data_tree.util import Pickled

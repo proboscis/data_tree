@@ -3,8 +3,10 @@ from dataclasses import dataclass
 
 import PIL
 from PIL import Image
-from loguru import logger
+
 from wandb.apis.public import Run
+
+from data_tree import logger
 
 
 @dataclass

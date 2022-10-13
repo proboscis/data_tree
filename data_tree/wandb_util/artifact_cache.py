@@ -12,9 +12,10 @@ from typing import Callable, Generic, TypeVar, List
 import jsonpickle
 import cloudpickle
 from cytoolz import valmap
-from loguru import logger
+
 from wandb.apis.public import ArtifactType
 
+from data_tree import logger
 from data_tree.disk_cache import StaticDiskCache
 from data_tree.dt_wandb.json_artifact import JsonArtifactLogger, JsonArtifactLoader
 from data_tree.key_value_cache import IKeyValueCache, LmdbHelper

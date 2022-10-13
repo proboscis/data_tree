@@ -6,7 +6,7 @@ from pathlib import Path
 from pprint import pformat
 from typing import List, Callable
 
-from loguru import logger
+
 from tqdm import tqdm
 
 from data_tree.util import Pickled
@@ -42,6 +42,7 @@ class FileTimeCache:
         # logger.info(f"get called from {callee}")
         t, data = self.pkled.value
         if self.latest_modification() > t:
+            from loguru import logger
             logger.warning(f"src file changed, invalidating cache")
             self.pkled.clear()
         return self.pkled.value[1]
@@ -73,6 +74,7 @@ class FileTimeCacheImpl(ICache):
     def get(self):
         t, data = self.cache.value
         if self.latest_modification() > t:
+            from loguru import logger
             logger.warning(f"src file changed, invalidating cache")
             self.cache.clear()
         return self.cache.value[1]

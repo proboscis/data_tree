@@ -7,7 +7,10 @@
 # Coconut Header: -------------------------------------------------------------
 
 from __future__ import generator_stop
-import sys as _coconut_sys, os as _coconut_os
+
+import os as _coconut_os
+import sys as _coconut_sys
+
 _coconut_file_dir = _coconut_os.path.dirname(_coconut_os.path.abspath(__file__))
 _coconut_cached_module = _coconut_sys.modules.get("__coconut__")
 if _coconut_cached_module is not None and _coconut_os.path.dirname(_coconut_cached_module.__file__) != _coconut_file_dir:
@@ -28,17 +31,16 @@ if _coconut_module_name and _coconut_module_name[0].isalpha() and all(c.isalpha(
                     _coconut_v_type.__module__ = _coconut_full_module_name
     _coconut_sys.modules[_coconut_full_module_name] = _coconut__coconut__
 from __coconut__ import *
-from __coconut__ import _coconut_call_set_names, _coconut, _coconut_MatchError, _coconut_igetitem, _coconut_base_compose, _coconut_forward_compose, _coconut_back_compose, _coconut_forward_star_compose, _coconut_back_star_compose, _coconut_forward_dubstar_compose, _coconut_back_dubstar_compose, _coconut_pipe, _coconut_star_pipe, _coconut_dubstar_pipe, _coconut_back_pipe, _coconut_back_star_pipe, _coconut_back_dubstar_pipe, _coconut_none_pipe, _coconut_none_star_pipe, _coconut_none_dubstar_pipe, _coconut_bool_and, _coconut_bool_or, _coconut_none_coalesce, _coconut_minus, _coconut_map, _coconut_partial, _coconut_get_function_match_error, _coconut_base_pattern_func, _coconut_addpattern, _coconut_sentinel, _coconut_assert, _coconut_mark_as_match, _coconut_reiterable, _coconut_self_match_types, _coconut_dict_merge, _coconut_exec
+from __coconut__ import _coconut_call_set_names, _coconut, _coconut_base_compose, _coconut_get_function_match_error, \
+    _coconut_sentinel, _coconut_mark_as_match
+
 _coconut_sys.path.pop(0)
 
 # Compiled Coconut: -----------------------------------------------------------
 
-from PIL import Image  # from PIL import Image
 import numpy as np  # import numpy as np
-import heapq  # import heapq
 from data_tree.coconut.visualization import infer_widget  # from data_tree.coconut.visualization import infer_widget
-from loguru import logger  # from loguru import logger
-from data_tree.coconut.astar import new_conversion  # from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
+  # from loguru import logger
 from data_tree.coconut.astar import AStarSolver  # from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from data_tree.coconut.astar import NoRouteException  # from data_tree.coconut.astar import new_conversion,AStarSolver,NoRouteException
 from math import sqrt  # from math import sqrt

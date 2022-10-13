@@ -11,13 +11,13 @@ import h5py
 import numpy as np
 from PIL import Image
 from cytoolz import merge
-from loguru import logger
+
 from tqdm import tqdm
 
 # from data_tree.coconut.auto_data import AutoData
 from data_tree.coconut.auto_data import AutoData
 from data_tree._series import Series
-from data_tree import series
+from data_tree import series, logger
 from data_tree.key_value_store import JustKVS
 from data_tree.mocks.images import dummy_images
 from data_tree.mp_util import GlobalHolder, get_global_holder, SequentialTaskParallel2

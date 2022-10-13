@@ -4,7 +4,7 @@ from types import ModuleType
 from uuid import uuid4
 
 import wandb
-from loguru import logger
+
 from wandb.apis.public import Run
 
 # from archpainter.wandb_util.artifact_finder import WandbArtifactFinder
