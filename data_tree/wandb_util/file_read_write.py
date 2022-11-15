@@ -8,6 +8,7 @@ import torch
 
 T = TypeVar("T")
 
+
 class FileRead(Generic[T], metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def read(self, file: str) -> T:
@@ -18,6 +19,18 @@ class FileWrite(Generic[T], abc.ABC):
     @abc.abstractmethod
     def write(self, object: T, file: str):
         """needs to be a single file!"""
+        pass
+
+
+class AsyncFileRead(Generic[T], abc.ABC):
+    @abc.abstractmethod
+    async def aread(self, file: str) -> T:
+        pass
+
+
+class AsyncFileWrite(Generic[T], abc.ABC):
+    @abc.abstractmethod
+    async def awrite(self, object: T, file: str):
         pass
 
 
@@ -46,5 +59,4 @@ class Hdf5DataFrameRead(FileRead[pd.DataFrame]):
 
 class Hdf5DataFrameWrite(FileWrite[pd.DataFrame]):
     def write(self, object: pd.DataFrame, file: str):
-
-        return object.to_hdf(file, key="data",)
+        return object.to_hdf(file, key="data", )

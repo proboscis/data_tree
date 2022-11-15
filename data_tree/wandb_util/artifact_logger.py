@@ -89,4 +89,5 @@ class ArtifactLogger:
         )
         art.add(target, target_name)
         self.wandb.log_artifact(art, aliases=artifact_metadata.aliases)
+        logger.info(f"logging artifact...done.")
         return LocalArtifact(self.wandb, art)

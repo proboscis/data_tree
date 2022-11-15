@@ -55,6 +55,7 @@ class RemoteArtifact:
             logger.info(f"downloading artifact:{self.identifier} at {result}")
         return result
 
+
     def get_path(self, name):
         return self._art.get_path(name)
 
@@ -164,6 +165,10 @@ class RemoteArtifactMetadata:
     @property
     def version(self):
         return self.art.version
+
+    @property
+    def size(self):
+        return self.art.size
 
     def __repr__(self):
         return f"RemoteArtifactMetadata({self.art.metadata})"

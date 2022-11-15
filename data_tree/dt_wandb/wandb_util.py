@@ -23,3 +23,14 @@ class WandbSavedImage:
     def __hash__(self):
         return hash(tuple(self.info.items()))
 
+    def __getstate__(self):
+        #wandb.Api().run()
+        return self.run.path,self.info
+
+    def __setstate__(self, state):
+        import wandb
+        path,info = state
+        run = wandb.Api().run("/".join(path))
+        self.run = run
+        self.info = info
+

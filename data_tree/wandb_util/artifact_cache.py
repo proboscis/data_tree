@@ -1,17 +1,23 @@
 import abc
+import asyncio
 import hashlib
 import os
 import pickle
 from abc import ABCMeta
-from dataclasses import dataclass
+from concurrent.futures import Future
+from dataclasses import dataclass, replace, field
 from glob import glob
 from os import makedirs
 from pprint import pformat
-from typing import Callable, Generic, TypeVar, List
+from threading import Thread
+from typing import Callable, Generic, TypeVar, List, Awaitable, Any
 
 import jsonpickle
 import cloudpickle
 from cytoolz import valmap
+from expression import Nothing
+from returns.maybe import Some, Maybe
+from returns.result import safe, Success
 
 from wandb.apis.public import ArtifactType
 
@@ -22,9 +28,9 @@ from data_tree.key_value_cache import IKeyValueCache, LmdbHelper
 from data_tree.key_value_store import KeyValueStore
 from data_tree.wandb_util.file_read_write import FileRead, PickleRead, CloudPickleRead, TorchRead, Hdf5DataFrameRead, \
     FileWrite, Hdf5DataFrameWrite
-from pinject_design.di.injected import Injected
+from pinject_design.di.injected import Injected, injected_factory
 from data_tree.wandb_util import random_artifact_file_path, random_artifact_tmp_dir, artifact_logger
-from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
+from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata, ArtifactMetadataLike
 from data_tree.wandb_util.artifact_logger import ArtifactLogger
 from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory, PublicRemoteArtifactFactory, \
     RemoteArtifactMetadataFactory, RemoteArtifactMetadata, RemoteArtifact
@@ -43,6 +49,18 @@ class ArtifactWrite(Generic[T], metaclass=abc.ABCMeta):
 class ArtifactRead(Generic[T], metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def read(self, idt: ArtifactIdentifier) -> T:
+        pass
+
+
+class AsyncArtifactRead(Generic[T], abc.ABC):
+    @abc.abstractmethod
+    async def aread(self, idt: ArtifactIdentifier) -> T:
+        pass
+
+
+class AsyncArtifactWrite(Generic[T], abc.ABC):
+    @abc.abstractmethod
+    async def awrite(self, data: T, meta: ArtifactMetadata):
         pass
 
 
@@ -98,6 +116,35 @@ class ExtensionArtifactRead(ArtifactRead):
         path = rart.download()
         tgt = glob(path + f"/*.{self.extension}")[0]
         return self.file_read.read(tgt)
+
+
+async def proc_as_async_in_thread(proc: Callable):
+    fut = Future()
+
+    def impl():
+        res = safe(proc)()
+        fut.set_result(res)
+
+    t = Thread(target=impl, daemon=True)
+    t.start()
+    res = await asyncio.wrap_future(fut)
+    return res.unwrap()
+
+
+@dataclass
+class ThreadedAsyncArtifactRead(AsyncArtifactRead):
+    artifact_read: ArtifactRead
+
+    async def aread(self, idt: ArtifactIdentifier) -> T:
+        return await proc_as_async_in_thread(lambda: self.artifact_read.read(idt))
+
+
+@dataclass
+class ThreadedAsyncArtifactWrite(AsyncArtifactWrite):
+    artifact_write: ArtifactWrite
+
+    async def awrite(self, data: T, meta: ArtifactMetadata):
+        return await proc_as_async_in_thread(lambda: self.artifact_write.write(data, meta))
 
 
 @dataclass
@@ -230,32 +277,99 @@ ARTIFACT_TYPE_MEMO = "memo"
 
 
 @dataclass
+class ArtifactMemoHashProvider:
+    remote_artifact_metadata_factory: RemoteArtifactMetadataFactory
+
+    def get_hash_meta(self, name, args, kwargs):
+        dumped = jsonpickle.dumps((args, kwargs))
+        input_hash = hashlib.sha256(dumped.encode()).hexdigest()
+        meta = ArtifactMetadata(
+            identifier=ArtifactIdentifier(
+                name=name,
+                type=ARTIFACT_TYPE_MEMO,
+                version=input_hash
+            ),
+            metadata=dict(
+                input=dumped[:100]
+            )
+        )
+        return input_hash, meta
+
+    def exists(self, name, args, kwargs):
+        ihash, meta = self.get_meta(name, args, kwargs)
+        rmeta = self.remote_artifact_metadata_factory.get2(meta.identifier)
+        try:
+            size = rmeta.size
+            return True
+        except Exception as e:
+            logger.error(f"failed to get size for {meta}")
+        return False
+
+
+@dataclass
+class MemoCallResult:
+    value: Any
+    hit: bool
+
+
+@dataclass
 class ArtifactMemo:
     read: ArtifactRead
     write: ArtifactWrite
+    artifact_memo_hash_provider: ArtifactMemoHashProvider
     name: str
     f: Callable
 
     def __post_init__(self):
         self.cache = dict()
 
+    def exists(self, *args, **kwargs):
+        return self.artifact_memo_hash_provider.exists(self.name, args, kwargs)
+
     def __call__(self, *args, **kwargs):
-        dumped = jsonpickle.dumps((args, kwargs))
-        input_hash = hashlib.sha256(dumped.encode()).hexdigest()
-        meta = ArtifactMetadata(
-            identifier=ArtifactIdentifier(
-                name=self.name,
-                type=ARTIFACT_TYPE_MEMO,
-                version=input_hash[:10]
-            ),
-            metadata=dict(
-                input=dumped
-            )
-        )
+        return self.call_with_hit(*args, **kwargs).value
+
+    def call_with_hit(self, *args, **kwargs):
+        input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
+        try:
+            # logger.info(f"checking artifact memo for \n{pformat(dumped)}")
+            hash, loaded = self.read.read(meta.identifier)
+            if input_hash == hash:
+                self.cache[input_hash] = loaded
+                return MemoCallResult(value=loaded, hit=False)
+            else:
+                raise RuntimeError(
+                    f"input hash is different from cached value.:before:{hash},now:{input_hash}")
+        except Exception as e:
+            logger.error(f"error while loading cache from artifact")
+            logger.error(e)
+            logger.error(f"failed to load cache: {meta}")
+            value = self.f(*args, **kwargs)
+            obj = input_hash, value
+            self.write.write(obj, meta)
+            self.cache[input_hash] = value
+        return MemoCallResult(self.cache[input_hash], hit=False)
+
+
+@dataclass
+class AsyncArtifactMemo:
+    read: AsyncArtifactRead
+    write: AsyncArtifactWrite
+    name: str
+    f: Callable[[Any], Awaitable]
+    artifact_memo_hash_provider: ArtifactMemoHashProvider
+
+    def __post_init__(self):
+        self.cache = dict()
+
+    def exists(self, *args, **kwargs):
+        return self.artifact_memo_hash_provider.exists(*args, **kwargs)
+
+    async def __call__(self, *args, **kwargs):
+        input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
         if input_hash not in self.cache:
             try:
-                logger.info(f"checking artifact memo for \n{pformat(dumped)}")
-                hash, loaded = self.read.read(meta.identifier)
+                hash, loaded = await self.read.aread(meta.identifier)
                 if input_hash == hash:
                     self.cache[input_hash] = loaded
                 else:
@@ -263,11 +377,12 @@ class ArtifactMemo:
                         f"input hash is different from cached value.:before:{hash},now:{input_hash}")
             except Exception as e:
                 logger.error(f"error while loading cache from artifact")
-                logger.error(e)
+                logger.error(f"error type:{type(e)}")
+                logger.error(f"cause:{e}")
                 logger.error(f"failed to load cache: {meta}")
-                value = self.f(*args, **kwargs)
+                value = await self.f(*args, **kwargs)
                 obj = input_hash, value
-                self.write.write(obj, meta)
+                await self.write.awrite(obj, meta)
                 self.cache[input_hash] = value
         return self.cache[input_hash]
 
@@ -444,6 +559,22 @@ class ArtifactCacheFactory(IArtifactCacheFactory):
 class ArtifactMemoFactory:
     read: ArtifactRead
     write: ArtifactWrite
+    artifact_memo_hash_provider: ArtifactMemoHashProvider
+
+    def get(self, name, f: Callable) -> ArtifactMemo:
+        return ArtifactMemo(
+            name=name,
+            read=self.read,
+            write=self.write,
+            artifact_memo_hash_provider=self.artifact_memo_hash_provider,
+            f=f
+        )
+
+
+@dataclass
+class AsyncMemoFactory:
+    read: ArtifactRead
+    write: ArtifactWrite
 
     def get(self, name, f: Callable) -> ArtifactMemo:
         return ArtifactMemo(
@@ -456,25 +587,58 @@ class ArtifactMemoFactory:
 
 @dataclass
 class PickleArtifactMemoFactory:
-    pickle_artifact_read: PickleArtifactRead
-    pickle_artifact_write: PickleArtifactWrite
+    cloud_pickle_artifact_read: ArtifactRead
+    cloud_pickle_artifact_write: ArtifactWrite
+    artifact_memo_hash_provider: ArtifactMemoHashProvider
 
     def __post_init__(self):
-        self.factory = ArtifactMemoFactory(read=self.pickle_artifact_read, write=self.pickle_artifact_write)
+        self.factory = ArtifactMemoFactory(read=self.cloud_pickle_artifact_read, write=self.cloud_pickle_artifact_write,
+                                           artifact_memo_hash_provider=self.artifact_memo_hash_provider)
 
     def get(self, name: str, f: Callable) -> ArtifactMemo:
         return self.factory.get(name=name, f=f)
 
 
+@injected_factory
+def cloud_pickle_async_artifact_memo(
+        _cloud_pickle_artifact_read,
+        _cloud_pickle_artifact_write,
+        _artifact_memo_hash_provider,
+        name,
+):
+    def impl(func):
+        return AsyncArtifactMemo(
+            read=ThreadedAsyncArtifactRead(_cloud_pickle_artifact_read),
+            write=ThreadedAsyncArtifactWrite(_cloud_pickle_artifact_write),
+            artifact_memo_hash_provider=_artifact_memo_hash_provider,
+            name=name,
+            f=func
+        )
+
+    return impl
+
+
+@dataclass
+class PickleArtifactAsyncMemoFactory:
+    cloud_pickle_artifact_read: ArtifactRead
+    cloud_pickle_artifact_write: ArtifactWrite
+
+    def __post_init__(self):
+        pass
+
+    def get(self, name, f: Callable):
+        pass
+
+
 @dataclass
 class PickleArtifactCacheFactory(IArtifactCacheFactory):
-    pickle_artifact_read: PickleArtifactRead
-    pickle_artifact_write: PickleArtifactWrite
+    cloud_pickle_artifact_read: ArtifactRead
+    cloud_pickle_artifact_write: ArtifactWrite
 
     def __post_init__(self):
         self.factory = ArtifactCacheFactory(
-            read=self.pickle_artifact_read,
-            write=self.pickle_artifact_write
+            read=self.cloud_pickle_artifact_read,
+            write=self.cloud_pickle_artifact_write
         )
 
     def get(self, meta: ArtifactMetadata) -> ReadFacory:

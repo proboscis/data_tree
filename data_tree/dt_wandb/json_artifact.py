@@ -59,6 +59,7 @@ class TableArtifactLogger:
         :return:
         """
         table = wandb.Table(dataframe=data)
+        logger.info(f"logging dataframe to wandb with metadata: {metadata}")
         return self.artifact_logger.save_artifact2(
             target=table,
             target_name=metadata.identifier.name,
