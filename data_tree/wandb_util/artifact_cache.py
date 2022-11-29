@@ -24,7 +24,8 @@ from wandb.apis.public import ArtifactType
 from data_tree import logger
 from data_tree.disk_cache import StaticDiskCache
 from data_tree.dt_wandb.json_artifact import JsonArtifactLogger, JsonArtifactLoader
-from data_tree.key_value_cache import IKeyValueCache, LmdbHelper
+from data_tree.key_value_cache import IKeyValueCache
+from data_tree.lmdb_helper import LmdbHelper
 from data_tree.key_value_store import KeyValueStore
 from data_tree.wandb_util.file_read_write import FileRead, PickleRead, CloudPickleRead, TorchRead, Hdf5DataFrameRead, \
     FileWrite, Hdf5DataFrameWrite

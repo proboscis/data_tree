@@ -8,8 +8,8 @@ from typing import Generic, List, Callable, Tuple, Iterable, Any, TypeVar
 import h5py
 import numpy as np
 import ray
-
 from ray.actor import ActorHandle
+from tqdm import tqdm
 
 from data_tree import series, logger
 from data_tree._series import Series
@@ -55,6 +55,11 @@ class KeyValueStore(Generic[T], metaclass=abc.ABCMeta):
 
     def subset(self, keys):
         return JustKVS(lambda: keys, lambda k: self[k])
+
+    def blacklist_keys(self,keys):
+        org_keys = set(self.keys())
+        result_keys = org_keys - set(keys)
+        return self.subset(result_keys)
 
     def take(self, n):
         return self.subset(self.keys()[:n])
@@ -252,3 +257,23 @@ class RemoteKeyValueStoreWrapper(KeyValueStore):
 
     def __getitem__(self, item) -> T:
         return ray.get(self.src.__getitem__.remote(item))
+
+
+@dataclass
+class MergedKvs(KeyValueStore):
+    sources: List[KeyValueStore]
+
+    def __post_init__(self):
+        # build key to src mapping
+        self.key_to_src = dict()
+        for i, s in tqdm(enumerate(self.sources)):
+            for k in tqdm(s.keys()):
+                self.key_to_src[k] = i
+
+    def keys(self) -> List[str]:
+        return list(self.key_to_src.keys())
+
+    def __getitem__(self, item) -> T:
+        return self.sources[self.key_to_src[item]][item]
+
+

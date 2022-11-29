@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from data_tree import logger
-from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
+from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata, ArtifactMetadataLike
 from data_tree.dt_wandb.json_artifact import JsonArtifactLogger, JsonArtifactLoader
 from data_tree.storage_manager import FileStorageManager
+
 
 
 @dataclass

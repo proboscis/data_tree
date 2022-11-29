@@ -760,6 +760,12 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
 
+    def windowed(self,n:int)->"Series[Series[T]]":
+        data = []
+        for bs in range(0,self.total,n):
+            data.append(self[bs:bs+n])
+        return self.from_iterable(data)
+
     def batch_generator(self, batch_size, preload=5, offset=0, en_numpy=False, progress_bar=None):
         def _slices():
             for bs, be in batch_index_generator(offset, self.total, batch_size):

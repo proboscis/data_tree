@@ -12,25 +12,22 @@ from typing import Iterable, Tuple, List, Callable, Iterator, Any
 import PIL
 import lmdb
 import ray
-import rx
 from PIL import Image
 
-from ray import ObjectRef
 from ray.actor import ActorHandle
 from rx import Observable
-from rx.core import Observer, typing
+from rx.core import typing
 from rx.core.typing import T_in
-from rx.scheduler import ThreadPoolScheduler
 from rx.subject import Subject
 from tqdm import tqdm
 
-from data_tree import series, format_converter, logger
+from data_tree import series, logger
 
 from data_tree.dt_wandb.json_artifact import JsonArtifactLoader
 from data_tree.format_converter import FormatConverter
 from data_tree.image_store import ImageStoreCreator, convert_images_to_bytes_mp, ImageStore, MillionImageFileCreator, \
     MergedImageStore
-from data_tree.key_value_store import KeyValueStore
+from data_tree.lmdb_bytes_kvs import LmdbBytesKvs
 from data_tree.lmdb_util import LmdbCreator
 from data_tree.storage_manager import FileStorageManager
 from data_tree.util import ensure_path_exists, Pickled
@@ -428,73 +425,6 @@ class ImageLMDBCreator(MillionImageFileCreator):
                     yield os.path.basename(p), data
 
         self.lmdb_creator.create(keys_and_data(), dst)
-
-
-@dataclass
-class LmdbBytesKvs(KeyValueStore):
-    target_lmdb_path: str
-    sort_keys: bool
-
-    def __post_init__(self):
-        assert os.path.exists(self.target_lmdb_path), f"lmdb target path does not exist at {self.target_lmdb_path}!"
-        self._keys = self._cached_keys()
-
-    @property
-    def txn(self):
-        return self.create_txn()
-
-    @contextmanager
-    def create_env(self):
-        # map_size was 1e11
-        # on lustre file system on abci you cannot use file lock. and you have to disable it for lmdb to work.
-        try:
-            with lmdb.open(self.target_lmdb_path, lock=False, readonly=True) as env:
-                yield env
-        except Exception as e:
-            import os
-            if not os.path.exists(self.target_lmdb_path):
-                logger.error(f"target_lmdb_path does not exist!:{e}")
-            raise e
-
-    @contextmanager
-    def create_txn(self):
-        with self.create_env() as env:
-            with env.begin(write=False, buffers=True) as txn:
-                yield txn
-
-    def num_keys(self):
-        with self.create_txn() as txn:
-            return txn.stat()['entries']
-
-    def _cached_keys(self) -> List[str]:
-        cache_path = os.path.join(self.target_lmdb_path, 'keys.pkl')
-        pkl_keys = Pickled(cache_path, self._retrieve_keys)
-        keys = pkl_keys.value
-        if len(keys) != self.num_keys():
-            pkl_keys.clear()
-        return pkl_keys.value
-
-    def keys(self) -> List[str]:
-        return self._keys
-
-    def _retrieve_keys(self) -> List[str]:
-        _keys = list(self.key_iterator())
-        if self.sort_keys:
-            logger.info(f"sorting image store keys...")
-            _keys = list(sorted(_keys))
-        return _keys
-
-    def key_iterator(self):
-        with self.create_txn() as txn:
-            with txn.cursor() as cur:
-                for t in tqdm(cur.iternext(values=False), desc="retrieving keys from lmdb"):
-                    yield t.tobytes().decode()
-
-    def __getitem__(self, item):
-        with self.create_txn() as txn:
-            buf = txn.get(item.encode())
-            assert buf is not None  # why the heck this is None?
-            return buf.tobytes()
 
 
 @dataclass
