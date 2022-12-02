@@ -134,13 +134,18 @@ class FileStorageManager(DBProvider):
             return candidates
 
     def find_matching(self, conditions):
+        from frozendict import frozendict
+        import os
+        logger.info(f"calling customized find_matching")
+        logger.info(f"self:{self}")
+        logger.info(f"{type(self.scan_lock)}")
+        conditions =frozendict(conditions)
         with self.scan_lock:
+            # for each key and value in caches
             for k, c in self.info_cache.value.items():
-                matched = True
-                for ck, cv in conditions.items():
-                    if ck in c and c[ck] != cv:
-                        matched = False
-                        break
+                c = frozendict(c)
+                matched = c==conditions
+                print(f"matched={matched}!")
                 if matched and k in self.scan_cache.value:
                     candidates = self.scan_cache.value[k]
                     candidates = [c for c in candidates if os.path.exists(c)]

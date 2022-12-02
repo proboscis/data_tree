@@ -358,6 +358,9 @@ def scantree_filtered(path, ignore: Callable, yield_dir=False):
                 if yield_dir:
                     yield entry
                 if not ignore(entry.path):
+                    logger.info(f"digging {entry.path}")
+                    if len(os.listdir(entry.path)) > 100:
+                        logger.warning(f"directory {entry.path} has more than 100 entries")
                     yield from scantree_filtered(entry.path, ignore=ignore,
                                                  yield_dir=yield_dir)  # see below for Python 2.x
             else:
