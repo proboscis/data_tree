@@ -29,7 +29,7 @@ from data_tree.lmdb_helper import LmdbHelper
 from data_tree.key_value_store import KeyValueStore
 from data_tree.wandb_util.file_read_write import FileRead, PickleRead, CloudPickleRead, TorchRead, Hdf5DataFrameRead, \
     FileWrite, Hdf5DataFrameWrite
-from pinject_design.di.injected import Injected, injected_factory
+from pinject_design.di.injected import Injected, injected_function
 from data_tree.wandb_util import random_artifact_file_path, random_artifact_tmp_dir, artifact_logger
 from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata, ArtifactMetadataLike
 from data_tree.wandb_util.artifact_logger import ArtifactLogger
@@ -600,7 +600,7 @@ class PickleArtifactMemoFactory:
         return self.factory.get(name=name, f=f)
 
 
-@injected_factory
+@injected_function
 def cloud_pickle_async_artifact_memo(
         _cloud_pickle_artifact_read,
         _cloud_pickle_artifact_write,
