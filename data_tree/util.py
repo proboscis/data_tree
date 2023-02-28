@@ -5,7 +5,7 @@ import time
 from contextlib import contextmanager
 from datetime import datetime
 from hashlib import sha1
-from multiprocessing import Manager, Process
+from multiprocessing import Manager
 from queue import Queue, Full, Empty
 from threading import Thread
 from typing import Callable
@@ -16,8 +16,6 @@ from cytoolz import memoize
 from easydict import EasyDict as edict
 from frozendict import frozendict
 from lazy import lazy
-
-
 # from data_tree._series import Series
 from tqdm import tqdm
 
@@ -278,7 +276,7 @@ class Pickled(PickledTrait):
         state = dict(
             path=self.path,
             proc=self.proc,  # I think this is preventing pickling.. but it is a must to pickle this.
-            backend="pickle" if self.backend == pickle else None
+            backend=self.backend
         )
         # at this point self.proc requires recursive pickling
         return state
@@ -289,7 +287,7 @@ class Pickled(PickledTrait):
         self.path = state["path"]
         self.proc = state["proc"]
         self.lock = PicklableFileLock(self.path + ".lock")
-        self.backend = pickle if state["backend"] == "pickle" else None
+        self.backend = state['backend']
 
     @property
     def value(self):

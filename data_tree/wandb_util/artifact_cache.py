@@ -4,7 +4,7 @@ import hashlib
 import os
 import pickle
 from abc import ABCMeta
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, replace, field
 from glob import glob
 from os import makedirs
@@ -242,6 +242,7 @@ class JsonArtifactCache(IRead):
             except Exception as e:
                 logger.error(f"error while loading cache from artifact")
                 logger.error(e)
+                logger.error(f"error type:{type(e)}")
                 logger.error(f"failed to load cache: {self.identifier}")
                 self._value = self.f()
                 self.json_artifact_logger.log(self.name, self.type, self._value, metadata=dict(kind="cache"),
@@ -297,7 +298,7 @@ class ArtifactMemoHashProvider:
         return input_hash, meta
 
     def exists(self, name, args, kwargs):
-        ihash, meta = self.get_meta(name, args, kwargs)
+        ihash, meta = self.get_hash_meta(name, args, kwargs)
         rmeta = self.remote_artifact_metadata_factory.get2(meta.identifier)
         try:
             size = rmeta.size
@@ -337,7 +338,7 @@ class ArtifactMemo:
             hash, loaded = self.read.read(meta.identifier)
             if input_hash == hash:
                 self.cache[input_hash] = loaded
-                return MemoCallResult(value=loaded, hit=False)
+                return MemoCallResult(value=loaded, hit=True)
             else:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
@@ -367,25 +368,29 @@ class AsyncArtifactMemo:
         return self.artifact_memo_hash_provider.exists(*args, **kwargs)
 
     async def __call__(self, *args, **kwargs):
+        return (await self.call_with_hit(*args, **kwargs)).value
+
+    async def call_with_hit(self, *args, **kwargs):
         input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
-        if input_hash not in self.cache:
-            try:
-                hash, loaded = await self.read.aread(meta.identifier)
-                if input_hash == hash:
-                    self.cache[input_hash] = loaded
-                else:
-                    raise RuntimeError(
-                        f"input hash is different from cached value.:before:{hash},now:{input_hash}")
-            except Exception as e:
-                logger.error(f"error while loading cache from artifact")
-                logger.error(f"error type:{type(e)}")
-                logger.error(f"cause:{e}")
-                logger.error(f"failed to load cache: {meta}")
-                value = await self.f(*args, **kwargs)
-                obj = input_hash, value
-                await self.write.awrite(obj, meta)
-                self.cache[input_hash] = value
-        return self.cache[input_hash]
+        try:
+            # logger.info(f"checking artifact memo for \n{pformat(dumped)}")
+            hash, loaded = await self.read.aread(meta.identifier)
+            if input_hash == hash:
+                self.cache[input_hash] = loaded
+                return MemoCallResult(value=loaded, hit=True)
+            else:
+                raise RuntimeError(
+                    f"input hash is different from cached value.:before:{hash},now:{input_hash}")
+        except Exception as e:
+            logger.error(f"error while loading cache from artifact")
+            logger.error(e)
+            logger.error(f"error type:{type(e)}")
+            logger.error(f"failed to load cache: {meta}")
+            value = await self.f(*args, **kwargs)
+            obj = input_hash, value
+            await self.write.awrite(obj, meta)
+            self.cache[input_hash] = value
+        return MemoCallResult(self.cache[input_hash], hit=False)
 
 
 def get_memo_meta_hash(name, args, kwargs):
@@ -607,7 +612,7 @@ def cloud_pickle_async_artifact_memo(
         _artifact_memo_hash_provider,
         name,
 ):
-    def impl(func):
+    def impl(func:Callable[[Any], Awaitable]):
         return AsyncArtifactMemo(
             read=ThreadedAsyncArtifactRead(_cloud_pickle_artifact_read),
             write=ThreadedAsyncArtifactWrite(_cloud_pickle_artifact_write),
