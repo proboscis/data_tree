@@ -14,10 +14,13 @@ from typing import Callable, Generic, TypeVar, List, Awaitable, Any
 
 import jsonpickle
 import cloudpickle
+from IPython import embed
 from cytoolz import valmap
 from expression import Nothing
+from filelock import FileLock
 from returns.maybe import Some, Maybe
-from returns.result import safe, Success
+from returns.primitives.exceptions import UnwrapFailedError
+from returns.result import safe, Success, Failure
 
 from wandb.apis.public import ArtifactType
 
@@ -220,6 +223,16 @@ class CloudPickleArtifactWrite(ArtifactWrite):
         self.artifact_logger.save2(path, meta)
 
 
+def investigate_cache_error(e, identifier):
+    logger.error(f"investigate_cache_error")
+    logger.error(f"error while loading cache from artifact")
+    logger.error(e)
+    logger.error(f"error type:{type(e)}")
+    logger.error(f"failed to load cache: {identifier}")
+    if isinstance(e, UnwrapFailedError):
+        logger.error(f"causing container:{e.halted_container}")
+
+
 @dataclass
 class JsonArtifactCache(IRead):
     json_artifact_logger: JsonArtifactLogger
@@ -240,10 +253,7 @@ class JsonArtifactCache(IRead):
                 loaded = self.json_artifact_loader.load(self.identifier, self.type)
                 self._value = loaded
             except Exception as e:
-                logger.error(f"error while loading cache from artifact")
-                logger.error(e)
-                logger.error(f"error type:{type(e)}")
-                logger.error(f"failed to load cache: {self.identifier}")
+                investigate_cache_error(e, self.identifier)
                 self._value = self.f()
                 self.json_artifact_logger.log(self.name, self.type, self._value, metadata=dict(kind="cache"),
                                               aliases=[self.alias])
@@ -267,9 +277,7 @@ class ArtifactCache:
                 loaded = self.read.read(self.meta.identifier)
                 self._value = loaded
             except Exception as e:
-                logger.error(f"error while loading cache from artifact")
-                logger.error(e)
-                logger.error(f"failed to load cache: {self.meta}")
+                investigate_cache_error(e, self.meta.identifier)
                 self._value = self.f()
                 self.write.write(self._value, self.meta)
         return self._value
@@ -343,9 +351,7 @@ class ArtifactMemo:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
         except Exception as e:
-            logger.error(f"error while loading cache from artifact")
-            logger.error(e)
-            logger.error(f"failed to load cache: {meta}")
+            investigate_cache_error(e, meta.identifier)
             value = self.f(*args, **kwargs)
             obj = input_hash, value
             self.write.write(obj, meta)
@@ -382,10 +388,7 @@ class AsyncArtifactMemo:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
         except Exception as e:
-            logger.error(f"error while loading cache from artifact")
-            logger.error(e)
-            logger.error(f"error type:{type(e)}")
-            logger.error(f"failed to load cache: {meta}")
+            investigate_cache_error(e, meta.identifier)
             value = await self.f(*args, **kwargs)
             obj = input_hash, value
             await self.write.awrite(obj, meta)
@@ -480,9 +483,7 @@ class ArtifactInjectedMemo:
                     raise RuntimeError(
                         f"input hash is different from cached value.:before:{hash},now:{input_hash}")
             except Exception as e:
-                logger.error(f"error while loading cache from artifact")
-                logger.error(e)
-                logger.error(f"failed to load cache: {meta}")
+                investigate_cache_error(e, meta.identifier)
 
                 def _assign_cache(task_impl):
                     # res is an instance of task so it's not cachable
@@ -529,9 +530,7 @@ class JsonArtifactCache2(IRead):
                 loaded = self.json_artifact_read.read(self.meta.identifier)
                 self._value = loaded
             except Exception as e:
-                logger.error(f"error while loading cache from artifact")
-                logger.error(e)
-                logger.error(f"failed to load cache: {self.meta}")
+                investigate_cache_error(e, self.meta.identifier)
                 self._value = self.f()
                 self.json_artifact_write.write(self._value, self.meta)
         return self._value
@@ -612,7 +611,7 @@ def cloud_pickle_async_artifact_memo(
         _artifact_memo_hash_provider,
         name,
 ):
-    def impl(func:Callable[[Any], Awaitable]):
+    def impl(func: Callable[[Any], Awaitable]):
         return AsyncArtifactMemo(
             read=ThreadedAsyncArtifactRead(_cloud_pickle_artifact_read),
             write=ThreadedAsyncArtifactWrite(_cloud_pickle_artifact_write),
