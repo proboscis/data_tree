@@ -19,7 +19,6 @@ from data_tree.coconut.auto_data import AutoData
 from data_tree._series import Series
 from data_tree import series, logger
 from data_tree.key_value_store import JustKVS
-from data_tree.mocks.images import dummy_images
 from data_tree.mp_util import GlobalHolder, get_global_holder, SequentialTaskParallel2
 
 T = TypeVar("T")
@@ -302,6 +301,7 @@ class MergedImageStore(ImageStore):
 class MockImageStore(ImageStore):
 
     def __init__(self):
+        from data_tree.mocks.images import dummy_images
         self.imgs = {str(i): img for i, img in enumerate(dummy_images().to('[image,RGB,RGB]'))}
 
     def keys(self) -> List[str]:
