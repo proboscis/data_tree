@@ -300,7 +300,7 @@ class ArtifactMemoHashProvider:
                 version=input_hash
             ),
             metadata=dict(
-                input=dumped[:100]
+                input=dumped[:10000]
             )
         )
         return input_hash, meta
@@ -388,6 +388,7 @@ class AsyncArtifactMemo:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
         except Exception as e:
+            #hmm, why??
             investigate_cache_error(e, meta.identifier)
             value = await self.f(*args, **kwargs)
             obj = input_hash, value
