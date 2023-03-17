@@ -22,6 +22,7 @@ from returns.maybe import Some, Maybe
 from returns.primitives.exceptions import UnwrapFailedError
 from returns.primitives.tracing import collect_traces
 from returns.result import safe, Success, Failure
+from wandb import CommError
 
 from wandb.apis.public import ArtifactType
 
@@ -131,6 +132,7 @@ class ExtensionArtifactRead(ArtifactRead):
 
 
 async def proc_as_async_in_thread(proc: Callable):
+    """Threows exception if the proc throws exception ineternally"""
     fut = Future()
 
     def impl():
@@ -138,7 +140,9 @@ async def proc_as_async_in_thread(proc: Callable):
             res = proc()
         except Exception as e:
             fut.set_exception(e)
-            raise e
+            # raising this will print the stacktrace somehow.
+            # raise e
+            return
         fut.set_result(res)
 
     t = Thread(target=impl, daemon=True)
@@ -236,8 +240,8 @@ class CloudPickleArtifactWrite(ArtifactWrite):
         self.artifact_logger.save2(path, meta)
 
 
-def investigate_cache_error(e, identifier):
-    logger.error(f"investigate_cache_error")
+def investigate_cache_error(e, identifier,caller_info:str):
+    logger.error(f"investigate_cache_error from {caller_info}")
     logger.error(f"error while loading cache from artifact")
     logger.error(e)
     logger.error(f"error type:{type(e)}")
@@ -266,7 +270,7 @@ class JsonArtifactCache(IRead):
                 loaded = self.json_artifact_loader.load(self.identifier, self.type)
                 self._value = loaded
             except Exception as e:
-                investigate_cache_error(e, self.identifier)
+                investigate_cache_error(e, self.identifier,caller_info="JsonArtifactCache")
                 self._value = self.f()
                 self.json_artifact_logger.log(self.name, self.type, self._value, metadata=dict(kind="cache"),
                                               aliases=[self.alias])
@@ -290,7 +294,7 @@ class ArtifactCache:
                 loaded = self.read.read(self.meta.identifier)
                 self._value = loaded
             except Exception as e:
-                investigate_cache_error(e, self.meta.identifier)
+                investigate_cache_error(e, self.meta.identifier,caller_info="ArtifactCache")
                 self._value = self.f()
                 self.write.write(self._value, self.meta)
         return self._value
@@ -364,7 +368,7 @@ class ArtifactMemo:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
         except Exception as e:
-            investigate_cache_error(e, meta.identifier)
+            investigate_cache_error(e, meta.identifier,caller_info="ArtifactMemo")
             value = self.f(*args, **kwargs)
             obj = input_hash, value
             self.write.write(obj, meta)
@@ -404,9 +408,12 @@ class AsyncArtifactMemo:
             else:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
+        except (CommError,ValueError):
+            logger.debug(f"failed to load cache for {meta.identifier} (CommError/ValueError == cache miss)")
+            # I thought the chain ends here,,, yes it does.?
+            # then why is this exception being printed???
         except Exception as e:
-            # hmm, why??
-            investigate_cache_error(e, meta.identifier)
+            investigate_cache_error(e, meta.identifier,caller_info="AsyncArtifactMemo")
         # we are here since we failed to load the cache
         value = await self.f(*args, **kwargs)
         obj = input_hash, value
@@ -502,7 +509,7 @@ class ArtifactInjectedMemo:
                     raise RuntimeError(
                         f"input hash is different from cached value.:before:{hash},now:{input_hash}")
             except Exception as e:
-                investigate_cache_error(e, meta.identifier)
+                investigate_cache_error(e, meta.identifier,caller_info="ArtifactInjectedMemo")
 
                 def _assign_cache(task_impl):
                     # res is an instance of task so it's not cachable
@@ -549,7 +556,7 @@ class JsonArtifactCache2(IRead):
                 loaded = self.json_artifact_read.read(self.meta.identifier)
                 self._value = loaded
             except Exception as e:
-                investigate_cache_error(e, self.meta.identifier)
+                investigate_cache_error(e, self.meta.identifier,caller_info="JsonArtifactCache2")
                 self._value = self.f()
                 self.json_artifact_write.write(self._value, self.meta)
         return self._value
