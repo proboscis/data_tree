@@ -68,6 +68,7 @@ class RemoteArtifact:
         return self._art.get(object_name)
 
 
+
 @dataclass
 class PublicRemoteArtifact:
     identifier: ArtifactIdentifier

@@ -20,6 +20,7 @@ from expression import Nothing
 from filelock import FileLock
 from returns.maybe import Some, Maybe
 from returns.primitives.exceptions import UnwrapFailedError
+from returns.primitives.tracing import collect_traces
 from returns.result import safe, Success, Failure
 
 from wandb.apis.public import ArtifactType
@@ -56,6 +57,7 @@ class ArtifactRead(Generic[T], metaclass=abc.ABCMeta):
         pass
 
 
+
 class AsyncArtifactRead(Generic[T], abc.ABC):
     @abc.abstractmethod
     async def aread(self, idt: ArtifactIdentifier) -> T:
@@ -65,6 +67,12 @@ class AsyncArtifactRead(Generic[T], abc.ABC):
 class AsyncArtifactWrite(Generic[T], abc.ABC):
     @abc.abstractmethod
     async def awrite(self, data: T, meta: ArtifactMetadata):
+        pass
+
+
+class AsyncArtifactDelete(abc.ABC):
+    @abc.abstractmethod
+    async def adelete(self, idt: ArtifactIdentifier):
         pass
 
 
@@ -126,13 +134,17 @@ async def proc_as_async_in_thread(proc: Callable):
     fut = Future()
 
     def impl():
-        res = safe(proc)()
+        try:
+            res = proc()
+        except Exception as e:
+            fut.set_exception(e)
+            raise e
         fut.set_result(res)
 
     t = Thread(target=impl, daemon=True)
     t.start()
     res = await asyncio.wrap_future(fut)
-    return res.unwrap()
+    return res
 
 
 @dataclass
@@ -149,6 +161,7 @@ class ThreadedAsyncArtifactWrite(AsyncArtifactWrite):
 
     async def awrite(self, data: T, meta: ArtifactMetadata):
         return await proc_as_async_in_thread(lambda: self.artifact_write.write(data, meta))
+
 
 
 @dataclass
@@ -376,6 +389,10 @@ class AsyncArtifactMemo:
     async def __call__(self, *args, **kwargs):
         return (await self.call_with_hit(*args, **kwargs)).value
 
+    def artifact_metadata(self, *args, **kwargs):
+        input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
+        return meta
+
     async def call_with_hit(self, *args, **kwargs):
         input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
         try:
@@ -388,12 +405,13 @@ class AsyncArtifactMemo:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
         except Exception as e:
-            #hmm, why??
+            # hmm, why??
             investigate_cache_error(e, meta.identifier)
-            value = await self.f(*args, **kwargs)
-            obj = input_hash, value
-            await self.write.awrite(obj, meta)
-            self.cache[input_hash] = value
+        # we are here since we failed to load the cache
+        value = await self.f(*args, **kwargs)
+        obj = input_hash, value
+        await self.write.awrite(obj, meta)
+        self.cache[input_hash] = value
         return MemoCallResult(self.cache[input_hash], hit=False)
 
 
