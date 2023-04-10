@@ -3,7 +3,6 @@ from abc import ABC, ABCMeta
 from dataclasses import dataclass, field
 from typing import Tuple, Dict, Any, Callable, Iterable
 
-from distributed.profile import identifier
 from frozendict import frozendict
 
 from pampy import match_dict
