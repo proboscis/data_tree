@@ -6,7 +6,7 @@ import zmq
 from PIL import Image
 
 from data_tree import logger
-from data_tree.coconut.monad import try_monad, Failure, Success
+from omni_converter.coconut.monad import try_monad, Failure, Success
 
 
 class ZMQRemoteException(Exception):

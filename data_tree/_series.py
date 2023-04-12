@@ -425,7 +425,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         :return:
         """
         from data_tree.ops.cache import AutoSeries
-        from data_tree.coconut.auto_data import AutoData
+        from omni_converter.coconut.auto_data import AutoData
         if format is None:
             assert isinstance(self[0], AutoData), "element must be a instance of AutoData if format=None"
             return AutoSeries(self.map(lambda i: i.value), self[0].format)

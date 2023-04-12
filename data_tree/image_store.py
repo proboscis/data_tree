@@ -14,16 +14,15 @@ from cytoolz import merge
 
 from tqdm import tqdm
 
-# from data_tree.coconut.auto_data import AutoData
-from data_tree.coconut.auto_data import AutoData
+# from omni_converter.coconut.auto_data import AutoData
 from data_tree._series import Series
 from data_tree import series, logger
 from data_tree.key_value_store import JustKVS
 from data_tree.mp_util import GlobalHolder, get_global_holder, SequentialTaskParallel2
+from omni_converter.coconut.auto_data import AutoData
 
 T = TypeVar("T")
 U = TypeVar("U")
-
 
 class ImageStorePair(NamedTuple):
     key: str

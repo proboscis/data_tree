@@ -96,7 +96,7 @@ def test_casting():
 
 def test_omni_converter():
     from data_tree.coconut.omni_converter import auto_img,cast_imdef_str_to_imdef,cast_imdef_to_imdef_str
-    from data_tree.coconut.auto_data import AutoData
+    from omni_converter.coconut.auto_data import AutoData
     x = np.ones((100,100,3),dtype="float32")
     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
     assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()
