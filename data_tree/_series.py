@@ -347,7 +347,7 @@ class Series(Generic[T], metaclass=abc.ABCMeta):
         if isinstance(item, slice):
             return self.indexed(IdentityIndexer(self.total).slice(item))
         elif isinstance(item, np.ndarray):
-            if item.dtype == np.bool:
+            if item.dtype == bool:
                 return self.indexed(IdentityIndexer(self.total).mask(item))
             else:
                 return self.indexed(IdentityIndexer(self.total).transform(item))
