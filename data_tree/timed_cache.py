@@ -32,6 +32,8 @@ class FileTimeCache:
         #logger.warning(f"file time cache targets:{pformat(sorted(self.target_files))}")
 
     def modified_times(self):
+        from loguru import logger
+        logger.info(f"checking modified times of {len(self.target_files)} files...")
         return [os.path.getmtime(str(p)) for p in tqdm(self.target_files, desc="examining modified times...")]
 
     def latest_modification(self):

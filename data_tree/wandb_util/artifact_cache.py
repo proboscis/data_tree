@@ -3,44 +3,34 @@ import asyncio
 import hashlib
 import os
 import pickle
-from abc import ABCMeta
-from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, replace, field
+from concurrent.futures import Future
+from dataclasses import dataclass
 from glob import glob
-from os import makedirs
-from pprint import pformat
 from threading import Thread
 from typing import Callable, Generic, TypeVar, List, Awaitable, Any
 
-import jsonpickle
 import cloudpickle
-from IPython import embed
+import jsonpickle
 from cytoolz import valmap
-from expression import Nothing
-from filelock import FileLock
-from returns.maybe import Some, Maybe
 from returns.primitives.exceptions import UnwrapFailedError
-from returns.primitives.tracing import collect_traces
-from returns.result import safe, Success, Failure
 from wandb import CommError
-
 from wandb.apis.public import ArtifactType
 
 from data_tree import logger
 from data_tree.disk_cache import StaticDiskCache
 from data_tree.dt_wandb.json_artifact import JsonArtifactLogger, JsonArtifactLoader
 from data_tree.key_value_cache import IKeyValueCache
-from data_tree.lmdb_helper import LmdbHelper
 from data_tree.key_value_store import KeyValueStore
+from data_tree.wandb_util import random_artifact_file_path
+from data_tree.wandb_util.artifact_cache_type_memo import ARTIFACT_TYPE_MEMO
+from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata
+from data_tree.wandb_util.artifact_logger import ArtifactLogger
+from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory, PublicRemoteArtifactFactory, \
+    RemoteArtifactMetadataFactory, RemoteArtifactMetadata
+from data_tree.wandb_util.cache import IRead, ReadFacory, LambdaReadFacory
 from data_tree.wandb_util.file_read_write import FileRead, PickleRead, CloudPickleRead, TorchRead, Hdf5DataFrameRead, \
     FileWrite, Hdf5DataFrameWrite
 from pinject_design.di.injected import Injected, injected_function
-from data_tree.wandb_util import random_artifact_file_path, random_artifact_tmp_dir, artifact_logger
-from data_tree.wandb_util.artifact_identifier import ArtifactIdentifier, ArtifactMetadata, ArtifactMetadataLike
-from data_tree.wandb_util.artifact_logger import ArtifactLogger
-from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory, PublicRemoteArtifactFactory, \
-    RemoteArtifactMetadataFactory, RemoteArtifactMetadata, RemoteArtifact
-from data_tree.wandb_util.cache import IRead, ReadFacory, LambdaReadFacory
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -298,9 +288,6 @@ class ArtifactCache:
                 self._value = self.f()
                 self.write.write(self._value, self.meta)
         return self._value
-
-
-ARTIFACT_TYPE_MEMO = "memo"
 
 
 @dataclass

@@ -1,0 +1,1 @@
+ARTIFACT_TYPE_MEMO = "memo"
