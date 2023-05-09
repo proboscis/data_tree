@@ -48,7 +48,6 @@ class ArtifactRead(Generic[T], metaclass=abc.ABCMeta):
         pass
 
 
-
 class AsyncArtifactRead(Generic[T], abc.ABC):
     @abc.abstractmethod
     async def aread(self, idt: ArtifactIdentifier) -> T:
@@ -157,7 +156,6 @@ class ThreadedAsyncArtifactWrite(AsyncArtifactWrite):
         return await proc_as_async_in_thread(lambda: self.artifact_write.write(data, meta))
 
 
-
 @dataclass
 class ExtensionArtifactReadFactory:
     remote_artifact_factory: RemoteArtifactFactory
@@ -230,7 +228,7 @@ class CloudPickleArtifactWrite(ArtifactWrite):
         self.artifact_logger.save2(path, meta)
 
 
-def investigate_cache_error(e, identifier,caller_info:str):
+def investigate_cache_error(e, identifier, caller_info: str):
     logger.error(f"investigate_cache_error from {caller_info}")
     logger.error(f"error while loading cache from artifact")
     logger.error(e)
@@ -260,7 +258,7 @@ class JsonArtifactCache(IRead):
                 loaded = self.json_artifact_loader.load(self.identifier, self.type)
                 self._value = loaded
             except Exception as e:
-                investigate_cache_error(e, self.identifier,caller_info="JsonArtifactCache")
+                investigate_cache_error(e, self.identifier, caller_info="JsonArtifactCache")
                 self._value = self.f()
                 self.json_artifact_logger.log(self.name, self.type, self._value, metadata=dict(kind="cache"),
                                               aliases=[self.alias])
@@ -284,7 +282,7 @@ class ArtifactCache:
                 loaded = self.read.read(self.meta.identifier)
                 self._value = loaded
             except Exception as e:
-                investigate_cache_error(e, self.meta.identifier,caller_info="ArtifactCache")
+                investigate_cache_error(e, self.meta.identifier, caller_info="ArtifactCache")
                 self._value = self.f()
                 self.write.write(self._value, self.meta)
         return self._value
@@ -355,7 +353,7 @@ class ArtifactMemo:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
         except Exception as e:
-            investigate_cache_error(e, meta.identifier,caller_info="ArtifactMemo")
+            investigate_cache_error(e, meta.identifier, caller_info="ArtifactMemo")
             value = self.f(*args, **kwargs)
             obj = input_hash, value
             self.write.write(obj, meta)
@@ -384,6 +382,14 @@ class AsyncArtifactMemo:
         input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
         return meta
 
+    async def update(self, *args, **kwargs):
+        input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
+        value = await self.f(*args, **kwargs)
+        obj = input_hash, value
+        await self.write.awrite(obj, meta)
+        self.cache[input_hash] = value
+        return value
+
     async def call_with_hit(self, *args, **kwargs):
         input_hash, meta = self.artifact_memo_hash_provider.get_hash_meta(self.name, args, kwargs)
         try:
@@ -395,17 +401,14 @@ class AsyncArtifactMemo:
             else:
                 raise RuntimeError(
                     f"input hash is different from cached value.:before:{hash},now:{input_hash}")
-        except (CommError,ValueError):
+        except (CommError, ValueError):
             logger.debug(f"failed to load cache for {meta.identifier} (CommError/ValueError == cache miss)")
             # I thought the chain ends here,,, yes it does.?
             # then why is this exception being printed???
         except Exception as e:
-            investigate_cache_error(e, meta.identifier,caller_info="AsyncArtifactMemo")
+            investigate_cache_error(e, meta.identifier, caller_info="AsyncArtifactMemo")
         # we are here since we failed to load the cache
-        value = await self.f(*args, **kwargs)
-        obj = input_hash, value
-        await self.write.awrite(obj, meta)
-        self.cache[input_hash] = value
+        await self.update(*args, **kwargs)
         return MemoCallResult(self.cache[input_hash], hit=False)
 
 
@@ -496,7 +499,7 @@ class ArtifactInjectedMemo:
                     raise RuntimeError(
                         f"input hash is different from cached value.:before:{hash},now:{input_hash}")
             except Exception as e:
-                investigate_cache_error(e, meta.identifier,caller_info="ArtifactInjectedMemo")
+                investigate_cache_error(e, meta.identifier, caller_info="ArtifactInjectedMemo")
 
                 def _assign_cache(task_impl):
                     # res is an instance of task so it's not cachable
@@ -543,7 +546,7 @@ class JsonArtifactCache2(IRead):
                 loaded = self.json_artifact_read.read(self.meta.identifier)
                 self._value = loaded
             except Exception as e:
-                investigate_cache_error(e, self.meta.identifier,caller_info="JsonArtifactCache2")
+                investigate_cache_error(e, self.meta.identifier, caller_info="JsonArtifactCache2")
                 self._value = self.f()
                 self.json_artifact_write.write(self._value, self.meta)
         return self._value
