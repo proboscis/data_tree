@@ -1,8 +1,8 @@
 import os
 
-from loguru import logger
 
-from data_tree.util import DefaultShelveCache
+
+from omni_converter.util import DefaultShelveCache
 
 
 def test_default_shelve_cache():

@@ -8,13 +8,20 @@ import shelve
 import threading
 from contextlib import contextmanager
 # from threading import RLock
+<<<<<<< HEAD
 from multiprocessing import RLock
+=======
+from datetime import time
+from multiprocessing import RLock
+from multiprocessing.dummy import Value
+>>>>>>> master
 
 import h5py
 import numpy as np
 from PIL import Image
 from filelock import FileLock
 from lazy import lazy as en_lazy
+<<<<<<< HEAD
 from loguru import logger
 from lru import LRU
 from tqdm.autonotebook import tqdm
@@ -26,6 +33,21 @@ from data_tree.indexer import IdentityIndexer, Indexer
 from data_tree.resource import ContextResource
 from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_generator
 
+=======
+
+from lru import LRU
+from tqdm import tqdm
+
+from archpainter.rulebook import legacy_auto as auto
+
+from data_tree import logger
+from data_tree._series import SourcedSeries, NumpySeries, MappedSeries, Series
+from data_tree.coconut.astar import Conversion
+from data_tree.indexer import IdentityIndexer, Indexer
+from data_tree.custom_resource import ContextResource
+from data_tree.util import ensure_path_exists, batch_index_generator, prefetch_generator
+
+>>>>>>> master
 
 # from loguru import logger
 
@@ -171,7 +193,50 @@ class ShelveSeries(CachedSeries):
         return os.remove(self.cache_path)
 
 
+class FlagCacheProvider:
+    def create_flags(self, total: int):
+        pass
+
+    def craete_cache(self, total: int):
+        pass
+
+    def create_coint(self):
+        pass
+
+
+class MpFlagCache(FlagCacheProvider):
+    def __init__(self):
+        self.manager = multiprocessing.Manager()
+
+    def create_flags(self, total: int):
+        return self.manager.list([False] * total)
+
+    def create_cache(self, total: int):
+        return self.manager.list([None] * total)
+
+    def create_count(self):
+        return self.manager.Value("int", 0)
+
+
+class LocalFlagCache(FlagCacheProvider):
+    def create_flags(self, total: int):
+        return [False] * total
+
+    def create_cache(self, total: int):
+        return [None] * total
+
+    def create_coutn(self):
+        return Value("int", 0)
+
+
 class LazySeries(CachedSeries):
+    try:
+        provider = MpFlagCache()
+        logger.warning(f"created lazy series with multi processing manager")
+        # each manager creation causes a new process to be spawned. beware!
+    except Exception as e:
+        logger.warning(f"could not create process safe cache. using non-process safe cache")
+        provider = LocalFlagCache()
 
     def clone(self, parents):
         return LazySeries(src=parents[0], prefer_slice=self.prefer_slice)
@@ -189,29 +254,63 @@ class LazySeries(CachedSeries):
         return self._indexer
 
     def __init__(self, src: Series, prefer_slice=True):
-        logger.debug(f"lazy series created")
-        self.manager = multiprocessing.Manager()
+        # this class will be accessed by multiple processes so I need to make it process safe.
+        ctx = multiprocessing.get_context("fork")  # DO NOT USE SPAWNING
+        # this may be causing a dead lock
         self._src = src
+        self.count_lock = ctx.RLock()
+        # self.locks = [ctx.RLock() for i in range(self.src.total)]
+        # hmm, we need so many locks.
+        # actually we only need lock to share lock state.
+
         self._indexer = IdentityIndexer(self.src.total)
-        self.flags = self.manager.list([False] * self.total)
-        self.cache = self.manager.list([None] * self.total)
+        self.states = self.provider.create_flags(self.total)
+        self.state_lock = ctx.Lock()
+        self.cache = self.provider.create_cache(self.total)
+        self.num_loaded = self.provider.create_count()
         self._index = np.arange(src.total)
         self.prefer_slice = prefer_slice  # not used currently
+        self.ctx = ctx
 
     def _get_item(self, index):
-        if not self.flags[index]:
-            self.cache[index] = self.src._values(index)
-            self.flags[index] = True
-        else:
-            pass
+        #logger.debug(f"trying to get lock pid:{os.getpid()} idx:{index}")
+
+        # first check the state of target index,
+        # wait if it is now loading... but how long do you wait?
+        # you can use an event for this so that the waiter can wait on event.
+
+        self.ctx.Event()
+
+        with self.state_lock:
+            state = self.states[index]
+            if not state:
+                logger.debug(f"cache not hit. pid:{os.getpid()} at {index}.")
+                self.states[index] = "loading"#self.ctx.Event() #
+                #logger.debug(f"obtained a lock:{os.getpid()}")
+                #well.. should I do a polling to check if this index is released?
+
+        if not state:
+            self._update_cache(index)
+
+        while state == "loading":
+            time.sleep(0.1) # I dont like the way this is done though...
+            state = self.states[index]
         return self.cache[index]
 
+    def _update_cache(self,index):
+        self.cache[index] = self.src._values(index)
+        self.states[index] = True
+        with self.count_lock:
+            self.num_loaded.value += 1
+            logger.debug(f"written data to {index} from pid: {os.getpid()} \t progress:{self.num_loaded}/{len(self.states)}")
+        with self.state_lock:
+            self.states[index] = True
+
     def _ensure_and_return_smart(self, smart_indexer):
-        if not self.flags[smart_indexer].all():
-            non_cached_indices = self._index[smart_indexer][~self.flags[smart_indexer]]
+        if not all(self.states[smart_indexer]):
+            non_cached_indices = self._index[smart_indexer][~np.array(self.states[smart_indexer])]
             for v, i in zip(self.src._values(non_cached_indices), non_cached_indices):
-                self.cache[i] = v
-                self.flags[i] = True
+                self._get_item(i)
         else:
             pass
             # logger.debug(f"hit")
@@ -918,7 +1017,7 @@ class Hdf5AutoSeries(CachedSeries):
         self.cache_path = cache_path
         self.format = format  # format ?? src[0].format
         self.cache = Hdf5CachedSeries(self._src.map(lambda a: a.value), cache_path, src_hash=src_hash)
-        from data_tree import auto
+        from archpainter.rulebook import legacy_auto as auto
         self.auto = auto(self.format)
         self._indexer = IdentityIndexer(self.src.total)
 

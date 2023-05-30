@@ -1,9 +1,11 @@
 
 import numpy as np
-from loguru import logger
 
-from data_tree import Series
-from tqdm.autonotebook import tqdm
+
+from tqdm import tqdm
+
+from data_tree._series import Series
+
 
 def test_numpy_dataset():
     data = np.arange(100)

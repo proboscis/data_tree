@@ -1,6 +1,6 @@
 import yaml
 from lazy_object_proxy import Proxy
-from loguru import logger
+
 from easydict import EasyDict as edict
 
 default_config = edict(
@@ -24,6 +24,7 @@ def get_config():
         res.update(config)
         return edict(res)
     else:
+        from data_tree import logger
         logger.warning(f"data_tree config not found at {config_dir}. using default configs.")
         return default_config.copy()
 

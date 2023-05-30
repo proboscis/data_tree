@@ -1,4 +1,5 @@
 import multiprocessing
+import os
 import pickle
 import sys
 import time
@@ -6,30 +7,28 @@ from concurrent.futures import Future
 from contextlib import contextmanager
 from multiprocessing import Pipe, Process
 from queue import Empty
-from threading import Thread
 from typing import Iterable
 from uuid import uuid4
-import os
+import multiprocessing as mp
 
-import logzero
-from loguru import logger
+from returns.result import safe, Result
+
+from data_tree import logger
+from data_tree.util import shared_npy_array_like
+
 # from logzero import logger
-from easydict import EasyDict as edict
 # logger = edict(
 #    info=print,
 #    warning=print,
 #    debug=print
 # )
-from six import reraise
-
-from data_tree.util import shared_npy_array_like
 
 GLOBAL_OBJECTS = dict()
 
 from tblib import pickling_support
 
 pickling_support.install()
-from tqdm.autonotebook import tqdm
+from tqdm import tqdm
 
 
 class GlobalHolder:
@@ -44,10 +43,30 @@ class GlobalHolder:
         return GLOBAL_OBJECTS[self.id]
 
 
+class GlobalProxy:
+    def __init__(self, holder: GlobalHolder):
+        self._holder = holder
+
+    def __call__(self, *args, **kwargs):
+        return self._holder.value(*args, **kwargs)
+
+    def __getitem__(self, item):
+        return self._holder.value[item]
+
+    def __getattr__(self, item):
+        if item == "_holder":
+            raise AttributeError()
+        return getattr(self._holder.value, item)
+
+
 def get_global_holder(data: object) -> GlobalHolder:
     id = str(uuid4())
     GLOBAL_OBJECTS[id] = data
     return GlobalHolder(id)
+
+
+def get_global_proxy(data: object) -> GlobalProxy:
+    return GlobalProxy(get_global_holder(data))
 
 
 SUCCESS = "success"
@@ -223,8 +242,8 @@ class SequentialTaskParallel:
             logger.info("finished yielder")
 
 
-def _worker2(self, worker_id):
-    f = self.worker_generator()
+def _worker2(self, worker_id, worker_gen_args):
+    f = self.worker_generator(*worker_gen_args)
     # a worker dies silently?
     task_count = 0
     self.worker_task_counts[worker_id] = task_count
@@ -265,7 +284,7 @@ def _worker2(self, worker_id):
                 try:
                     # logger.info(f"worker working on task {i}")
                     self.worker_states[worker_id] = "working on task"
-                    result = f(task)
+                    result = safe(f)(task)
                     self.worker_states[worker_id] = "putting result to queue"
                     # logger.info(f"worker trying to put result {i} to queue.")
                     self.result_queue.put((i, result))
@@ -314,13 +333,22 @@ def _worker2(self, worker_id):
 class SequentialTaskParallel2:
     TERMINATION_SIGNAL = "__END__"
 
-    def __init__(self, worker_generator, num_worker=8, max_pending_result=100):
+    def __init__(self,
+                 worker_generator,
+                 worker_gen_args,
+                 num_worker=8,
+                 max_pending_result=100,
+                 mp=multiprocessing,
+                 use_result_monad=False
+                 ):
+        self.worker_gen_args = worker_gen_args
         self.worker_generator = worker_generator
         self.num_worker = num_worker
-        self.manager = multiprocessing.Manager()  # always use manager to avoid wtf errors!
+        self.mp = mp
+        self.manager = mp.Manager()  # always use manager to avoid wtf errors!
         # you need to master the 'proper' way of using this..
 
-        self.task_queue = self.manager.Queue(max_pending_result)
+        self.task_queue = self.manager.Queue()
         self.result_queue = self.manager.Queue()
         self.worker_start_signal = self.manager.Event()
         self.termination_signal = self.manager.Event()
@@ -355,6 +383,7 @@ class SequentialTaskParallel2:
             uid=self.uid,
             TERMINATION_SIGNAL=self.TERMINATION_SIGNAL,
         )
+        self.use_result_monad = use_result_monad
 
     def enqueue(self, item):
         current_task_i = self.task_i
@@ -369,6 +398,10 @@ class SequentialTaskParallel2:
         # without a lock, you lose items..
         self.task_queue.put(task_item)
         # logger.debug(f"task put with index:{self.task_i}. before:{current_task_i}")
+
+    def enqueue_all(self, items):
+        for item in items:
+            self.enqueue(item)
 
     def enqueue_termination(self):
         self.enqueue(self.TERMINATION_SIGNAL)
@@ -398,7 +431,8 @@ class SequentialTaskParallel2:
                 time.sleep(0.1)
             logger.info(f"monitoring thread stopped")
 
-        workers = [multiprocessing.Process(target=_worker2, args=(self.self_object, i), daemon=True) for i in
+        workers = [self.mp.Process(target=_worker2, args=(self.self_object, i, self.worker_gen_args), daemon=True) for i
+                   in
                    range(self.num_worker)]
         for w in workers:
             w.start()
@@ -437,7 +471,7 @@ class SequentialTaskParallel2:
         sorter_thread.start()
         self.sorter_thread = sorter_thread
 
-        bar = tqdm()
+        # bar = tqdm()
         try:
             while not self.termination_signal.is_set():
                 if waiting_index not in self.results:
@@ -445,7 +479,7 @@ class SequentialTaskParallel2:
                     continue
                 fut: Future = self.results[waiting_index]
                 # logger.info(f"yielder waiting for result {waiting_index}")
-                result = fut.result()
+                result: Result = fut.result()
                 if result == self.TERMINATION_SIGNAL:
                     # logger.info(f"stopping yielder")
                     self.termination_signal.set()
@@ -453,8 +487,11 @@ class SequentialTaskParallel2:
                 with self.lock:
                     del self.results[waiting_index]
                     self.finished_pending.value -= 1
-                bar.update(1)
-                yield result
+                # bar.update(1)
+                if self.use_result_monad:
+                    yield result  # yield as is
+                else:
+                    yield result.unwrap()
                 # logger.info(f"yielder yielded:{waiting_index}")
                 waiting_index += 1
 
@@ -466,9 +503,13 @@ class SequentialTaskParallel2:
             # logger.info("finished yielder")
 
     @contextmanager
-    def managed_start(self):
-        yield self.start()
+    def managed_start(self, debug=False):
+        yield self.start(debug=debug)
+        self.close()
         # the code is not reaching here.
+
+    def close(self):
+        assert self.worker_start_signal.is_set()
         logger.info(f"stopping workers")
         self.termination_signal.set()
         if self.workers is not None:
@@ -505,7 +546,7 @@ class SharedBufferPool:
             self.buffers.append(buffer)
 
 
-class SequentialTaskParallel3:
+class SequentialNumpyTaskParallel:
     """
     parallel task processing of numpy-to-numpy task
     """
@@ -671,13 +712,9 @@ class SequentialTaskParallel3:
         self.termination_signal.set()
 
 
-
-
-import queue
 from threading import Thread
 # mp.set_start_method("spawn",force=True)
-from loguru import logger
-import numpy as np
+
 
 
 def _mp_worker(f, in_queue, res_dict):

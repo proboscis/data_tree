@@ -5,12 +5,16 @@ import queue
 import threading
 from collections import OrderedDict
 from concurrent.futures import Executor
+from dataclasses import dataclass, replace
 from datetime import datetime
+from functools import partial
 from hashlib import sha1
+from multiprocessing.dummy import Pool
 from random import randint
-from typing import Iterable, NamedTuple, Union, Mapping, Callable, List
+from typing import Iterable, NamedTuple, Union, Mapping, Callable, List, TypeVar, Generic, Generator, Iterator, Dict
 
 import h5py
+<<<<<<< HEAD
 
 import numpy as np
 
@@ -21,13 +25,37 @@ from loguru import logger
 from pyvis.network import Network
 from sklearn.preprocessing import MinMaxScaler
 from tqdm.autonotebook import tqdm
+=======
+>>>>>>> master
 
+import numpy as np
+from IPython import embed
+
+from frozendict import frozendict
+
+from lazy import lazy as en_lazy
+
+from pyvis.network import Network
+from sklearn.preprocessing import MinMaxScaler
+from snoop import snoop
+from tqdm import tqdm
+
+from data_tree import logger
+#from archpainter.experiments.util import Lazy
 from data_tree.cache import ConditionedFilePathProvider
-from data_tree.coconut.visualization import infer_widget
+#from data_tree.coconut.visualization import infer_widget
+#from data_tree.coconut.visualization import infer_widget
+from omni_cv_rules.coconut.visualization import infer_widget
 from data_tree.indexer import Indexer, IdentityIndexer
 from data_tree.mp_util import GlobalHolder, SequentialTaskParallel2, get_global_holder
+<<<<<<< HEAD
 from data_tree.resource import Resource
 from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled
+=======
+from data_tree.custom_resource import Resource
+from data_tree.util import batch_index_generator, load_or_save, prefetch_generator, Pickled
+from omni_converter import IAutoData
+>>>>>>> master
 
 
 def en_numpy(data):
@@ -37,10 +65,13 @@ def en_numpy(data):
         t = object
         if data:
             sample = data[0]
-            if isinstance(sample, int):
+            if isinstance(sample, bool):
+                t = np.bool
+            elif isinstance(sample, int):
                 t = np.int64
             elif isinstance(sample, float):
                 t = np.float64
+
         buf = np.empty(len(data), dtype=t)
         buf[:] = data
         return buf
@@ -63,7 +94,16 @@ def series_to_tree(s):
     return got_net.show("ancestors.html")
 
 
-class Trace(NamedTuple):
+def compile_trace(t: "Trace"):
+    if isinstance(t.series, MetadataOpsSeries):
+        m = t.metadata
+        return replace(t.parents[0], metadata=t.series.operator(m)).compiled
+    else:
+        return replace(t, parents=[p.compiled for p in t.parents])
+
+
+@dataclass
+class Trace:
     parents: List["Trace"]
     series: "Series"
     index: int
@@ -79,9 +119,8 @@ class Trace(NamedTuple):
             if metadata_generator is not None:
                 meta.update(metadata_generator(trace))
             buf = f"{indent_str}:{str(trace.series)} | {meta}\n"
-            if not trace.parents:
-                buf += indent_str + ">" + str(trace.get_value()) + "\n"
-            else:
+            buf += indent_str + ">" + str(trace.get_value()) + "\n"
+            if trace.parents:
                 for p in trace.parents:
                     buf += _print_trace(p, indent + 1)
             return buf
@@ -122,17 +161,14 @@ class Trace(NamedTuple):
         return Series.from_iterable(list(self.traverse()))
 
     def find_by_tag(self, tag: str):
-        return [t for t in self.compiled().traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
+        return [t for t in self.compiled.traverse() if "tags" in t.metadata and tag in t.metadata["tags"]]
 
     def find_one_by_tag(self, tag: str):
         return self.find_by_tag(tag)[0]
 
+    @en_lazy
     def compiled(self):
-        if isinstance(self.series, MetadataOpsSeries):
-            m = self.metadata
-            return self.parents[0]._replace(metadata=self.series.operator(m)).compiled()
-        else:
-            return self._replace(parents=[p.compiled() for p in self.parents])
+        return compile_trace(self)
 
     def __repr__(self):
         return self.trace_string()
@@ -148,6 +184,8 @@ class Trace(NamedTuple):
         elif isinstance(data, Trace):
             from ipywidgets import widgets
             viz = widgets.HTML(value=repr(data).replace("\n", "<br>"))
+        elif isinstance(data,IAutoData):
+            viz = data.to("widget")
         else:
             viz = infer_widget(data)
         return viz
@@ -185,6 +223,7 @@ class Trace(NamedTuple):
             mask[show_mask] = True
         else:
             mask[skip_mask] = False
+        from IPython.display import display
 
         for i, t in enumerate(traces[:depth]):
             if mask[i]:
@@ -201,11 +240,50 @@ class Trace(NamedTuple):
                 display(hbox)
 
 
-def mp_each_helper(_self, i, f):
+def mp_each_helper(t):
+    _self, i, f = t
     f(_self.value[i])
 
 
-class Series(metaclass=abc.ABCMeta):
+@dataclass
+class MetadataUpdater:
+    src: dict
+
+    def __call__(self, m):
+        # print(f"incoming:{m}")
+        copied = m.copy()
+        copied.update(self.src)
+        # print(f"result:{copied}")
+        return copied
+
+
+T = TypeVar("T")
+U = TypeVar("U")
+
+class _StarMapHelper:
+    def __init__(self, f):
+        self.f = f
+
+    def __call__(self, t):
+        return self.f(*t)
+
+
+@dataclass
+class TagAdder:
+    tags: tuple
+
+    def __call__(self, m: dict):
+        try:
+            copied = m.copy()
+            old_tags = copied.get("tags") or set()
+            new_tags = old_tags | set(self.tags)
+            copied["tags"] = new_tags
+            return copied
+        except Exception as e:
+            embed()
+
+
+class Series(Generic[T], metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def indexer(self) -> Indexer:
@@ -213,22 +291,22 @@ class Series(metaclass=abc.ABCMeta):
 
     @property
     @abc.abstractmethod
-    def total(self):
+    def total(self) -> int:
         pass
 
     def __len__(self):
         return self.total
 
     @abc.abstractmethod
-    def _get_item(self, index):
+    def _get_item(self, index) -> Union[T, Iterable[T]]:
         pass
 
     @abc.abstractmethod
-    def _get_slice(self, _slice):
+    def _get_slice(self, _slice) -> Iterable[T]:
         pass
 
     @abc.abstractmethod
-    def _get_indices(self, indices):
+    def _get_indices(self, indices) -> Iterable[T]:
         pass
 
     @abc.abstractmethod
@@ -268,7 +346,7 @@ class Series(metaclass=abc.ABCMeta):
         return self.traversed.map(lambda m: m._metadata)
 
     def trace(self, index) -> Trace:
-        return self._trace(index).compiled()
+        return self._trace(index).compiled
 
     def _values(self, item):
         # logger.debug(f"{self} _values at:{item}")
@@ -283,11 +361,11 @@ class Series(metaclass=abc.ABCMeta):
         else:
             return self._get_item(smart_indices)
 
-    def __getitem__(self, item) -> Union["Series", object]:
+    def __getitem__(self, item) -> Union["Series[T]", object]:
         if isinstance(item, slice):
             return self.indexed(IdentityIndexer(self.total).slice(item))
         elif isinstance(item, np.ndarray):
-            if item.dtype == np.bool:
+            if item.dtype == bool:
                 return self.indexed(IdentityIndexer(self.total).mask(item))
             else:
                 return self.indexed(IdentityIndexer(self.total).transform(item))
@@ -299,16 +377,16 @@ class Series(metaclass=abc.ABCMeta):
     def indexed(self, indexer: Indexer):
         return Indexed(self, indexer)
 
-    def map(self, f, batch_f=None):
+    def map(self, f:Callable[[T],U], batch_f=None)->"Series[U]":
         return MappedSeries(self, f, batch_f)
 
     def star_map(self, f):
-        return MappedSeries(self, single_mapper=lambda args: f(*args))
+        return MappedSeries(self, single_mapper=_StarMapHelper(f))
 
     def map_b(self, batch_f):
         return MappedSeries(self, lambda b: batch_f(b[None])[0], batch_f)
 
-    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None, max_pending_result=8):
+    def mp_map(self, f, global_resources: Union[None, dict] = None, num_process=None, max_pending_result=1000):
         """
         :param f: picklable function (Item,Dict(str,value from resources) => value)
         :param global_resources: Mapping[Str,Resource[GlobalHolder]]
@@ -320,6 +398,18 @@ class Series(metaclass=abc.ABCMeta):
 
     def mp_each(self, f, num_process=None, show_progress=True):
         from multiprocessing import Pool
+        holder = get_global_holder(self)
+
+        def gen():
+            for i in range(self.total):
+                yield holder, i, f
+
+        with Pool(num_process) as p:
+            for item in tqdm(p.imap_unordered(mp_each_helper, gen()), total=self.total):
+                pass
+
+    def mt_each(self, f, num_process=None):
+        from multiprocessing.dummy import Pool
         holder = get_global_holder(self)
 
         def gen():
@@ -353,7 +443,7 @@ class Series(metaclass=abc.ABCMeta):
         :return:
         """
         from data_tree.ops.cache import AutoSeries
-        from data_tree.coconut.auto_data import AutoData
+        from omni_converter.coconut.auto_data import AutoData
         if format is None:
             assert isinstance(self[0], AutoData), "element must be a instance of AutoData if format=None"
             return AutoSeries(self.map(lambda i: i.value), self[0].format)
@@ -454,6 +544,10 @@ class Series(metaclass=abc.ABCMeta):
         return PickledSeries(self, pickle_path=cache_path, src_hash=src_hash)
 
     def lazy(self):
+        """
+        keeps all the items in a list.
+        :return:
+        """
         from data_tree.ops.cache import LazySeries
         return LazySeries(self)
 
@@ -465,26 +559,10 @@ class Series(metaclass=abc.ABCMeta):
         return FlattenedSeries(self)
 
     def tag(self, *tags):
-        def _add_tag(m: dict):
-            copied = m.copy()
-            old_tags = copied.get("tags")
-            if old_tags is None:
-                old_tags = set()
-            new_tags = old_tags | set(tags)
-            copied["tags"] = new_tags
-            return copied
-
-        return MetadataOpsSeries(self, operator=_add_tag)
+        return MetadataOpsSeries(self, operator=TagAdder(tags))
 
     def update_metadata(self, **metadata):
-        def _update_metadata(m: dict):
-            # print(f"incoming:{m}")
-            copied = m.copy()
-            copied.update(metadata)
-            # print(f"result:{copied}")
-            return copied
-
-        return MetadataOpsSeries(self, operator=_update_metadata)
+        return MetadataOpsSeries(self, operator=MetadataUpdater(metadata))
 
     def meta(self, **metadata):
         return self.update_metadata(**metadata)
@@ -500,8 +578,22 @@ class Series(metaclass=abc.ABCMeta):
     def from_iterable(values):
         if isinstance(values, np.ndarray):
             return Series.from_numpy(values)
-        else:
-            return ListSeries(list(values))
+        if isinstance(values, list):
+            return ListLikeSeries(values)
+        if isinstance(values, Generator):
+            return ListLikeSeries(list(values))
+        if isinstance(values, Iterator):
+            return ListLikeSeries(list(values))
+        if isinstance(values, Series):
+            return ListLikeSeries(list(values))
+        if isinstance(values, Iterable):
+            return ListLikeSeries(list(values))
+        # dict.items is not iterator or generator. but dict_items
+        return ListLikeSeries(values)
+
+    @staticmethod
+    def from_indexed(values):
+        return IntMapSeries(values)
 
     @staticmethod
     def from_lambda(f, total):
@@ -538,14 +630,35 @@ class Series(metaclass=abc.ABCMeta):
             values_for_sort = self.map(key).values
         else:
             values_for_sort = self.values
+        if isinstance(values_for_sort[0], Iterable):
+            tgt = np.empty(len(values_for_sort), dtype=object)
+            tgt[:] = values_for_sort
+            values_for_sort = tgt
         indices = np.argsort(values_for_sort)
+        assert len(indices.shape) == 1
         return indices
 
     def filter(self, _filter):
+        """
+        :param _filter: filter should return True to be kept in the result
+        :return: filtered series. works the same as numpy's ary[filter(ary)]
+
+        """
+
         # filter must check whole element since a series requires predetermined length...
         # I can make this length lazy though
-        mask = np.array(self.map(_filter).values, dtype=bool)
+        def wrapped_filter(item):
+            flag = _filter(item)
+            if flag is None:
+                raise RuntimeError("filter may never return None. return bool! check:{_filter}")
+            return flag
+
+        flags = self.map(wrapped_filter)
+        mask = np.array(flags.values, dtype=bool)
         return self[mask]
+
+    def select(self, selector: Callable[[T], bool]) -> "Series[T]":
+        return self.filter(selector)
 
     @en_lazy
     def hash(self):
@@ -613,6 +726,38 @@ class Series(metaclass=abc.ABCMeta):
         left = int(self.total * ratio)
         return self[0:left], self[left:]
 
+    #@snoop
+    def split_n(self,n:int)->"Series[Series]":
+        """
+        splits this series in to n sub groups.
+        grouping will be done by evenly distributing the number of items in each group so
+        if 298 items are split into 3 then the distribution will be like so:
+        g1: 100
+        g2: 99
+        g3: 99
+        :param n:
+        :return:
+        """
+        div = self.total // n
+        mod = self.total % n
+        i = 0
+        res = []
+        while i < self.total:
+            if mod != 0:
+                l = div + 1
+                mod -= 1
+            else:
+                l = div
+            res.append(self[i:i+l])
+            i += l
+        iters = self.from_iterable(res)
+        assert iters is not None
+        for group in iters:
+            assert group.total != 0
+        return iters
+
+
+
     def split3(self, train_amount, valid_amount):
         return [self[start:end] for start, end in Series.split3_indices(train_amount, valid_amount, self.total)]
 
@@ -632,6 +777,12 @@ class Series(metaclass=abc.ABCMeta):
                 yield batch
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
+
+    def windowed(self,n:int)->"Series[Series[T]]":
+        data = []
+        for bs in range(0,self.total,n):
+            data.append(self[bs:bs+n])
+        return self.from_iterable(data)
 
     def batch_generator(self, batch_size, preload=5, offset=0, en_numpy=False, progress_bar=None):
         def _slices():
@@ -819,6 +970,7 @@ class Series(metaclass=abc.ABCMeta):
         return inner
 
     def _ipython_display_(self):
+        from IPython.display import display
         return display(self.widget())
 
     def replace(self, replacer):
@@ -863,9 +1015,11 @@ class Series(metaclass=abc.ABCMeta):
             param_controllers=defaults
         )
 
-    def values_progress(self, batch_size=16, progress_bar=tqdm):
+    def values_progress(self, batch_size=16, progress_bar=tqdm, desc=None, preload=0):
         res = []
-        for batch in self.batch_generator(batch_size=batch_size, preload=0, progress_bar=progress_bar):
+        if desc is not None:
+            progress_bar = partial(progress_bar, desc=desc)
+        for batch in self.batch_generator(batch_size=batch_size, preload=preload, progress_bar=progress_bar):
             res += batch
         return res
 
@@ -873,9 +1027,53 @@ class Series(metaclass=abc.ABCMeta):
         i = randint(0, self.total - 1)
         return self[i]
 
+    def to_dict_of_series(self,keys:List[str])->Dict[str,"Series"]:
+        return {k:self.map(lambda item:item[k]) for k in keys}
+
+    @staticmethod
+    def to_series_of_dict(src:Dict[str,"Series"]):
+        keys = list(src.keys())
+        indexed = list(enumerate(keys))
+        return Series.zip(*[src[k] for k in keys]).map(lambda t:{k:t[i] for i,k in indexed})
+
 
 #    def zip_with_index(self):
 #        return self.zip(Series.from_iterable(list(range(self.total))))
+class IntMapSeries(Series[T]):
+
+    def __init__(self, src: Mapping[int, T]):
+        self.data = src
+        self._indexer = IdentityIndexer(self.total)
+        self.indices = np.arange(self.total)
+
+    @property
+    def indexer(self) -> Indexer:
+        return self._indexer
+
+    @property
+    def total(self) -> int:
+        return len(self.data)
+
+    def _get_item(self, index) -> Union[T, Iterable[T]]:
+        return self.data[int(index)]
+        pass
+
+    def _get_slice(self, _slice) -> Iterable[T]:
+
+        return [self.data[int(i)] for i in self.indices[_slice]]
+
+    def _get_indices(self, indices) -> Iterable[T]:
+        return [self.data[int(i)] for i in self.indices[indices]]
+
+    def _get_mask(self, mask):
+        return [self.data[int(i)] for i in self.indices[mask]]
+
+    @property
+    def parents(self) -> List["Series"]:
+        return []
+
+    def clone(self, parents):
+        return IntMapSeries(self.data)
 
 
 class MultiSourcedSeries(Series):
@@ -949,6 +1147,10 @@ class ZippedSeries(MultiSourcedSeries):
 
 
 class LambdaAdapter(Series):
+    def clone(self, parents):
+        return LambdaAdapter(self.slicer,self.total)
+
+
     @en_lazy
     def parents(self):
         return []
@@ -1120,7 +1322,7 @@ class FlattenedSeries(MultiSourcedSeries):
         self._range = np.arange(self.total)
         i = 0
         count = 0
-        for s in src.values:
+        for s in src:
             self.mapping[count:count + s.total] = i
             self.offsets[count:count + s.total] = np.arange(s.total)
             i += 1
@@ -1221,6 +1423,7 @@ class ScheduledSeries(IndexedSeries):
         waiting_thread.start()
         while True:
             if q.qsize() == 0:
+                from loguru import logger
                 logger.warning(f"preload queue is empty!")
             item = q.get()
             if item is DONE:
@@ -1255,16 +1458,26 @@ class TaggedSeries(IndexedSeries):
 class MetadataOpsSeries(IndexedSeries):
 
     def clone(self, parents):
+        from loguru import logger
+        logger.info(f"cloning metadata ops")
         return MetadataOpsSeries(src=parents[0], operator=self.operator)
 
     def __init__(self, src: Series, operator: Callable):
+        logger.info(f"creating metadata ops")
         self.operator = operator
         self._src = src
         self._indexer = IdentityIndexer(self.src.total)
 
     @en_lazy
     def _metadata(self):
-        return self.operator(dict())
+        try:
+            logger.info(self.operator)
+            res = self.operator(dict())
+            logger.info(res)
+        except Exception as e:
+            logger.info(f"failed to get metadata..")
+            embed()
+        return res
 
     @property
     def src(self) -> Series:
@@ -1385,6 +1598,17 @@ def stp_worker_generator(mapper, global_resources):
     return _worker_generator
 
 
+class Worker:
+    def __init__(self, mapper, resources):
+        self.mapper = mapper
+        self.resources = resources
+
+    def __call__(self, value):
+        v, token = value
+        resources = {k: g.value for k, g in self.resources.items()}
+        return self.mapper(v, **resources), token
+
+
 class MPMappedSeries(IndexedSeries):
     def clone(self, parents):
         return MPMappedSeries(src=parents[0], single_mapper=self.single_mapper, resources_kwargs=self.resources,
@@ -1476,10 +1700,13 @@ class MPMappedSeries(IndexedSeries):
         def batches():
             resources = {k: r.prepare() for k, r in self.resources.items()}
             stp = SequentialTaskParallel2(
-                worker_generator=stp_worker_generator(self.single_mapper, global_resources=resources),
+                worker_generator=Worker,
                 num_worker=multiprocessing.cpu_count() if self.num_process is None else self.num_process,
-                max_pending_result=self.max_pending_result)
+                max_pending_result=self.max_pending_result,
+                worker_gen_args=(self.single_mapper, resources)
+            )
 
+            # why is this slow?
             def _fetcher():
                 logger.info(f"multiprocessing fetcher started")
                 for batch in self.src.slice_generator(src_slices, preload=preload, en_numpy=False):
@@ -1497,9 +1724,9 @@ class MPMappedSeries(IndexedSeries):
             fetch_thread = threading.Thread(target=_fetcher)
             fetch_thread.start()
             try:
-                with stp.managed_start() as gen:
+                with stp.managed_start(debug=False) as gen:
                     batch_buffer = []
-                    for item, token in tqdm(gen, desc="multi process mapping progress.."):
+                    for item, token in tqdm(gen, desc="multi process mapping progress..", total=self.total):
                         batch_buffer.append(item)
                         if token == "end":
                             if en_numpy:
@@ -1516,6 +1743,19 @@ class MPMappedSeries(IndexedSeries):
                 logger.debug(f"mp user resources are released")
 
         yield from prefetch_generator(batches(), preload, name=f"{self.__class__.__name__} #{id(self)}")
+
+
+class MPMappedSeries2(MPMappedSeries):
+
+    def slice_generator(self, slices, preload=5, en_numpy=False):
+        resources = {k: r.prepare() for k, r in self.resources.items()}
+        with multiprocessing.Pool(processes=self.num_process) as pool:
+            futures = (pool.apply_async(mp_mapper, args=(self.single_mapper, resources, v)) for v in
+                       self.src.slice_generator(slices, preload=preload, en_numpy=en_numpy))
+            results = [f.get() for f in bar(futures, desc="waiting for mp map results")]
+        for k, r in self.resources.items():
+            r.release(r)
+        return results
 
 
 class NumpySeries(Series):
@@ -1555,13 +1795,13 @@ class NumpySeries(Series):
         return self.data[item]
 
 
-class ListSeries(Series):
+class ListLikeSeries(Series):
     @property
     def parents(self):
         return []
 
     def clone(self, parents):
-        return ListSeries(self.data)
+        return ListLikeSeries(self.data)
 
     @property
     def indexer(self):

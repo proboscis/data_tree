@@ -11,6 +11,7 @@ start = str_to_img_def("numpy,float32,HWC,RGB,0_1")
 end = str_to_img_def("torch,uint8,BHWC,RGB,0_255")
 data END from ImageDef
 data DUMMY from ImageDef
+from archpainter.rulebook import legacy_auto as auto
 def dummy_rule(imdef):
     return [(a->a,end,1,"dummy")]
 
@@ -95,7 +96,7 @@ def test_casting():
 
 def test_omni_converter():
     from data_tree.coconut.omni_converter import auto_img,cast_imdef_str_to_imdef,cast_imdef_to_imdef_str
-    from data_tree.coconut.auto_data import AutoData
+    from omni_converter.coconut.auto_data import AutoData
     x = np.ones((100,100,3),dtype="float32")
     auto_x:AutoData = auto_img("numpy,float32,HW,L,0_1")(x)
     assert (auto_x.to("numpy,float32,HW,L,0_255") == 255).all()
@@ -111,12 +112,10 @@ def test_omni_converter():
     #assert format == n_format,f"{format} != {n_format}"
 
 def test_tuple_conversion():
-    from data_tree import auto
     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     logger.info(auto(("image,RGB,RGB","image,RGB,RGB"))((None,None)).converter(("pix2pix_batch,nc=1", TORCH_XYZ_BATCH)))
 
 def test_rgb_to_yuv():
-    from data_tree import auto
     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))
 

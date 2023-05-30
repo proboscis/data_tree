@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from IPython import embed
 from loguru import logger
 def test_rgb_to_yuv():
@@ -5,16 +6,31 @@ def test_rgb_to_yuv():
     from archpainter.experiments.rgba2xyz_mod.instances import torch_xyz, pix2pix_rgb_batch, TORCH_XYZ_BATCH
     from archpainter.dataset.ask import ask256
     img = ask256.original_pairs[0][0]
+=======
+import pytest
+from IPython import embed
+
+import numpy as np
+
+from data_tree import logger
+
+
+def test_rgb_to_yuv(archpainter=u):
+    from archpainter.rulebook import legacy_auto as auto
+>>>>>>> master
     import numpy as np
-    ary = auto("numpy,uint8,HWC,RGB,0_255")(img[1]).to("numpy,uint8,HWC,YCbCr,0_255")
+    a_data = auto("numpy,uint8,HWC,RGB,0_255")(None)
+    logger.info(a_data)
+    ary = a_data.converter("numpy,uint8,HWC,YCbCr,0_255")
     from matplotlib import pyplot as plt
-    plt.figure()
-    plt.hist(ary[:, :, 0].flatten(), bins=100)
-    plt.hist(ary[:, :, 1].flatten(), bins=100)
-    plt.hist(ary[:, :, 2].flatten(), bins=100)
-    plt.show()
+    #plt.figure()
+    #plt.hist(ary[:, :, 0].flatten(), bins=100)
+    # plt.hist(ary[:, :, 1].flatten(), bins=100)
+    # plt.hist(ary[:, :, 2].flatten(), bins=100)
+    # plt.show()
     #auto("numpy,uint8,HWC,YCbCr,0_255")(ary).convert("numpy,uint8,CHW,YCbCr,0_255").cast("numpy,uint8,BHW,L,0_255").show()
     #logger.info(auto("image,RGB,RGB")(None).converter("image,YCbCr,YCbCr"))
+<<<<<<< HEAD
 
 def test_list_vgg_prep_to_vgg_prep_batch():
     from data_tree import auto
@@ -24,3 +40,65 @@ def test_list_vgg_prep_to_vgg_prep_batch():
     converted = auto("vgg_prep")(vgg_prep).convert("vgg_prep_batch").to("numpy,uint8,HWC,RGB,0_255")
     # now, can we embed numbers into a state?
     embed()
+=======
+formats = [
+    "numpy_rgb",
+    "numpy_rgba",
+    "torch,float32,BCHW,RGB,0_1",
+    "image,RGB,RGB",
+    "image,L,L",
+    "vgg_prep",
+    "vgg_prep_batch",
+    "pix2pix,nc=3",
+    "pix2pix_batch,nc=3"
+]
+@pytest.fixture(params=[0,1,2])
+def conv_pair(request):
+    p = request.param # 0 or 1 or 2
+    return p
+
+
+def test_list_vgg_prep_to_vgg_prep_batch():
+    from archpainter.rulebook import legacy_auto as auto
+    from archpainter.dataset.ask import ask256
+    img = ask256.original_pairs[0][0]
+    start = auto("numpy,uint8,HWC,RGB,0_255")(img[1])
+    vgg_prep = start.convert("vgg_prep")
+    inverted = vgg_prep.convert("numpy,uint8,HWC,RGB,0_255")
+    diff = start.value - inverted.value
+    assert abs(diff).max() < 1.001
+    #assert np.abs(inverted.value - start.value).max() < 1
+    converted = vgg_prep.convert("vgg_prep_batch").convert("numpy_rgb")
+    converted.to("image,RGB,RGB,None:None:3")
+    targets = [("image,L,L","numpy,float32,HWC,LLL,0_1"),
+               ("numpy,float32,HWC,XYZ,-1_1","image,RGBA,RGBA") # path is t,0,6,6,11,8,7,6,6,12,8,1,9,2,0,8,2,1,3
+               ]
+    for src,dst in targets:
+        logger.info(auto(src)(None).converter(dst))
+    # now, can we embed numbers into a state?
+    logger.warning(f"check outputs!")
+    #embed()
+
+def test_convert_batch_to_tile():
+    from archpainter.rulebook import legacy_auto as auto_image
+    import numpy as np
+    s = (2,256,256)
+    ary = np.arange(np.product(s),dtype="float32").reshape(s)
+    ai = auto_image("numpy,float32,BHW,L,None")(ary)
+    a = ai.to("numpy,float32,HWC,L,None")
+    #from matplotlib import pyplot as plt
+    #plt.imshow(a)
+    #plt.colorbar()
+    #plt.show()
+    ai.color_map(show=True,value_range="None")
+
+def test_converter_cache():
+    from archpainter.rulebook import legacy_auto as auto
+    logger.info(auto("image,RGB,RGB")(None).converter("numpy,uint8,HWC,RGB,0_1"))
+
+def test_convert_impath_to_image():
+    from archpainter.rulebook import legacy_auto as auto
+    from data_tree.coconut.omni_converter import rule_image_path_to_image
+    logger.info(rule_image_path_to_image("image_path"))
+    logger.info(auto("image_path")(None).converter("image,RGB,RGB"))
+>>>>>>> master
