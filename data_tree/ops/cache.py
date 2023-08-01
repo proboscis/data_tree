@@ -21,7 +21,7 @@ from lazy import lazy as en_lazy
 from lru import LRU
 from tqdm import tqdm
 
-from archpainter.rulebook import legacy_auto as auto
+from strd.utilities.rulebook import legacy_auto as auto
 
 from data_tree import logger
 from data_tree._series import SourcedSeries, NumpySeries, MappedSeries, Series
@@ -999,7 +999,7 @@ class Hdf5AutoSeries(CachedSeries):
         self.cache_path = cache_path
         self.format = format  # format ?? src[0].format
         self.cache = Hdf5CachedSeries(self._src.map(lambda a: a.value), cache_path, src_hash=src_hash)
-        from archpainter.rulebook import legacy_auto as auto
+        from strd.utilities.rulebook import legacy_auto as auto
         self.auto = auto(self.format)
         self._indexer = IdentityIndexer(self.src.total)
 

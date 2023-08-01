@@ -4,7 +4,7 @@ from typing import Callable
 
 
 
-from archpainter.rulebook import legacy_auto as auto
+from strd.utilities.rulebook import legacy_auto as auto
 
 from data_tree import logger
 

@@ -1,7 +1,7 @@
 import numpy as np
 
 from omni_converter.auto_data.auto_v2 import IAutoData
-from archpainter.rulebook import legacy_auto as auto
+from strd.utilities.rulebook import legacy_auto as auto
 
 def dummy_images(n=9,auto=auto) -> IAutoData:
     """

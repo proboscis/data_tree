@@ -1,6 +1,6 @@
 from typing import Union
 
-from pinject_design.di.graph import ExtendedObjectGraph
+from pinject_design.di.graph import IObjectGraph
 from pinject_design.di.util import Design
 from data_tree.dt_ast.dt_core import AstExpr, AstCall, AstTuple, AstDict, match_dataclass, AstObject
 
@@ -33,7 +33,7 @@ def injected(*dependencies: str):
     return convert
 
 
-def run_injected(ast: AstExpr, g: Union[Design, ExtendedObjectGraph]):
+def run_injected(ast: AstExpr, g: Union[Design, IObjectGraph]):
     """
     runs a given ast which contains Injected as Object. with provided graph.
     so you can construct a expression without actually evaluating Injected values,
