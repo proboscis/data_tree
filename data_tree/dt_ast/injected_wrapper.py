@@ -1,7 +1,7 @@
 from typing import Union
 
-from pinject_design.di.graph import IObjectGraph
-from pinject_design.di.util import Design
+from pinjected.di.graph import IObjectGraph
+from pinjected.di.util import Design
 from data_tree.dt_ast.dt_core import AstExpr, AstCall, AstTuple, AstDict, match_dataclass, AstObject
 
 

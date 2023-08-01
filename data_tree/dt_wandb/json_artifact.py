@@ -14,7 +14,7 @@ from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactI
 from data_tree.wandb_util.artifact_logger import ArtifactLogger
 from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory
 from data_tree.wandb_util.local_artifact import LocalArtifact
-from pinject_design.di.injected import Injected
+from pinjected.di.injected import Injected
 
 
 @dataclass

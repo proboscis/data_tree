@@ -13,7 +13,7 @@ from data_tree import storage_manager, logger
 from data_tree.image_store import T
 from data_tree.storage_manager import FileStorageManager
 from data_tree.util import Pickled
-from pinject_design.di.injected import Injected
+from pinjected.di.injected import Injected
 
 
 class IRead(Generic[T], metaclass=ABCMeta):

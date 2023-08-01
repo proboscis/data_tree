@@ -30,7 +30,7 @@ from data_tree.wandb_util.artifact_wrapper import RemoteArtifactFactory, PublicR
 from data_tree.wandb_util.cache import IRead, ReadFacory, LambdaReadFacory
 from data_tree.wandb_util.file_read_write import FileRead, PickleRead, CloudPickleRead, TorchRead, Hdf5DataFrameRead, \
     FileWrite, Hdf5DataFrameWrite
-from pinject_design.di.injected import Injected, injected_function
+from pinjected.di.injected import Injected, injected_function
 
 T = TypeVar("T")
 U = TypeVar("U")

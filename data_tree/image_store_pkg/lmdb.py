@@ -33,7 +33,7 @@ from data_tree.storage_manager import FileStorageManager
 from data_tree.util import ensure_path_exists, Pickled
 from data_tree.wandb_util.artifact_identifier import ArtifactMetadata, ArtifactIdentifier
 from data_tree.wandb_util.path_artifact import ManagedPathArtifactLoader, ManagedPathArtifactLogger
-from pinject_design.di.util import check_picklable
+from pinjected.di.util import check_picklable
 
 
 @dataclass

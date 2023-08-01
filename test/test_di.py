@@ -1,8 +1,8 @@
 
 
 import archpainter.experiments.config.root_cfg
-from pinject_design.di.util import Design
-from pinject_design.di import util
+from pinjected.di.util import Design
+from pinjected.di import util
 from data_tree import di, logger
 
 
