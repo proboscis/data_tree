@@ -11,10 +11,13 @@ class WandbArtifactGetter:
     wandb_user: str
 
     def use_artifact(self, name: str, type: str, user=None, project=None) -> wandb.Artifact:
+        from loguru import logger
         user = user or self.wandb_user
         project = project or self.wandb.run.project
         assert project is not None
         tgt = f"{user}/{project}/{name}"
+        logger.info(f"using artifact {tgt} with type {type}")
+
         return self.wandb.run.use_artifact(tgt, type=type)
 
     def use_artifact2(self,idt:ArtifactIdentifier)->wandb.Artifact:
