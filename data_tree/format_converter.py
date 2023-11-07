@@ -4,7 +4,7 @@ from typing import Callable
 
 
 
-from strd.utilities.rulebook import legacy_auto as auto
+from proboscis_image_rules.rulebook import legacy_auto as auto
 
 from data_tree import logger
 
