@@ -83,8 +83,8 @@ class DUMMY(_coconut.collections.namedtuple("DUMMY", ()), ImageDef):  # data DUM
     def __hash__(self):  # data DUMMY from ImageDef
         return _coconut.tuple.__hash__(self) ^ hash(self.__class__)  # data DUMMY from ImageDef
 
-_coconut_call_set_names(DUMMY)  # from strd.utilities.rulebook import legacy_auto as auto
-from strd.utilities.rulebook import legacy_auto as auto  # from strd.utilities.rulebook import legacy_auto as auto
+_coconut_call_set_names(DUMMY)  # from proboscis_image_rules.rulebook import legacy_auto as auto
+from proboscis_image_rules.rulebook import legacy_auto as auto  # from proboscis_image_rules.rulebook import legacy_auto as auto
 def dummy_rule(imdef):  # def dummy_rule(imdef):
     return ([(lambda a: a, end, 1, "dummy"),])  #     return [(a->a,end,1,"dummy")]
 

@@ -7,7 +7,7 @@ from data_tree import logger
 
 
 def test_rgb_to_yuv(archpainter=u):
-    from strd.utilities.rulebook import legacy_auto as auto
+    from proboscis_image_rules.rulebook import legacy_auto as auto
     import numpy as np
     a_data = auto("numpy,uint8,HWC,RGB,0_255")(None)
     logger.info(a_data)
@@ -38,7 +38,7 @@ def conv_pair(request):
 
 
 def test_list_vgg_prep_to_vgg_prep_batch():
-    from strd.utilities.rulebook import legacy_auto as auto
+    from proboscis_image_rules.rulebook import legacy_auto as auto
     from archpainter.dataset.ask import ask256
     img = ask256.original_pairs[0][0]
     start = auto("numpy,uint8,HWC,RGB,0_255")(img[1])
@@ -59,7 +59,7 @@ def test_list_vgg_prep_to_vgg_prep_batch():
     #embed()
 
 def test_convert_batch_to_tile():
-    from strd.utilities.rulebook import legacy_auto as auto_image
+    from proboscis_image_rules.rulebook import legacy_auto as auto_image
     import numpy as np
     s = (2,256,256)
     ary = np.arange(np.product(s),dtype="float32").reshape(s)
@@ -72,11 +72,11 @@ def test_convert_batch_to_tile():
     ai.color_map(show=True,value_range="None")
 
 def test_converter_cache():
-    from strd.utilities.rulebook import legacy_auto as auto
+    from proboscis_image_rules.rulebook import legacy_auto as auto
     logger.info(auto("image,RGB,RGB")(None).converter("numpy,uint8,HWC,RGB,0_1"))
 
 def test_convert_impath_to_image():
-    from strd.utilities.rulebook import legacy_auto as auto
+    from proboscis_image_rules.rulebook import legacy_auto as auto
     from data_tree.coconut.omni_converter import rule_image_path_to_image
     logger.info(rule_image_path_to_image("image_path"))
     logger.info(auto("image_path")(None).converter("image,RGB,RGB"))
