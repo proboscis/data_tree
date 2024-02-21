@@ -1,9 +1,11 @@
 [tool.poetry]
-name = "data_tree"
-version = "0.1.1"
+name = "proboscis_data_tree"
+version = "0.1.2"
 description = ""
 authors = ["proboscis"]
-
+[[tool.poetry.packages]]
+include = "data_tree"
+from = "."
 [tool.poetry.dependencies]
 python = "^3.8"
 h5py = "*" # h5py
@@ -27,10 +29,10 @@ matplotlib = "*"
 cytoolz = "*"
 pinject = "*"
 filelock = "*"
-makefun = "^1.11.3"
-dill = "^0.3.4"
-tabulate = "^0.8.9"
-Expression = "^1.1.0"
+makefun = "*"
+dill = "*"
+tabulate = "*"
+Expression = "*"
 py-omni-converter = "*"
 omni-cv-rules = "*"
 [tool.poetry.extras]
